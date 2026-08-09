@@ -33,7 +33,12 @@ function buildHarness() {
     }
   };
   const ctx = {
-    deps: { store: {}, log: undefined, meshAgentHost, hookCwd: '/tmp/default-workspace' },
+    deps: { store: {}, log: undefined, meshAgentHost, paths: { home: '/tmp/default-monad-home' } },
+    requireSession: (sessionId: string) => {
+      if (sessionId === session.id) return session;
+      if (sessionId === 'ses_no_cwd000000') return { ...session, id: sessionId, cwd: undefined };
+      throw new Error(`session not found: ${sessionId}`);
+    },
     makeEmit: (round: Event[]) => (event: Event) => {
       round.push(event);
       events.push(event);
@@ -107,6 +112,19 @@ test('member working directory override is optional and falls back to the sessio
   expect(workingPaths).toEqual(['/tmp/member', '/tmp/prj']);
 });
 
+test('member working directory override rejects a relative path before starting the runtime', async () => {
+  const { delivery, starts } = buildHarness();
+
+  await expect(
+    delivery.startManagedMeshAgentRuntimeWithRecovery({
+      ...startArgs('relative override', 'codex-relative'),
+      workingDirectoryOverride: 'packages/web'
+    })
+  ).rejects.toThrow('working directory override must be absolute');
+
+  expect(starts).toEqual([]);
+});
+
 test('managed member without a session working directory falls back to the daemon workspace', async () => {
   const { delivery, workingPaths } = buildHarness();
   const sessionWithoutCwd = {
@@ -120,7 +138,7 @@ test('managed member without a session working directory falls back to the daemo
     session: sessionWithoutCwd
   });
 
-  expect(workingPaths).toEqual(['/tmp/default-workspace']);
+  expect(workingPaths).toEqual(['/tmp/default-monad-home/workplace/prj_race00000000/shared']);
 });
 
 test('resume failure without a provider error code cold-starts with a valid lifecycle event', async () => {
