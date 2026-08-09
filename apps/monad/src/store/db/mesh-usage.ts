@@ -30,11 +30,14 @@ interface SessionUsageSnapshotRow {
   agent_name: string;
   checked_at: string;
   input: number;
+  member_display_name: string | null;
   mesh_session_id: string;
   output: number;
+  project_member_id: string | null;
   project_id: string | null;
   provider: string;
   session_id: string;
+  session_title: string | null;
   total: number;
 }
 
@@ -145,17 +148,29 @@ export function listMeshUsageOverview(
   const sessionUsage = (
     sqlite
       .query(
-        `SELECT mesh_session_id, session_id, project_id, provider, agent_name, total, input, output, checked_at
-         FROM mesh_session_usage_snapshots
-         ORDER BY project_id, provider, agent_name, mesh_session_id`
+        `SELECT usage.mesh_session_id, usage.session_id, usage.project_id, usage.provider,
+                usage.agent_name, usage.total, usage.input, usage.output, usage.checked_at,
+                sessions.title AS session_title,
+                COALESCE(mesh_sessions.project_member_id, project_members.id) AS project_member_id,
+                project_members.display_name AS member_display_name
+         FROM mesh_session_usage_snapshots usage
+         LEFT JOIN sessions ON sessions.id = usage.session_id
+         LEFT JOIN mesh_sessions ON mesh_sessions.id = usage.mesh_session_id
+         LEFT JOIN project_members
+           ON project_members.id = COALESCE(mesh_sessions.project_member_id, usage.agent_name)
+          AND project_members.project_id = usage.project_id
+         ORDER BY usage.project_id, usage.provider, usage.agent_name, usage.mesh_session_id`
       )
       .all() as SessionUsageSnapshotRow[]
   ).map((row) => ({
     meshSessionId: row.mesh_session_id,
     sessionId: row.session_id,
+    sessionTitle: row.session_title ?? row.session_id,
     projectId: row.project_id,
+    projectMemberId: row.project_member_id,
     provider: row.provider,
     agentName: row.agent_name,
+    agentDisplayName: row.member_display_name ?? row.agent_name,
     total: row.total,
     input: row.input,
     output: row.output,

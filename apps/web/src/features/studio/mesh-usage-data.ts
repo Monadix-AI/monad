@@ -1,4 +1,4 @@
-import type { MeshAgentUsageResponse, MeshUsageOverviewResponse, ProjectId } from '@monad/protocol';
+import type { MeshAgentUsageResponse, MeshUsageOverviewResponse, ProjectId, SessionId } from '@monad/protocol';
 
 export interface MeshUsageTotals {
   input: number;
@@ -7,41 +7,53 @@ export interface MeshUsageTotals {
 }
 
 export interface MeshUsageProviderGroup extends MeshUsageTotals {
-  agentNames: string[];
+  agentCount: number;
   projectIds: ProjectId[];
   provider: string;
   providerUsage: MeshAgentUsageResponse[];
   sessionCount: number;
+  topSessions: MeshUsageRankedItem[];
 }
 
-interface MeshUsageProjectGroup extends MeshUsageTotals {
-  agentNames: string[];
-  projectId: ProjectId;
+export interface MeshUsageRankedItem extends MeshUsageTotals {
+  id: string;
+  name: string;
+  provider?: string;
+}
+
+export interface MeshUsageSessionGroup extends MeshUsageTotals {
+  agentCount: number;
+  projectId: ProjectId | null;
   providerNames: string[];
-  sessionCount: number;
+  sessionId: SessionId;
+  sessionTitle: string;
+  topAgents: MeshUsageRankedItem[];
 }
 
 export interface MeshUsageView {
   agents: number;
-  projects: MeshUsageProjectGroup[];
+  projects: ProjectId[];
   providers: MeshUsageProviderGroup[];
+  sessionGroups: MeshUsageSessionGroup[];
   sessions: number;
   totals: MeshUsageTotals;
 }
 
 interface ProviderAccumulator extends MeshUsageTotals {
-  agentNames: Set<string>;
+  configuredAgentNames: Set<string>;
   projectIds: Set<ProjectId>;
   provider: string;
   providerUsage: MeshAgentUsageResponse[];
-  sessionCount: number;
+  runtimeAgentIds: Set<string>;
+  sessions: Map<SessionId, MeshUsageRankedItem>;
 }
 
-interface ProjectAccumulator extends MeshUsageTotals {
-  agentNames: Set<string>;
-  projectId: ProjectId;
+interface SessionAccumulator extends MeshUsageTotals {
+  agents: Map<string, MeshUsageRankedItem>;
+  projectId: ProjectId | null;
   providerNames: Set<string>;
-  sessionCount: number;
+  sessionId: SessionId;
+  sessionTitle: string;
 }
 
 function addUsage(target: MeshUsageTotals, usage: MeshUsageTotals): void {
@@ -53,79 +65,111 @@ function addUsage(target: MeshUsageTotals, usage: MeshUsageTotals): void {
 function newProviderGroup(provider: string): ProviderAccumulator {
   return {
     provider,
-    agentNames: new Set<string>(),
+    configuredAgentNames: new Set<string>(),
     projectIds: new Set<ProjectId>(),
     providerUsage: [],
-    sessionCount: 0,
+    runtimeAgentIds: new Set<string>(),
+    sessions: new Map(),
     total: 0,
     input: 0,
     output: 0
   };
 }
 
-function newProjectGroup(projectId: ProjectId): ProjectAccumulator {
+function newSessionGroup(sessionId: SessionId, sessionTitle: string, projectId: ProjectId | null): SessionAccumulator {
   return {
+    sessionId,
+    sessionTitle,
     projectId,
     providerNames: new Set<string>(),
-    agentNames: new Set<string>(),
-    sessionCount: 0,
+    agents: new Map(),
     total: 0,
     input: 0,
     output: 0
   };
+}
+
+function addRankedUsage(
+  groups: Map<string, MeshUsageRankedItem>,
+  id: string,
+  name: string,
+  usage: MeshUsageTotals,
+  provider?: string
+): void {
+  const group = groups.get(id) ?? { id, name, ...(provider ? { provider } : {}), total: 0, input: 0, output: 0 };
+  addUsage(group, usage);
+  groups.set(id, group);
+}
+
+function topUsage(groups: Map<string, MeshUsageRankedItem>): MeshUsageRankedItem[] {
+  return [...groups.values()].sort((a, b) => b.total - a.total || a.name.localeCompare(b.name)).slice(0, 3);
 }
 
 export function buildMeshUsageView(data: MeshUsageOverviewResponse): MeshUsageView {
   const providers = new Map<string, ProviderAccumulator>();
-  const projects = new Map<ProjectId, ProjectAccumulator>();
-  const agentNames = new Set<string>();
+  const sessions = new Map<SessionId, SessionAccumulator>();
+  const configuredAgentNames = new Set<string>();
+  const runtimeAgentIds = new Set<string>();
+  const projectIds = new Set<ProjectId>();
   const totals: MeshUsageTotals = { total: 0, input: 0, output: 0 };
 
   for (const snapshot of data.providerUsage) {
-    agentNames.add(snapshot.agentName);
+    configuredAgentNames.add(`${snapshot.provider}:${snapshot.agentName}`);
     const group = providers.get(snapshot.provider) ?? newProviderGroup(snapshot.provider);
-    group.agentNames.add(snapshot.agentName);
+    group.configuredAgentNames.add(snapshot.agentName);
     group.providerUsage.push(snapshot);
     providers.set(snapshot.provider, group);
   }
 
   for (const snapshot of data.sessionUsage) {
-    agentNames.add(snapshot.agentName);
+    const runtimeAgentId = snapshot.projectMemberId ?? `${snapshot.provider}:${snapshot.agentName}`;
+    runtimeAgentIds.add(runtimeAgentId);
+    if (snapshot.projectId) projectIds.add(snapshot.projectId);
     addUsage(totals, snapshot);
     const provider = providers.get(snapshot.provider) ?? newProviderGroup(snapshot.provider);
-    provider.agentNames.add(snapshot.agentName);
+    provider.runtimeAgentIds.add(runtimeAgentId);
     if (snapshot.projectId) provider.projectIds.add(snapshot.projectId);
-    provider.sessionCount += 1;
+    addRankedUsage(provider.sessions, snapshot.sessionId, snapshot.sessionTitle, snapshot);
     addUsage(provider, snapshot);
     providers.set(snapshot.provider, provider);
 
-    if (!snapshot.projectId) continue;
-    const project = projects.get(snapshot.projectId) ?? newProjectGroup(snapshot.projectId);
-    project.providerNames.add(snapshot.provider);
-    project.agentNames.add(snapshot.agentName);
-    project.sessionCount += 1;
-    addUsage(project, snapshot);
-    projects.set(snapshot.projectId, project);
+    const session =
+      sessions.get(snapshot.sessionId) ??
+      newSessionGroup(snapshot.sessionId, snapshot.sessionTitle, snapshot.projectId);
+    session.providerNames.add(snapshot.provider);
+    addRankedUsage(session.agents, runtimeAgentId, snapshot.agentDisplayName, snapshot, snapshot.provider);
+    addUsage(session, snapshot);
+    sessions.set(snapshot.sessionId, session);
   }
 
   return {
-    agents: agentNames.size,
-    sessions: data.sessionUsage.length,
+    agents: runtimeAgentIds.size || configuredAgentNames.size,
+    sessions: sessions.size,
     totals,
+    projects: [...projectIds].sort(),
     providers: [...providers.values()]
-      .map((group) => ({
-        ...group,
-        agentNames: [...group.agentNames].sort(),
-        projectIds: [...group.projectIds].sort(),
-        providerUsage: [...group.providerUsage].sort((a, b) => a.agentName.localeCompare(b.agentName))
-      }))
+      .map((group) => {
+        const { configuredAgentNames, runtimeAgentIds, sessions: providerSessions, ...totals } = group;
+        return {
+          ...totals,
+          agentCount: runtimeAgentIds.size || configuredAgentNames.size,
+          projectIds: [...group.projectIds].sort(),
+          providerUsage: [...group.providerUsage].sort((a, b) => a.agentName.localeCompare(b.agentName)),
+          sessionCount: providerSessions.size,
+          topSessions: topUsage(providerSessions)
+        };
+      })
       .sort((a, b) => b.total - a.total || a.provider.localeCompare(b.provider)),
-    projects: [...projects.values()]
-      .map((group) => ({
-        ...group,
-        agentNames: [...group.agentNames].sort(),
-        providerNames: [...group.providerNames].sort()
-      }))
-      .sort((a, b) => b.total - a.total || a.projectId.localeCompare(b.projectId))
+    sessionGroups: [...sessions.values()]
+      .map((group) => {
+        const { agents, ...totals } = group;
+        return {
+          ...totals,
+          agentCount: agents.size,
+          providerNames: [...group.providerNames].sort(),
+          topAgents: topUsage(agents)
+        };
+      })
+      .sort((a, b) => b.total - a.total || a.sessionTitle.localeCompare(b.sessionTitle))
   };
 }
