@@ -27,6 +27,14 @@ beforeEach(() => {
 afterEach(() => store.close());
 
 test('exact-key consumption leaves unread activity that arrived after the snapshot', () => {
+  store.insertMessage(
+    'msg_ABCDEF123456',
+    sessionId,
+    '<mention id="human">Human</mention> Review complete.',
+    '2026-07-22T10:00:00.000Z',
+    'assistant',
+    { streamStatus: 'complete' }
+  );
   store.applySessionAttentionSource({
     sessionId,
     itemKey: 'message:msg_ABCDEF123456',
@@ -34,6 +42,14 @@ test('exact-key consumption leaves unread activity that arrived after the snapsh
     sourceType: 'message',
     sourceId: 'msg_ABCDEF123456',
     occurredAt: '2026-07-22T10:00:00.000Z'
+  });
+  store.applySessionAttentionSource({
+    sessionId,
+    itemKey: 'approval:req_ABCDEF123456',
+    kind: 'need-approval',
+    sourceType: 'approval',
+    sourceId: 'req_ABCDEF123456',
+    occurredAt: '2026-07-22T10:00:00.500Z'
   });
   const snapshot = store.listSessionAttention([sessionId]);
   store.applySessionAttentionSource({
@@ -52,17 +68,22 @@ test('exact-key consumption leaves unread activity that arrived after the snapsh
     '2026-07-22T10:00:02.000Z'
   );
 
-  expect({ result, summaries: store.listSessionAttention([sessionId]) }).toEqual({
+  expect({
+    result,
+    summaries: store.listSessionAttention([sessionId]),
+    inbox: store.listOperatorInbox().items.map((item) => ({ itemKey: item.itemKey, readAt: item.readAt }))
+  }).toEqual({
     result: { consumedItemKeys: ['message:msg_ABCDEF123456'] },
     summaries: [
       {
         sessionId,
-        state: 'unread',
+        state: 'need-approval',
         generationState: null,
         activityAt: '2026-07-22T10:00:01.000Z',
         unreadItemKeys: ['message:msg_ABCDEF123457']
       }
-    ]
+    ],
+    inbox: [{ itemKey: 'mention:msg_ABCDEF123456', readAt: '2026-07-22T10:00:02.000Z' }]
   });
 });
 

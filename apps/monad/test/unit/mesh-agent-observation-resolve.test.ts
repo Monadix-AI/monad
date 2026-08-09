@@ -162,6 +162,7 @@ test('convenience ready anchors before its separately delivered bootstrap patch'
           {
             op: 'upsert',
             event: {
+              at: '2026-07-18T01:00:02.000Z',
               dedupeKey: 'plain-text:eb5a4353:agent',
               id: 'projected',
               streaming: false,
@@ -170,6 +171,7 @@ test('convenience ready anchors before its separately delivered bootstrap patch'
               provenance: {
                 contractEvents: [
                   {
+                    createdAt: '2026-07-18T01:00:02.000Z',
                     id: 'projected',
                     role: 'agent',
                     text: 'one\ntwo',
@@ -188,7 +190,7 @@ test('convenience ready anchors before its separately delivered bootstrap patch'
 
 test('convenience projection advances one retained projector with only newly committed rows', () => {
   const rows = [{ seq: 1, stream: 'stdout' as const, payload: 'one\n', observedAt: '2026-07-18T01:00:01.000Z' }];
-  const advances: string[] = [];
+  const advances: Array<[string, string | undefined]> = [];
   let creations = 0;
   const { live, resolver } = resolverWithRows((request) => {
     const selected =
@@ -207,8 +209,8 @@ test('convenience projection advances one retained projector with only newly com
         creations += 1;
         let output = '';
         return {
-          advance: (delta: string) => {
-            advances.push(delta);
+          advance: (delta: string, observedAt?: string) => {
+            advances.push([delta, observedAt]);
             output += delta;
             return {
               events: [
@@ -241,7 +243,10 @@ test('convenience projection advances one retained projector with only newly com
     second: second.state === 'live' ? second.frames : []
   }).toEqual({
     creations: 1,
-    advances: ['one\n', 'two\n'],
+    advances: [
+      ['one\n', '2026-07-18T01:00:01.000Z'],
+      ['two\n', '2026-07-18T01:00:02.000Z']
+    ],
     firstCursor: 'live:oep_observe:1',
     second: [
       { kind: 'ready', observationEpoch: 'oep_observe', cursor: 'live:oep_observe:1' },

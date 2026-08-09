@@ -30,6 +30,7 @@ export const meshAgentObservationEventSchema = z.object({
   diagnostic: agentObservationDiagnosticSchema.optional(),
   durationMs: z.number().nonnegative().optional(),
   hasContent: z.boolean().optional(),
+  summary: z.string().min(1).optional(),
   createdAt: z.string().optional(),
   provenance: meshAgentObservationRawProvenanceSchema
 });

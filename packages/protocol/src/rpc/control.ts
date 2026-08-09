@@ -561,6 +561,8 @@ export type SessionMcpServer = z.infer<typeof sessionMcpServerSchema>;
 export const configureRuntimeRequestSchema = z.object({
   sandboxRoots: z.array(z.string()).optional(),
   mcpServers: z.array(sessionMcpServerSchema).optional(),
+  /** Session-scoped immutable instructions appended to the agent's native system prompt. */
+  immutableInstructions: z.string().min(1).optional(),
   // The client advertised fs/terminal capability — the daemon should delegate those ops back to it
   // (editor-side diffs / terminal) via DelegationService instead of running them on the daemon host.
   delegate: z.object({ fs: z.boolean().optional(), terminal: z.boolean().optional() }).optional()

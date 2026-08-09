@@ -139,6 +139,8 @@ export interface Agent {
       /** Project-local skills discovered from session.cwd/.monad/skills/ — merged with global skills
        *  for this loop only; global skill hot-reload still applies to the shared portion. */
       extraSkills?: LoadedSkill[];
+      /** Session-scoped immutable instructions appended to the configured system prompt. */
+      instructions?: string;
       steers?: AgentLoopDeps['steers'];
       messageFanout?: AgentLoopDeps['messageFanout'];
       linkAssistantReplies?: AgentLoopDeps['linkAssistantReplies'];
@@ -318,6 +320,7 @@ export function createAgent(config: AgentConfig): Agent {
         history: config.history,
         cacheSystemPrompt: config.cacheSystemPrompt,
         instructions: config.instructions,
+        additionalInstructions: opts?.instructions,
         promptSlots: config.promptSlots,
         credentialManifest: config.credentialManifest,
         environment: config.environment,

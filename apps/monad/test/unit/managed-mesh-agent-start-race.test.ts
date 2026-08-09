@@ -11,13 +11,20 @@ function buildHarness() {
   const starts: string[] = [];
   const startRefs: (string | undefined)[] = [];
   const startInputs: string[] = [];
+  const workingPaths: string[] = [];
   const inputs: string[] = [];
   const events: Event[] = [];
   const meshAgentHost = {
-    start: async (args: { agentName: string; providerSessionRef?: string; initialInput: string }) => {
+    start: async (args: {
+      agentName: string;
+      providerSessionRef?: string;
+      initialInput: string;
+      workingPath: string;
+    }) => {
       starts.push(args.agentName);
       startRefs.push(args.providerSessionRef);
       startInputs.push(args.initialInput.trim());
+      workingPaths.push(args.workingPath);
       await Bun.sleep(20);
       return { id: `mesh_${args.agentName}_${starts.length}`, agentName: args.agentName } as MeshSessionView;
     },
@@ -26,7 +33,7 @@ function buildHarness() {
     }
   };
   const ctx = {
-    deps: { store: {}, log: undefined, meshAgentHost },
+    deps: { store: {}, log: undefined, meshAgentHost, hookCwd: '/tmp/default-workspace' },
     makeEmit: (round: Event[]) => (event: Event) => {
       round.push(event);
       events.push(event);
@@ -41,6 +48,7 @@ function buildHarness() {
     starts,
     startRefs,
     startInputs,
+    workingPaths,
     inputs,
     meshAgentHost
   };
@@ -87,9 +95,42 @@ test('different members start independently and a settled start does not dedupe 
   expect(inputs).toEqual([]);
 });
 
+test('member working directory override is optional and falls back to the session working directory', async () => {
+  const { delivery, workingPaths } = buildHarness();
+
+  await delivery.startManagedMeshAgentRuntimeWithRecovery({
+    ...startArgs('override', 'codex-override'),
+    workingDirectoryOverride: ' /tmp/member '
+  });
+  await delivery.startManagedMeshAgentRuntimeWithRecovery(startArgs('fallback', 'codex-fallback'));
+
+  expect(workingPaths).toEqual(['/tmp/member', '/tmp/prj']);
+});
+
+test('managed member without a session working directory falls back to the daemon workspace', async () => {
+  const { delivery, workingPaths } = buildHarness();
+  const sessionWithoutCwd = {
+    ...session,
+    id: 'ses_no_cwd000000',
+    cwd: undefined
+  } as unknown as Session;
+
+  await delivery.startManagedMeshAgentRuntimeWithRecovery({
+    ...startArgs('default workspace', 'codex-default'),
+    session: sessionWithoutCwd
+  });
+
+  expect(workingPaths).toEqual(['/tmp/default-workspace']);
+});
+
 test('resume failure without a provider error code cold-starts with a valid lifecycle event', async () => {
   const { delivery, events, starts, startRefs, startInputs, inputs, meshAgentHost } = buildHarness();
-  meshAgentHost.start = async (args: { agentName: string; providerSessionRef?: string; initialInput: string }) => {
+  meshAgentHost.start = async (args: {
+    agentName: string;
+    providerSessionRef?: string;
+    initialInput: string;
+    workingPath: string;
+  }) => {
     starts.push(args.agentName);
     startRefs.push(args.providerSessionRef);
     startInputs.push(args.initialInput.trim());

@@ -38,7 +38,8 @@ function createMonadSessionRuntime(
       agentId,
       context.workingPath,
       context.providerSessionRef,
-      context.managedMcpServer
+      context.managedMcpServer,
+      context.startInput?.immutableInstructions?.text
     )
   };
 }

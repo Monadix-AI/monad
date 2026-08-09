@@ -10,7 +10,7 @@ configureMeshAgentObservationAdapterResolver((provider) =>
   builtinAgentAdapters.find((adapter) => adapter.provider === provider)
 );
 
-test('structured observation events do not fall back to host observedAt', () => {
+test('structured observation events fall back to host observedAt', () => {
   const output = JSON.stringify({
     method: 'item/agentMessage/delta',
     params: { delta: 'Streaming update' }
@@ -26,7 +26,36 @@ test('structured observation events do not fall back to host observedAt', () => 
   ).toMatchObject([
     {
       text: 'Streaming update',
-      createdAt: undefined
+      createdAt: '2026-07-05T09:00:00.000Z'
+    }
+  ]);
+});
+
+test('live event projection carries host observedAt into Claude records without provider timestamps', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  const output = JSON.stringify({
+    type: 'assistant',
+    uuid: 'message_1',
+    session_id: 'session_1',
+    message: {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'Projected assistant message' }]
+    }
+  });
+
+  expect(
+    adapter?.events
+      .projectLive({
+        id: 'mesh_claude000000',
+        output,
+        observedAt: '2026-07-05T09:01:00.000Z'
+      })
+      .events.map(({ createdAt, role, text }) => ({ createdAt, role, text }))
+  ).toEqual([
+    {
+      createdAt: '2026-07-05T09:01:00.000Z',
+      role: 'agent',
+      text: 'Projected assistant message'
     }
   ]);
 });
@@ -131,6 +160,30 @@ test('Codex app-server turn lifecycle uses second timestamps from the provider c
       providerEventType: 'turn/completed',
       createdAt: '2026-07-06T00:00:05.000Z'
     }
+  ]);
+});
+
+test('Codex full turn records use turn boundaries when message items omit timestamps', () => {
+  const output = JSON.stringify({
+    id: 'turn_1',
+    items: [
+      { type: 'userMessage', id: 'item_1', text: 'Question' },
+      { type: 'reasoning', id: 'item_2', summary: ['Thinking'], content: [] },
+      { type: 'agentMessage', id: 'item_3', text: 'Answer' }
+    ],
+    itemsView: 'full',
+    status: 'completed',
+    startedAt: 1_783_296_000,
+    completedAt: 1_783_296_005
+  });
+
+  expect(
+    meshAgentStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output })
+      .filter((event) => event.role === 'user' || event.providerEventType === 'item/agentMessage')
+      .map(({ createdAt, role, text }) => ({ createdAt, role, text }))
+  ).toEqual([
+    { createdAt: '2026-07-06T00:00:00.000Z', role: 'user', text: 'Question' },
+    { createdAt: '2026-07-06T00:00:05.000Z', role: 'agent', text: 'Answer' }
   ]);
 });
 

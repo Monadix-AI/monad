@@ -39,6 +39,7 @@ const sessionOpenRequestSchema = z
         cwd: cwdSchema,
         providerSessionRef: sessionIdSchema.optional(),
         afterEventId: eventIdSchema.optional(),
+        immutableInstructions: z.string().min(1).optional(),
         mcpServers: z.array(nativeAgentManagedMcpServerSchema).optional()
       })
       .strict()

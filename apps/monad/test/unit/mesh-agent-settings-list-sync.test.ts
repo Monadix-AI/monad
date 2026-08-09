@@ -245,8 +245,8 @@ test('listing invitable MeshAgents returns fallback capabilities while refreshin
   expect(
     initial.agents
       .filter((agent) => agent.name === 'openclaw')
-      .map((agent) => ({ modelOptions: agent.modelOptions, speedsByModel: agent.speedsByModel }))
-  ).toEqual([{ modelOptions: [], speedsByModel: undefined }]);
+      .map((agent) => ({ icon: agent.icon, modelOptions: agent.modelOptions, speedsByModel: agent.speedsByModel }))
+  ).toEqual([{ icon: openClawMeshAgentAdapter.icon, modelOptions: [], speedsByModel: undefined }]);
 
   finishProbe?.();
   await waitFor(() => updates.length === 1, { message: 'capability refresh did not notify subscribers' });

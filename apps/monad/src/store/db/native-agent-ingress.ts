@@ -539,11 +539,15 @@ export function listClaimedNativeAgentIngress(sqlite: Database, batchId: string)
     } catch {}
     const agentName = typeof data.agentName === 'string' ? data.agentName : undefined;
     const displayName = typeof data.agentDisplayName === 'string' ? data.agentDisplayName : agentName;
+    const humanDisplayName =
+      typeof data.humanDisplayName === 'string' && data.humanDisplayName.trim()
+        ? data.humanDisplayName.trim()
+        : undefined;
     const role = row.message_role as string;
     const sender = agentName
       ? { kind: 'mesh-agent' as const, name: displayName ?? agentName, id: agentName }
       : role === 'user'
-        ? { kind: 'human' as const, name: 'Human' }
+        ? { kind: 'human' as const, name: humanDisplayName ?? 'User', id: 'human' }
         : role === 'system'
           ? { kind: 'system' as const, name: 'System' }
           : { kind: 'agent' as const, name: displayName ?? 'Agent' };

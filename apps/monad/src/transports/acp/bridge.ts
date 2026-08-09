@@ -163,8 +163,13 @@ export function createBridgeHandlers(opts: BridgeOptions): { handlers: AcpHandle
       abort: ({ id }) => post(`/v1/sessions/${id}/abort`, abortSessionResponseSchema),
       restore: ({ id, toMessageId }) =>
         post(`/v1/sessions/${id}/restore`, restoreSessionResponseSchema, { toMessageId }),
-      configureRuntime: ({ id, sandboxRoots, mcpServers, delegate }) =>
-        put(`/v1/sessions/${id}/runtime`, okResponseSchema, { sandboxRoots, mcpServers, delegate }),
+      configureRuntime: ({ id, sandboxRoots, mcpServers, delegate, immutableInstructions }) =>
+        put(`/v1/sessions/${id}/runtime`, okResponseSchema, {
+          sandboxRoots,
+          mcpServers,
+          delegate,
+          immutableInstructions
+        }),
       sendInline: async ({ sessionId, text }, sink: EventSink, runOpts) => {
         await streamTurn(sessionId, text, runOpts?.ambientContext, sink);
       }

@@ -7,6 +7,7 @@ import { MonadSessionEventDriver } from '../../src/agent-adapters/monad/driver.t
 import { createMonadEventSource } from '../../src/agent-adapters/monad/event-pages.ts';
 import { monadMeshAgentAdapter } from '../../src/agent-adapters/monad/index.ts';
 import { monadObservationProjection } from '../../src/agent-adapters/monad/observation.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 
 const agent = {
   name: 'monad',
@@ -220,6 +221,74 @@ test('Monad preserves a source CLI entry before app-server and auth arguments', 
   });
 });
 
+test('Monad opens managed sessions with immutable instructions in the app-server contract', async () => {
+  const requests: Array<Record<string, unknown>> = [];
+  const driver = new MonadSessionEventDriver(
+    'agt_1234567890ab',
+    '/workspace',
+    undefined,
+    undefined,
+    'Managed Monad instructions'
+  );
+  const sink = { async emit() {} };
+  const channel = {
+    async send(value: string) {
+      const request = JSON.parse(value) as Record<string, unknown>;
+      requests.push(request);
+      const method = request.method;
+      const response =
+        method === 'initialize'
+          ? {
+              kind: 'response',
+              id: request.id,
+              method,
+              result: {
+                protocolVersion: 1,
+                capabilities: {
+                  input: true,
+                  steer: true,
+                  interrupt: true,
+                  approvalResolution: true,
+                  providerSessionContinuation: true,
+                  runtimeRestoration: true,
+                  sessionReopen: true
+                }
+              }
+            }
+          : {
+              kind: 'response',
+              id: request.id,
+              method,
+              result: { sessionId: 'ses_MsSXceRDb7hX' }
+            };
+      queueMicrotask(() => {
+        void driver.accept(
+          {
+            source: 'stdout',
+            bytes: new TextEncoder().encode(`${JSON.stringify(response)}\n`),
+            receivedAt: '2026-08-09T00:00:00.000Z'
+          },
+          sink
+        );
+      });
+    },
+    async close() {}
+  };
+
+  await driver.attachChannel(channel, {});
+
+  expect(requests[1]).toEqual({
+    kind: 'request',
+    id: '2',
+    method: 'session/open',
+    params: {
+      agentId: 'agt_1234567890ab',
+      cwd: '/workspace',
+      immutableInstructions: 'Managed Monad instructions'
+    }
+  });
+});
+
 test('Monad resident events preserve approval gate keys for host escape decisions', async () => {
   const driver = new MonadSessionEventDriver('agt_1234567890ab', '/workspace');
   const events: MeshAgentSessionEvent[] = [];
@@ -384,6 +453,12 @@ test('Monad projects real app-server user, reasoning, and assistant records with
       text: 'OK',
       providerEventType: 'session.message.completed',
       activity: 'message'
+    },
+    {
+      role: 'tool',
+      text: 'Tool call shell_exec',
+      providerEventType: 'tool.called',
+      activity: 'tool-call'
     }
   ]);
 });
@@ -409,7 +484,291 @@ test('Monad provider history pages use the same projection as live records', asy
       text: 'I should answer briefly.',
       providerEventType: 'session.message.completed:reasoning'
     },
-    { role: 'agent', text: 'OK', providerEventType: 'session.message.completed' }
+    { role: 'agent', text: 'OK', providerEventType: 'session.message.completed' },
+    { role: 'tool', text: 'Tool call shell_exec', providerEventType: 'tool.called' }
+  ]);
+});
+
+test('Monad projects a compact directive as one context compaction event with its summary', () => {
+  const output = [
+    eventRecord({
+      id: 'evt_200000000001',
+      type: 'session.message.created',
+      at: '2026-08-09T16:31:44.246Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'command' },
+        message: {
+          id: 'msg_200000000001',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'user',
+          text: '/compact',
+          type: 'directive',
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T16:31:44.245Z'
+        },
+        messageRevision: 23
+      }
+    }),
+    eventRecord({
+      id: 'evt_200000000002',
+      type: 'session.message.created',
+      at: '2026-08-09T16:31:44.249Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'command' },
+        message: {
+          id: 'msg_200000000002',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'assistant',
+          text: 'Context compacted.',
+          type: 'directive',
+          data: { effect: { type: 'compacted', compacted: 16, summary: 'Earlier project context.' } },
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T16:31:44.249Z'
+        },
+        messageRevision: 24
+      }
+    })
+  ].join('\n');
+  const projected = monadMeshAgentAdapter.events.projectLive({
+    id: 'mesh_monad_compact',
+    output,
+    providerSessionRef: 'ses_MsSXceRDb7hX'
+  }).events;
+
+  expect(
+    projected.map((event) => {
+      const neutral = toAgentObservationEvent(event, monadObservationProjection);
+      return {
+        id: neutral?.id,
+        kind: neutral?.kind,
+        streaming: neutral?.streaming,
+        text: neutral?.text,
+        summary: neutral?.summary,
+        at: neutral?.at,
+        providerEventType: event.providerEventType
+      };
+    })
+  ).toEqual([
+    {
+      id: 'mesh_monad_compact:message:msg_200000000002:context-compaction',
+      kind: 'context-compaction',
+      streaming: false,
+      text: 'Context compacted',
+      summary: 'Earlier project context.',
+      at: '2026-08-09T16:31:44.249Z',
+      providerEventType: 'contextCompaction'
+    }
+  ]);
+});
+
+test('Monad provider history restores tool events before later assistant messages', async () => {
+  const output = [
+    eventRecord({
+      id: 'evt_100000000003',
+      type: 'session.message.completed',
+      at: '2026-08-09T13:21:39.987Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'agent-loop' },
+        message: {
+          id: 'msg_100000000003',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'assistant',
+          text: 'The project post completed.',
+          type: 'text',
+          stream: { status: 'complete' },
+          active: true,
+          createdAt: '2026-08-09T13:21:39.148Z',
+          updatedAt: '2026-08-09T13:21:39.987Z'
+        },
+        messageRevision: 7
+      }
+    }),
+    eventRecord({
+      id: 'evt_100000000001',
+      type: 'tool.called',
+      at: '2026-08-09T13:21:07.641Z',
+      payload: {
+        toolCallId: 'call_project_post',
+        tool: 'monad__project_post',
+        input: { text: 'Joined', requestId: 'req_join' }
+      }
+    }),
+    eventRecord({
+      id: 'evt_100000000002',
+      type: 'tool.result',
+      at: '2026-08-09T13:21:33.656Z',
+      payload: {
+        toolCallId: 'call_project_post',
+        tool: 'monad__project_post',
+        ok: true,
+        result: '{"ok":true}'
+      }
+    }),
+    eventRecord({
+      id: 'evt_100000000004',
+      type: 'session.message.created',
+      at: '2026-08-09T13:21:07.642Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'agent-loop' },
+        message: {
+          id: 'msg_100000000004',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'assistant',
+          text: '{"tool":"monad__project_post","input":{"text":"Joined"}}',
+          type: 'tool_call',
+          data: {
+            toolCallId: 'call_project_post',
+            toolName: 'monad__project_post',
+            input: { text: 'Joined' }
+          },
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T13:21:07.642Z'
+        },
+        messageRevision: 4
+      }
+    }),
+    eventRecord({
+      id: 'evt_100000000005',
+      type: 'session.message.created',
+      at: '2026-08-09T13:21:33.657Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'agent-loop' },
+        message: {
+          id: 'msg_100000000005',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'tool',
+          text: '{"ok":true}',
+          type: 'tool_result',
+          data: {
+            toolCallId: 'call_project_post',
+            toolName: 'monad__project_post',
+            output: '{"ok":true}',
+            ok: true
+          },
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T13:21:33.657Z'
+        },
+        messageRevision: 5
+      }
+    }),
+    eventRecord({
+      id: 'evt_100000000006',
+      type: 'session.message.created',
+      at: '2026-08-09T13:21:34.000Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'agent-loop' },
+        message: {
+          id: 'msg_100000000006',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'assistant',
+          text: '{"tool":"monad__agent_send","input":{"text":"Continue"}}',
+          type: 'tool_call',
+          data: {
+            toolCallId: 'call_message_only',
+            toolName: 'monad__agent_send',
+            input: { text: 'Continue' }
+          },
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T13:21:34.000Z'
+        },
+        messageRevision: 6
+      }
+    }),
+    eventRecord({
+      id: 'evt_100000000007',
+      type: 'session.message.created',
+      at: '2026-08-09T13:21:35.000Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'agent-loop' },
+        message: {
+          id: 'msg_100000000007',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'tool',
+          text: 'Delivered',
+          type: 'tool_result',
+          data: {
+            toolCallId: 'call_message_only',
+            toolName: 'monad__agent_send',
+            output: 'Delivered',
+            ok: true
+          },
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T13:21:35.000Z'
+        },
+        messageRevision: 7
+      }
+    })
+  ].join('\n');
+  const source = createMonadEventSource(async () => output);
+  const page = await source.readPage?.(
+    { providerSessionRef: 'ses_MsSXceRDb7hX', workingPath: '/workspace' },
+    { view: 'convenience', limit: 20 }
+  );
+  const events = page?.state === 'available' && page.view === 'convenience' ? page.events : [];
+
+  expect(
+    events.map((event) => ({
+      id: event.id,
+      role: event.role,
+      text: event.text,
+      at: event.createdAt,
+      providerEventType: event.providerEventType,
+      dedupeKey: event.dedupeKey
+    }))
+  ).toEqual([
+    {
+      id: 'ses_MsSXceRDb7hX:tool:call_project_post:call',
+      role: 'tool',
+      text: 'Tool call monad__project_post',
+      at: '2026-08-09T13:21:07.641Z',
+      providerEventType: 'tool.called',
+      dedupeKey: 'monad:tool:call_project_post:tool:tool.called'
+    },
+    {
+      id: 'ses_MsSXceRDb7hX:tool:call_project_post:result',
+      role: 'tool',
+      text: '{"ok":true}',
+      at: '2026-08-09T13:21:33.656Z',
+      providerEventType: 'tool.result',
+      dedupeKey: 'monad:tool:call_project_post:tool:tool.result'
+    },
+    {
+      id: 'ses_MsSXceRDb7hX:tool:call_message_only:call',
+      role: 'tool',
+      text: 'Tool call monad__agent_send',
+      at: '2026-08-09T13:21:34.000Z',
+      providerEventType: 'tool.called',
+      dedupeKey: 'monad:tool:call_message_only:tool:tool.called'
+    },
+    {
+      id: 'ses_MsSXceRDb7hX:tool:call_message_only:result',
+      role: 'tool',
+      text: 'Delivered',
+      at: '2026-08-09T13:21:35.000Z',
+      providerEventType: 'tool.result',
+      dedupeKey: 'monad:tool:call_message_only:tool:tool.result'
+    },
+    {
+      id: 'ses_MsSXceRDb7hX:message:msg_100000000003:text',
+      role: 'agent',
+      text: 'The project post completed.',
+      at: '2026-08-09T13:21:39.987Z',
+      providerEventType: 'session.message.completed',
+      dedupeKey: 'monad:f34ba295:agent:session.message.completed'
+    }
   ]);
 });
 

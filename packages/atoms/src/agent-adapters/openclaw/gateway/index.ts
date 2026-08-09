@@ -56,6 +56,9 @@ const CONNECT_ROLE = 'operator';
 /** `operator.write` is what `sessions.create`/`sessions.send` require; the gateway only grants it to a
  *  connection carrying a valid device signature (a token-only connect is granted an empty scope set). */
 const CONNECT_SCOPES = ['operator.read', 'operator.write'];
+// OpenClaw leaves `sessions.patch` unclassified, so its gateway policy requires admin even though Monad
+// only uses it to pin the managed prompt workspace and cwd. Keep that scope off ordinary chat sessions.
+const MANAGED_CONNECT_SCOPES = [...CONNECT_SCOPES, 'operator.admin'];
 
 interface OpenClawConnectState {
   identity: OpenClawDeviceIdentity;
@@ -64,6 +67,9 @@ interface OpenClawConnectState {
   sessionFrame: string;
   nonce?: string;
   retryCount: number;
+  scopes: string[];
+  workingPath: string;
+  systemPromptWorkspace?: string;
 }
 
 // Per-session signing state, populated by `openClawInitialize` and consumed when the gateway's
@@ -97,6 +103,10 @@ export function openClawInitialize(handle: MeshAgentRuntimeHandle, context: Mesh
   const modelParam = context.modelId ?? context.modelName;
   const agentId = context.adapterSettings?.agentId;
   const sessionParams = compactObject({
+    key:
+      context.systemPromptWorkspace && !context.providerSessionRef
+        ? `subagent:monad-${crypto.randomUUID()}`
+        : undefined,
     model: modelParam,
     agentId: typeof agentId === 'string' ? agentId : undefined
   });
@@ -124,7 +134,10 @@ export function openClawInitialize(handle: MeshAgentRuntimeHandle, context: Mesh
     connectId,
     token: context.env?.OPENCLAW_GATEWAY_TOKEN ?? '',
     sessionFrame,
-    retryCount: 0
+    retryCount: 0,
+    scopes: context.systemPromptWorkspace ? MANAGED_CONNECT_SCOPES : CONNECT_SCOPES,
+    workingPath: context.workingPath,
+    systemPromptWorkspace: context.systemPromptWorkspace
   });
 }
 
@@ -137,7 +150,7 @@ function sendConnect(handle: MeshAgentRuntimeHandle, state: OpenClawConnectState
     clientId: CONNECT_CLIENT_ID,
     clientMode: CONNECT_CLIENT_MODE,
     role: CONNECT_ROLE,
-    scopes: CONNECT_SCOPES,
+    scopes: state.scopes,
     signedAtMs,
     token: state.token,
     nonce,
@@ -151,7 +164,7 @@ function sendConnect(handle: MeshAgentRuntimeHandle, state: OpenClawConnectState
       maxProtocol: 4,
       client: { id: CONNECT_CLIENT_ID, displayName: 'monad', version: '0.0.1', platform, mode: CONNECT_CLIENT_MODE },
       role: CONNECT_ROLE,
-      scopes: CONNECT_SCOPES,
+      scopes: state.scopes,
       caps: [],
       auth: state.token ? { token: state.token } : undefined,
       device: {
@@ -247,7 +260,6 @@ function responseEvents(frame: OpenClawEnvelope, handle?: MeshAgentRuntimeHandle
     if (state?.sessionFrame && handle?.gateway) {
       handle.gateway.send(state.sessionFrame);
     }
-    if (handle) connectStates.delete(handle); // connect succeeded — no more retries needed
     return [];
   }
 
@@ -255,9 +267,28 @@ function responseEvents(frame: OpenClawEnvelope, handle?: MeshAgentRuntimeHandle
   // the routable session-target string every other method takes; `sessionId` is a separate internal id.
   if (kind === 'sessionStart' || kind === 'sessionResume') {
     const key = payload?.key;
+    const state = handle ? connectStates.get(handle) : undefined;
+    if (typeof key === 'string' && key.length > 0 && state?.systemPromptWorkspace && handle?.gateway) {
+      const patchId = frameId(handle);
+      handle.pendingRequests?.set(patchId, `sessionPatch:${key}`);
+      handle.gateway.send(
+        req('sessions.patch', patchId, {
+          key,
+          spawnedWorkspaceDir: state.systemPromptWorkspace,
+          spawnedCwd: state.workingPath
+        })
+      );
+      return [];
+    }
+    if (handle) connectStates.delete(handle);
     return typeof key === 'string' && key.length > 0
       ? [{ type: 'session_ref', payload: compactObject({ providerSessionRef: key, responseId: idKey }) }]
       : [];
+  }
+  if (kind?.startsWith('sessionPatch:')) {
+    const key = kind.slice('sessionPatch:'.length);
+    if (handle) connectStates.delete(handle);
+    return key ? [{ type: 'session_ref', payload: { providerSessionRef: key, responseId: idKey } }] : [];
   }
   if (kind === 'eventPage') {
     return [

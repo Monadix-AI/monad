@@ -46,6 +46,26 @@ function codexRequestIdentity(event: MeshAgentObservationEvent): string | undefi
   return undefined;
 }
 
+function monadToolIdentity(event: MeshAgentObservationEvent): string | undefined {
+  if (
+    event.role !== 'tool' ||
+    (event.providerEventType !== 'tool.called' && event.providerEventType !== 'tool.result')
+  ) {
+    return undefined;
+  }
+  for (const rawEvent of event.provenance.rawEvents) {
+    const raw = recordValue(rawEvent);
+    const params = recordValue(raw?.params);
+    const sourceEvent = recordValue(params?.event);
+    const payload = recordValue(sourceEvent?.payload);
+    const message = recordValue(payload?.message);
+    const data = recordValue(message?.data);
+    const toolCallId = payload?.toolCallId ?? data?.toolCallId;
+    if (typeof toolCallId === 'string' && toolCallId.trim().length > 0) return `tool:${toolCallId.trim()}`;
+  }
+  return undefined;
+}
+
 // A Codex rollout record carries no per-record id of its own, so the raw plane would have nothing
 // stable to key a row on. The turn it belongs to plus its position inside that turn is the only
 // identity the file itself exposes, and it stays stable across re-reads of the same rollout.
@@ -70,7 +90,10 @@ function outputRecordIdentities(entries: MeshAgentObservationJsonRecordEntry[]):
 }
 
 function projectedEventPart(id: string, recordIdentity: string): string | undefined {
-  const jsonPart = /:json:\d+:(.+)$/.exec(id)?.[1];
+  const recordMarker = `:json:${recordIdentity}:`;
+  const markerIndex = id.indexOf(recordMarker);
+  const jsonPart = markerIndex === -1 ? /:json:[^:]+:(.+)$/.exec(id)?.[1] : id.slice(markerIndex + recordMarker.length);
+  if (jsonPart === 'tool-call' || jsonPart === 'tool-result') return undefined;
   if (jsonPart) return jsonPart;
   const prefix = `${recordIdentity}:`;
   return id.startsWith(prefix) ? id.slice(prefix.length) : undefined;
@@ -97,12 +120,13 @@ function eventDedupeDiscriminator(event: MeshAgentObservationEvent, recordIdenti
 }
 
 function eventDedupeKey(provider: MeshAgentProvider, event: MeshAgentObservationEvent): string {
-  const requestIdentity = provider === 'codex' ? codexRequestIdentity(event) : undefined;
-  if (requestIdentity) {
+  const semanticIdentity =
+    provider === 'codex' ? codexRequestIdentity(event) : provider === 'monad' ? monadToolIdentity(event) : undefined;
+  if (semanticIdentity) {
     const discriminator = [event.role, event.providerEventType]
       .filter((value): value is string => typeof value === 'string' && value.length > 0)
       .join(':');
-    return discriminator ? `${provider}:${requestIdentity}:${discriminator}` : `${provider}:${requestIdentity}`;
+    return discriminator ? `${provider}:${semanticIdentity}:${discriminator}` : `${provider}:${semanticIdentity}`;
   }
   const rawEvents = event.provenance.rawEvents;
   const recordIds = providerRecordIds(rawEvents);
@@ -122,6 +146,10 @@ function compactEvent(event: MeshAgentObservationEvent): MeshAgentObservationEve
   ) as MeshAgentObservationEvent;
 }
 
+function withObservedAt(event: MeshAgentObservationEvent, observedAt: string | undefined): MeshAgentObservationEvent {
+  return event.createdAt || !observedAt ? event : { ...event, createdAt: observedAt };
+}
+
 function unknownEvent(args: {
   id: string;
   provider: MeshAgentProvider;
@@ -135,6 +163,7 @@ function unknownEvent(args: {
     role: 'system',
     text: providerEventType ?? args.entry.raw,
     source: 'unknown',
+    ...(args.entry.observedAt ? { createdAt: args.entry.observedAt } : {}),
     ...(providerEventType ? { providerEventType } : {}),
     provenance: { rawEvents: [args.entry.record] }
   };
@@ -160,7 +189,7 @@ function projectedRecordEvents(args: {
   if (events.length === 0) return [unknownEvent(args)];
   return events.map((event) =>
     compactEvent({
-      ...event,
+      ...withObservedAt(event, args.entry.observedAt),
       dedupeKey: eventDedupeKey(args.provider, event),
       projection: 'normalized' as const
     })
@@ -201,7 +230,7 @@ function projectedEntries(args: {
       const rawEvents = group.entries.map((entry) => entry.record);
       const withRaw = event.provenance.rawEvents.length === 0 ? { ...event, provenance: { rawEvents } } : event;
       return {
-        ...withRaw,
+        ...withObservedAt(withRaw, group.entries.at(-1)?.observedAt),
         dedupeKey: eventDedupeKey(args.provider, withRaw),
         projection: 'normalized' as const
       };
@@ -209,7 +238,12 @@ function projectedEntries(args: {
   });
 }
 
-function plainTextEvents(provider: MeshAgentProvider, id: string, output: string): MeshAgentObservationEvent[] {
+function plainTextEvents(
+  provider: MeshAgentProvider,
+  id: string,
+  output: string,
+  observedAt?: string
+): MeshAgentObservationEvent[] {
   return output
     .split(/\n{2,}/)
     .map((text) => text.trim())
@@ -221,6 +255,7 @@ function plainTextEvents(provider: MeshAgentProvider, id: string, output: string
         role: text.startsWith('tool:') ? 'tool' : 'agent',
         text,
         source: 'plain-text',
+        ...(observedAt ? { createdAt: observedAt } : {}),
         provenance: { rawEvents: [text] }
       };
       return { ...event, dedupeKey: eventDedupeKey(provider, event) };
@@ -284,9 +319,9 @@ export function createProjectedEventSource(args: {
     )
   });
   return {
-    projectLive: ({ id, output, providerSessionRef }) => {
-      const entries = jsonRecordEntries(output);
-      if (entries.length === 0) return { events: plainTextEvents(args.provider, id, output) };
+    projectLive: ({ id, output, observedAt, providerSessionRef }) => {
+      const entries = jsonRecordEntries(output).map((entry) => ({ ...entry, observedAt }));
+      if (entries.length === 0) return { events: plainTextEvents(args.provider, id, output, observedAt) };
       const projected = args.projection.eventEntries?.(entries, { providerSessionRef }) ?? entries;
       return projectEntries(id, projected);
     },
@@ -306,9 +341,9 @@ export function createProjectedEventSource(args: {
       let output = '';
       let recordIndex = 0;
       return {
-        advance: (delta) => {
+        advance: (delta, observedAt) => {
           output += delta;
-          const decoded = decoder.push(delta);
+          const decoded = decoder.push(delta).map((entry) => ({ ...entry, observedAt }));
           const entries = args.projection.eventEntries?.(decoded, { providerSessionRef }) ?? decoded;
           for (const entry of entries) {
             const created = groupProjector?.create(entry.record);
@@ -326,7 +361,7 @@ export function createProjectedEventSource(args: {
                 const withRaw =
                   event.provenance.rawEvents.length === 0 ? { ...event, provenance: { rawEvents } } : event;
                 return {
-                  ...withRaw,
+                  ...withObservedAt(withRaw, group.entries.at(-1)?.observedAt),
                   dedupeKey: eventDedupeKey(args.provider, withRaw),
                   projection: 'normalized' as const
                 };
@@ -345,7 +380,7 @@ export function createProjectedEventSource(args: {
             }
             recordIndex += 1;
           }
-          if (timeline.length === 0) return { events: plainTextEvents(args.provider, id, output) };
+          if (timeline.length === 0) return { events: plainTextEvents(args.provider, id, output, observedAt) };
           const events = timeline.flatMap((item) =>
             item.kind === 'events' ? item.events : (groups.get(item.key)?.events ?? [])
           );

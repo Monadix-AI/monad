@@ -1,4 +1,4 @@
-import type { IncomingMessage, ServerResponse } from 'node:http';
+import type { IncomingMessage, OutgoingHttpHeader, OutgoingHttpHeaders } from 'node:http';
 
 import { Transform, type TransformCallback } from 'node:stream';
 
@@ -23,6 +23,12 @@ export type ProtectedResponseFailureCode =
   | 'protected_response_too_large'
   | 'protected_response_unsupported_content_type';
 export type ProtectedResponseFailure = (code: ProtectedResponseFailureCode) => void;
+export interface ProtectedResponseWriter extends NodeJS.WritableStream {
+  readonly headersSent: boolean;
+  destroy(error?: Error): unknown;
+  writeHead(statusCode: number, headers?: OutgoingHttpHeaders | OutgoingHttpHeader[]): unknown;
+  writeHead(statusCode: number, statusMessage?: string, headers?: OutgoingHttpHeaders | OutgoingHttpHeader[]): unknown;
+}
 
 interface CredentialRedactionOptions {
   readonly maxOutputBytes?: number;
@@ -128,7 +134,7 @@ export function redactCredentialBytes(
 export async function forwardProtectedCredentialResponse(
   method: string | undefined,
   upstream: IncomingMessage,
-  response: ServerResponse,
+  response: ProtectedResponseWriter,
   redactions: readonly CredentialRedaction[],
   onFailure: ProtectedResponseFailure | undefined,
   budget = new ProtectedResponseBudget()
@@ -363,7 +369,7 @@ function redactHeaderValue(value: string, redactions: readonly CredentialRedacti
 }
 
 function failProtectedResponse(
-  response: ServerResponse,
+  response: ProtectedResponseWriter,
   code: ProtectedResponseFailureCode,
   onFailure: ProtectedResponseFailure | undefined
 ): void {

@@ -101,7 +101,7 @@ function geminiHistoryEntryFromAssistant(
 ): MeshAgentObservationJsonRecordEntry {
   const { delta: _delta, ...record } = entry.record;
   const foldedRecord = { ...record, content: text };
-  return { record: foldedRecord, raw: JSON.stringify(foldedRecord) };
+  return { ...entry, record: foldedRecord, raw: JSON.stringify(foldedRecord) };
 }
 
 function geminiHistoryEntries(entries: MeshAgentObservationJsonRecordEntry[]): MeshAgentObservationJsonRecordEntry[] {

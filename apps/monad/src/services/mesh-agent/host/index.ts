@@ -193,6 +193,7 @@ export class MeshAgentHost {
     });
     this.eventPages = new MeshAgentEventPages({
       live: this.live,
+      monadHome: deps.monadHome,
       resolveAgentEnv: async (agentName) => {
         const agent = (await deps.agents()).find((candidate) => candidate.name === agentName);
         if (!agent) return undefined;
@@ -372,10 +373,8 @@ export class MeshAgentHost {
     if (!row) throw new Error(`MeshAgent session not found: ${id}`);
     const adapter = getMeshAgentProviderAdapter(row.provider);
     if (!adapter.sessionUsage) return null;
+    if (!row.providerSessionRef) return null;
     const agent = await requireMeshSessionAgent(this.deps.agents, row.agentName, row.provider);
-    if (!row.providerSessionRef) {
-      throw new MeshAgentError('provider_protocol_error', `MeshAgent session has no provider session reference: ${id}`);
-    }
     const usage = await adapter.sessionUsage.read({
       providerSessionRef: row.providerSessionRef,
       workingPath: row.workingPath,

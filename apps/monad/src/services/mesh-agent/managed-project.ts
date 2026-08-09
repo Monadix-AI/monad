@@ -90,6 +90,13 @@ export function managedProjectRuntimeWorkspace(args: {
   return managedProjectRuntimeWorkspaces(args).runtime;
 }
 
+export function managedProjectSharedWorkspace(args: { monadHome: string; projectId: string }): string {
+  const project = resolve(args.monadHome, 'workplace', args.projectId);
+  const shared = resolve(project, 'shared');
+  assertManagedWorkspaceContained(project, shared);
+  return shared;
+}
+
 export function managedProjectRuntimeWorkspaces(args: {
   monadHome: string;
   projectId: string;
@@ -123,6 +130,7 @@ export function prepareManagedProjectRuntime(
     monadHome: string;
     serverUrl: string;
     meshSessionId: string;
+    workingPath?: string;
     baseEnvPath?: string;
     agentCommand?: string;
     agentEnv?: Readonly<Record<string, string>>;
@@ -186,6 +194,8 @@ export function prepareManagedProjectRuntime(
   const env = {
     ...(managed?.env?.({
       workspace,
+      workingPath: args.workingPath ?? workspace,
+      immutableInstructions: { text: prompt, file: promptFile },
       skipProviderApprovals: args.skipProviderApprovals ?? false,
       agentCommand: args.agentCommand ?? args.provider,
       agentEnv: args.agentEnv,

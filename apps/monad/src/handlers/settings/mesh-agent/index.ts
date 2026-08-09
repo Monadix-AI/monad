@@ -236,7 +236,7 @@ export function createMeshAgentSettingsModule({
           const view =
             configured ?? enrichViews([toBaseView(entry.config)], fallbackCapabilities([toBaseView(entry.config)]))[0];
           if (!view) throw new Error(`Missing invitable MeshAgent view "${entry.config.name}"`);
-          return toInvitableMeshAgent(view, entry.source);
+          return toInvitableMeshAgent(view, entry.source, getMeshAgentProviderAdapter(view.provider).icon);
         })
       };
     },

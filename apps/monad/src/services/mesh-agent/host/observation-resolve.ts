@@ -9,6 +9,7 @@ import type {
   ObservationCursor
 } from '@monad/protocol';
 import type { LiveMeshSession, MeshAgentHostDeps } from '#/services/mesh-agent/host/host-types.ts';
+import type { LiveRawRow } from '#/services/mesh-agent/live-raw-store.ts';
 
 import { MESH_AGENT_OUTPUT_SNAPSHOT_MAX } from '@monad/protocol';
 import { toFallbackAgentObservationEvent } from '@monad/sdk-atom';
@@ -21,7 +22,6 @@ import {
   liveRowsToRawFrames,
   readyFrame
 } from '#/services/mesh-agent/host/observation-dual.ts';
-import { liveRawRowsOutput } from '#/services/mesh-agent/live-raw-store.ts';
 
 export type MeshAgentRawObservationResult =
   | { state: 'live'; observationEpoch: string; frames: MeshRawEvent[] }
@@ -99,15 +99,31 @@ export class MeshAgentObservationResolver {
     if (incremental) return incremental;
     let output = '';
     return {
-      advance: (delta: string) => {
+      advance: (delta: string, observedAt?: string) => {
         output += delta;
-        return live.adapter.events.projectLive({
+        const projected = live.adapter.events.projectLive({
           id,
           output,
+          ...(observedAt ? { observedAt } : {}),
           ...(live.providerSessionRef ? { providerSessionRef: live.providerSessionRef } : {})
         });
+        return {
+          ...projected,
+          events: projected.events.map((event) =>
+            event.createdAt || !observedAt ? event : { ...event, createdAt: observedAt }
+          )
+        };
       }
     };
+  }
+
+  private advanceConvenienceRows(
+    projector: ReturnType<MeshAgentObservationResolver['createConvenienceProjector']>,
+    rows: LiveRawRow[]
+  ) {
+    let page = { events: [] } as ReturnType<typeof projector.advance>;
+    for (const row of rows) page = projector.advance(row.payload, row.observedAt);
+    return page;
   }
 
   private toConvenienceEvents(live: LiveMeshSession, events: MeshAgentObservationEvent[]) {
@@ -130,7 +146,7 @@ export class MeshAgentObservationResolver {
       sortDirection: 'desc'
     });
     const projector = this.createConvenienceProjector(live, id);
-    return this.toConvenienceEvents(live, projector.advance(liveRawRowsOutput(page.rows)).events);
+    return this.toConvenienceEvents(live, this.advanceConvenienceRows(projector, page.rows).events);
   }
 
   private advanceConvenienceProjection(live: LiveMeshSession, id: string): ConvenienceProjectionAdvance {
@@ -149,7 +165,7 @@ export class MeshAgentObservationResolver {
         events:
           page.rows.length === 0
             ? []
-            : this.toConvenienceEvents(live, projector.advance(liveRawRowsOutput(page.rows)).events),
+            : this.toConvenienceEvents(live, this.advanceConvenienceRows(projector, page.rows).events),
         ...(page.nextBefore !== undefined && page.rows[0]
           ? { eventsBefore: liveObservationCursor(live.observationEpoch, page.rows[0].seq) }
           : {}),
@@ -171,7 +187,7 @@ export class MeshAgentObservationResolver {
         });
         const last = page.rows.at(-1);
         if (!last) break;
-        state.events = this.toConvenienceEvents(live, state.projector.advance(liveRawRowsOutput(page.rows)).events);
+        state.events = this.toConvenienceEvents(live, this.advanceConvenienceRows(state.projector, page.rows).events);
         state.seq = last.seq;
       }
       return { state, previousSeq, previousEvents };

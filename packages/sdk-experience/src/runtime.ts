@@ -1,5 +1,6 @@
 import type {
   AgentSessionSnapshot,
+  ChannelIcon,
   MeshAgentProvider,
   ProfileView,
   ProjectId,
@@ -76,6 +77,7 @@ export interface WorkplaceExperienceMemberCandidate {
   reasoningEfforts: string[];
   executionCapabilities: { autopilot: boolean; fastMode: boolean };
   icon?: WorkplaceExperienceIcon;
+  providerIcon?: ChannelIcon;
   provider?: MeshAgentProvider;
 }
 

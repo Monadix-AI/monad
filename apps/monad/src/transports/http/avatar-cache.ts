@@ -52,6 +52,8 @@ import stripes from '@dicebear/styles/stripes.json' with { type: 'json' };
 import thumbs from '@dicebear/styles/thumbs.json' with { type: 'json' };
 import toonHead from '@dicebear/styles/toon-head.json' with { type: 'json' };
 import triangles from '@dicebear/styles/triangles.json' with { type: 'json' };
+import voxelArt from '@dicebear/styles/voxel-art.json' with { type: 'json' };
+import voxelBot from '@dicebear/styles/voxel-bot.json' with { type: 'json' };
 import waves from '@dicebear/styles/waves.json' with { type: 'json' };
 import weave from '@dicebear/styles/weave.json' with { type: 'json' };
 import { getPaths } from '@monad/environment';
@@ -110,6 +112,8 @@ const STYLE_DEFINITIONS: Record<AvatarStyle, unknown> = {
   thumbs,
   'toon-head': toonHead,
   triangles,
+  'voxel-art': voxelArt,
+  'voxel-bot': voxelBot,
   waves,
   weave
 };

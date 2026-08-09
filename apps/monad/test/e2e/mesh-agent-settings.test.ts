@@ -326,6 +326,8 @@ async function runValidation(call: Call, paths: MonadPaths): Promise<void> {
 }
 
 async function runInvitableMonadAgent(call: Call): Promise<void> {
+  const monadIcon = builtinAgentAdapters.find((adapter) => adapter.provider === 'monad')?.icon;
+  if (!monadIcon) throw new Error('Expected Monad adapter icon');
   let res = await call('GET', '/v1/mesh/agents');
   expect(res.status).toBe(200);
   expect(await res.json()).toEqual({ agents: [] });
@@ -339,6 +341,7 @@ async function runInvitableMonadAgent(call: Call): Promise<void> {
         displayName: 'Reviewer',
         provider: 'monad',
         productIcon: 'monad',
+        icon: monadIcon,
         enabled: true,
         allowAutopilot: false,
         capabilities: {

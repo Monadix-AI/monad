@@ -1,3 +1,4 @@
+import type { NativeAgentManagedMcpServer } from '@monad/protocol';
 import type {
   MeshAgentManagedEnvContext,
   MeshAgentProviderAdapter,
@@ -5,6 +6,7 @@ import type {
   SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
 
+import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
@@ -27,6 +29,46 @@ import { hermesObservationProjection } from './observation.ts';
 
 const HERMES_SUPPORTED_MODELS: string[] = [];
 
+function yamlRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+}
+
+function hermesConfig(path: string): Record<string, unknown> {
+  try {
+    return yamlRecord(Bun.YAML.parse(readFileSync(path, 'utf8'))) ?? {};
+  } catch (error) {
+    throw new Error(`Hermes managed MCP configuration failed: invalid config.yaml: ${String(error)}`);
+  }
+}
+
+function writeHermesManagedMcpConfig(path: string, server: NativeAgentManagedMcpServer): void {
+  const config = hermesConfig(path);
+  const existingServers = yamlRecord(config.mcp_servers) ?? {};
+  config.mcp_servers = {
+    ...existingServers,
+    [server.name]: {
+      command: server.command,
+      args: server.args,
+      env: server.env,
+      enabled: true
+    }
+  };
+  writeFileSync(path, Bun.YAML.stringify(config), { mode: 0o600 });
+  chmodSync(path, 0o600);
+}
+
+function requireHermesManagedMcpConfig(path: string, server: NativeAgentManagedMcpServer): void {
+  const entry = yamlRecord(yamlRecord(hermesConfig(path).mcp_servers)?.[server.name]);
+  if (
+    entry?.command !== server.command ||
+    JSON.stringify(entry.args) !== JSON.stringify(server.args) ||
+    JSON.stringify(entry.env) !== JSON.stringify(server.env) ||
+    entry.enabled !== true
+  ) {
+    throw new Error(`Hermes managed MCP configuration failed: server '${server.name}' was not persisted`);
+  }
+}
+
 export function hermesManagedMcpEnv(
   context: MeshAgentManagedEnvContext,
   run: ManagedMcpConfigRunner = runManagedMcpConfigCommand
@@ -34,28 +76,20 @@ export function hermesManagedMcpEnv(
   if (!context.agentCommand || !context.mcpServer) throw new Error('Hermes managed runtime requires an MCP server');
   const sourceHome = context.agentEnv?.HERMES_HOME ?? join(homedir(), '.hermes');
   const managedHome = join(context.workspace, '.hermes-managed');
-  mirrorManagedConfigHome(sourceHome, managedHome, 'config.yaml', '{}\n');
+  mirrorManagedConfigHome(sourceHome, managedHome, 'config.yaml', '{}\n', { preserveExisting: true });
+  const configPath = join(managedHome, 'config.yaml');
   const env: Record<string, string> = { ...(context.agentEnv ?? {}), HERMES_HOME: managedHome };
+  writeHermesManagedMcpConfig(configPath, context.mcpServer);
   requireManagedMcpConfigCommand(
     'Hermes',
     {
-      argv: [
-        context.agentCommand,
-        'mcp',
-        'add',
-        context.mcpServer.name,
-        '--command',
-        context.mcpServer.command,
-        '--env',
-        ...Object.entries(context.mcpServer.env).map(([key, value]) => `${key}=${value}`),
-        '--args',
-        ...context.mcpServer.args
-      ],
+      argv: [context.agentCommand, 'config', 'set', 'agent.system_prompt', context.immutableInstructions.text],
       cwd: context.workspace,
       env
     },
     run
   );
+  requireHermesManagedMcpConfig(configPath, context.mcpServer);
   return { HERMES_HOME: managedHome };
 }
 

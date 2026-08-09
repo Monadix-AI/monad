@@ -7,6 +7,7 @@ import type {
   SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
 
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
@@ -29,15 +30,14 @@ function withFlag(args: string[], names: string[], name: string, value: string |
   return [...args, name, value];
 }
 
-function turnText(input: MeshAgentTurnInput, immutableInstructions?: string): string {
+function turnText(input: MeshAgentTurnInput): string {
   const attachments =
     input.attachments.length === 0
       ? ''
       : `\n\nAttachments available in the workspace:\n${input.attachments
           .map((attachment) => `- ${attachment.name}: ${attachment.path}`)
           .join('\n')}`;
-  const prompt = `${input.text}${attachments}`;
-  return immutableInstructions ? `${immutableInstructions}\n\n${prompt}` : prompt;
+  return `${input.text}${attachments}`;
 }
 
 function buildAntigravityTurnLaunch(
@@ -50,6 +50,9 @@ function buildAntigravityTurnLaunch(
   args = withFlag(args, ['--conversation'], '--conversation', providerSessionRef);
   args = withFlag(args, ['--model'], '--model', context.modelId ?? context.modelName);
   args = withFlag(args, ['--effort'], '--effort', context.reasoningEffort);
+  if (context.startInput?.immutableInstructions) {
+    args = withFlag(args, ['--agent'], '--agent', 'monad-managed');
+  }
   for (const path of context.extraWorkingPaths ?? []) args.push('--add-dir', path);
   if (context.skipProviderApprovals && !hasFlag(args, '--dangerously-skip-permissions')) {
     args.push('--dangerously-skip-permissions');
@@ -65,16 +68,11 @@ function createAntigravitySessionRuntime(
   agent: MeshAgentView,
   context: MeshAgentSessionRuntimeContext
 ): SessionEventRuntimeDefinition {
-  let firstTurn = true;
   return {
     plan: {
       processModel: 'per-turn',
       buildTurnLaunch: ({ providerSessionRef }) => buildAntigravityTurnLaunch(agent, context, providerSessionRef),
-      encodeTurnInput: (input) => {
-        const prompt = turnText(input, firstTurn ? context.startInput?.immutableInstructions?.text : undefined);
-        firstTurn = false;
-        return { delivery: 'argv-tail', values: ['--print', prompt] };
-      },
+      encodeTurnInput: (input) => ({ delivery: 'argv-tail', values: ['--print', turnText(input)] }),
       startup: { timeoutMs: 20_000 },
       continuation: { strategy: 'provider-session-ref' }
     },
@@ -99,9 +97,16 @@ export const antigravityMeshAgentAdapter: MeshAgentProviderAdapter = {
   }),
   settings: () => meshAgentAdapterSettings(),
   managedRuntime: {
-    env: ({ workspace, mcpServer }) => {
+    env: ({ workspace, immutableInstructions, mcpServer }) => {
       if (!mcpServer) throw new Error('Antigravity managed runtime requires an MCP server');
       writeManagedMcpConfigFile(join(workspace, '.agents', 'mcp_config.json'), mcpServer);
+      const agentDir = join(workspace, '.agents', 'agents', 'monad-managed');
+      mkdirSync(agentDir, { recursive: true });
+      writeFileSync(
+        join(agentDir, 'agent.md'),
+        `---\nname: monad-managed\ndescription: Monad managed runtime instructions\n---\n\n${immutableInstructions.text}\n`,
+        { mode: 0o600 }
+      );
       return {};
     },
     usesManagedMcpBridge: true

@@ -8,8 +8,33 @@ export function codexAppServerItemRecord(p: Record<string, unknown>): Record<str
   return p;
 }
 
+function codexSemanticToolName(item: Record<string, unknown>): string | undefined {
+  const action = recordValue(item.action);
+  const input = recordValue(item.input);
+  const value = textValue(action?.name, input?.name, action?.type, input?.type);
+  if (!value || value.toLowerCase() === 'tool') return undefined;
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+    .split(/[\s_-]+/)
+    .filter(Boolean)
+    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+    .join(' ');
+}
+
 function codexAppServerToolName(item: Record<string, unknown>, fallback = 'tool'): string {
-  return textValue(item.name, item.tool, item.toolName, item.kind, item.type) ?? fallback;
+  const explicitName = textValue(item.name, item.tool, item.toolName);
+  if (explicitName && explicitName.toLowerCase() !== 'tool') return explicitName;
+  const semanticName = codexSemanticToolName(item);
+  if (semanticName) return semanticName;
+  const itemType = textValue(item.kind, item.type);
+  if (itemType && ['websearch', 'web_search', 'web_search_call'].includes(itemType.toLowerCase())) return 'Search';
+  return explicitName ?? itemType ?? fallback;
+}
+
+function isCodexAppServerWebSearchItem(item: Record<string, unknown>): boolean {
+  const type = textValue(item.type, item.kind, item.itemType)?.toLowerCase();
+  const actionType = textValue(recordValue(item.action)?.type, recordValue(item.input)?.type)?.toLowerCase();
+  return type === 'websearch' || type === 'web_search' || type === 'web_search_call' || actionType === 'search';
 }
 
 export function isCodexAppServerToolLikeItem(item: Record<string, unknown>): boolean {
@@ -47,9 +72,11 @@ export function hasCodexAppServerToolInput(item: Record<string, unknown>): boole
 
 export function hasCodexAppServerToolOutput(item: Record<string, unknown>): boolean {
   return (
+    isCodexAppServerWebSearchItem(item) ||
     item.changes !== undefined ||
     item.output !== undefined ||
     item.result !== undefined ||
+    item.results !== undefined ||
     item.content !== undefined ||
     item.aggregatedOutput !== undefined ||
     item.aggregated_output !== undefined ||
@@ -105,6 +132,7 @@ export function codexAppServerToolResultObservation(args: {
     textValue(
       args.item.output,
       args.item.result,
+      args.item.results,
       args.item.content,
       args.item.message,
       args.item.error,
@@ -113,6 +141,7 @@ export function codexAppServerToolResultObservation(args: {
     ) ??
     codexMcpContentText(
       args.item.result ??
+        args.item.results ??
         args.item.output ??
         args.item.content ??
         args.item.aggregatedOutput ??
@@ -121,10 +150,11 @@ export function codexAppServerToolResultObservation(args: {
     compactJson(
       args.item.output ??
         args.item.result ??
+        args.item.results ??
         args.item.content ??
         args.item.aggregatedOutput ??
         args.item.aggregated_output ??
-        args.item
+        (isCodexAppServerWebSearchItem(args.item) ? { status: textValue(args.item.status) ?? 'completed' } : args.item)
     );
   return observation({
     id: `${args.id}:json:${recordKey}${args.itemIndex === undefined ? '' : `:${args.itemIndex}`}:tool-result`,

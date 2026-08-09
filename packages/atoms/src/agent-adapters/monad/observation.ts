@@ -43,10 +43,83 @@ interface MonadMessageGroup {
   rawEvents: Record<string, unknown>[];
 }
 
+interface MonadToolMessage {
+  messageId: string;
+  phase: 'call' | 'result';
+  text: string;
+  toolCallId?: string;
+  createdAt: string;
+}
+
+interface MonadContextCompactionMessage {
+  messageId: string;
+  summary?: string;
+  createdAt: string;
+}
+
 function reasoningFromMessageData(data: unknown): string | undefined {
   if (!data || typeof data !== 'object' || Array.isArray(data)) return undefined;
   const reasoning = (data as Record<string, unknown>).reasoning;
   return typeof reasoning === 'string' && reasoning.trim() ? reasoning : undefined;
+}
+
+function jsonRecordValue(value: string): Record<string, unknown> | undefined {
+  try {
+    return recordValue(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function contextCompactionMessageFromRecord(
+  record: Record<string, unknown>
+): MonadContextCompactionMessage | undefined {
+  const event = eventFromRecord(record);
+  if (event?.type !== 'session.message.created') return undefined;
+  const { message } = sessionMessageCreatedPayloadSchema.parse(event.payload);
+  if (message.role !== 'assistant' || message.type !== 'directive') return undefined;
+  const effect = recordValue(recordValue(message.data)?.effect);
+  if (effect?.type !== 'compacted') return undefined;
+  return {
+    messageId: message.id,
+    summary: nonEmptyString(effect.summary),
+    createdAt: message.createdAt
+  };
+}
+
+function toolMessageFromRecord(record: Record<string, unknown>): MonadToolMessage | undefined {
+  const event = eventFromRecord(record);
+  if (event?.type !== 'session.message.created') return undefined;
+  const { message } = sessionMessageCreatedPayloadSchema.parse(event.payload);
+  if (message.type !== 'tool_call' && message.type !== 'tool_result') return undefined;
+  const data = recordValue(message.data);
+  const textData = jsonRecordValue(message.text);
+  const toolName = nonEmptyString(data?.toolName) ?? nonEmptyString(textData?.tool);
+  const phase = message.type === 'tool_call' ? 'call' : 'result';
+  return {
+    messageId: message.id,
+    phase,
+    text: phase === 'call' ? `Tool call ${toolName ?? 'tool'}` : (nonEmptyString(data?.output) ?? message.text),
+    toolCallId: nonEmptyString(data?.toolCallId),
+    createdAt: message.createdAt
+  };
+}
+
+function explicitToolEventKey(record: Record<string, unknown>): string | undefined {
+  const event = eventFromRecord(record);
+  if (event?.type === 'tool.called') {
+    const payload = toolCalledPayloadSchema.parse(event.payload);
+    return `call:${payload.toolCallId}`;
+  }
+  if (event?.type === 'tool.result') {
+    const payload = toolResultPayloadSchema.parse(event.payload);
+    return `result:${payload.toolCallId}`;
+  }
+  return undefined;
 }
 
 function messageGroupSeed(record: Record<string, unknown>): { key: string; state: MonadMessageGroup } | undefined {
@@ -156,6 +229,32 @@ function renderMessageGroup(id: string, group: MonadMessageGroup): MeshAgentObse
 function monadEventObservations(id: string, record: Record<string, unknown>): MeshAgentObservationEvent[] {
   const event = eventFromRecord(record);
   if (!event) return [];
+  const contextCompaction = contextCompactionMessageFromRecord(record);
+  if (contextCompaction) {
+    return observation({
+      id: `${id}:message:${contextCompaction.messageId}:context-compaction`,
+      role: 'system',
+      text: 'Context compacted',
+      summary: contextCompaction.summary,
+      source: 'monad-app-server',
+      providerEventType: 'contextCompaction',
+      createdAt: contextCompaction.createdAt,
+      raw: record
+    });
+  }
+  const toolMessage = toolMessageFromRecord(record);
+  if (toolMessage) {
+    const identity = toolMessage.toolCallId ?? toolMessage.messageId;
+    return observation({
+      id: `${id}:tool:${identity}:${toolMessage.phase}`,
+      role: 'tool',
+      text: toolMessage.text,
+      source: 'monad-app-server',
+      providerEventType: toolMessage.phase === 'call' ? 'tool.called' : 'tool.result',
+      createdAt: toolMessage.createdAt,
+      raw: record
+    });
+  }
   const common = {
     id: `${id}:${event.id}`,
     source: 'monad-app-server' as const,
@@ -165,7 +264,12 @@ function monadEventObservations(id: string, record: Record<string, unknown>): Me
   };
   if (event.type === 'tool.called') {
     const payload = toolCalledPayloadSchema.parse(event.payload);
-    return observation({ ...common, role: 'tool', text: `Tool call ${payload.tool}` });
+    return observation({
+      ...common,
+      id: `${id}:tool:${payload.toolCallId}:call`,
+      role: 'tool',
+      text: `Tool call ${payload.tool}`
+    });
   }
   if (event.type === 'tool.progress') {
     const payload = toolProgressPayloadSchema.parse(event.payload);
@@ -173,7 +277,12 @@ function monadEventObservations(id: string, record: Record<string, unknown>): Me
   }
   if (event.type === 'tool.result') {
     const payload = toolResultPayloadSchema.parse(event.payload);
-    return observation({ ...common, role: 'tool', text: payload.displayResult ?? payload.result });
+    return observation({
+      ...common,
+      id: `${id}:tool:${payload.toolCallId}:result`,
+      role: 'tool',
+      text: payload.displayResult ?? payload.result
+    });
   }
   if (event.type === 'session.run.completed') {
     return observation({ ...common, role: 'system', text: 'Turn completed' });
@@ -189,39 +298,55 @@ export const monadObservationProjection = {
   identity: (event: MeshAgentObservationEvent) => event.id,
   checkpoint: (event: MeshAgentObservationEvent) => event.id,
   eventEntries(entries) {
-    return entries.filter((entry) => {
-      if (
-        entry.record.kind === 'response' &&
-        (entry.record.method === 'initialize' ||
-          entry.record.method === 'session/open' ||
-          entry.record.method === 'turn/start' ||
-          entry.record.method === 'turn/steer')
-      ) {
-        return false;
-      }
-      if (
-        entry.record.kind === 'notification' &&
-        (entry.record.method === 'session/identified' || entry.record.method === 'session/error')
-      ) {
-        return false;
-      }
-      const event = eventFromRecord(entry.record);
-      if (!event) return true;
-      if (
-        event.type === 'session.created' ||
-        event.type === 'session.updated' ||
-        event.type === 'session.message.updated' ||
-        event.type === 'session.run.started' ||
-        event.type === 'tool.approval_requested' ||
-        event.type === 'tool.approval_resolved'
-      ) {
-        return false;
-      }
-      if (event.type === 'session.message.created' || event.type === 'session.message.completed') {
-        return messageGroupSeed(entry.record) !== undefined;
-      }
-      return true;
-    });
+    const explicitToolEvents = new Set(
+      entries.map((entry) => explicitToolEventKey(entry.record)).filter((key): key is string => key !== undefined)
+    );
+    return entries
+      .filter((entry) => {
+        if (
+          entry.record.kind === 'response' &&
+          (entry.record.method === 'initialize' ||
+            entry.record.method === 'session/open' ||
+            entry.record.method === 'turn/start' ||
+            entry.record.method === 'turn/steer')
+        ) {
+          return false;
+        }
+        if (
+          entry.record.kind === 'notification' &&
+          (entry.record.method === 'session/identified' || entry.record.method === 'session/error')
+        ) {
+          return false;
+        }
+        const event = eventFromRecord(entry.record);
+        if (!event) return true;
+        if (
+          event.type === 'session.created' ||
+          event.type === 'session.updated' ||
+          event.type === 'session.message.updated' ||
+          event.type === 'session.run.started' ||
+          event.type === 'tool.approval_requested' ||
+          event.type === 'tool.approval_resolved'
+        ) {
+          return false;
+        }
+        if (event.type === 'session.message.created' || event.type === 'session.message.completed') {
+          if (contextCompactionMessageFromRecord(entry.record)) return true;
+          const toolMessage = toolMessageFromRecord(entry.record);
+          if (toolMessage) {
+            return !toolMessage.toolCallId || !explicitToolEvents.has(`${toolMessage.phase}:${toolMessage.toolCallId}`);
+          }
+          return messageGroupSeed(entry.record) !== undefined;
+        }
+        return true;
+      })
+      .map((entry, index) => ({ entry, event: eventFromRecord(entry.record), index }))
+      .sort((left, right) => {
+        if (!left.event || !right.event) return left.index - right.index;
+        const order = left.event.at.localeCompare(right.event.at);
+        return order === 0 ? left.index - right.index : order;
+      })
+      .map(({ entry }) => entry);
   },
   classifyActivity(event: MeshAgentObservationEvent) {
     if (event.providerEventType === 'tool.called') return 'tool-call';

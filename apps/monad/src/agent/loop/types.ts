@@ -167,6 +167,8 @@ export interface AgentLoopDeps {
   cacheSystemPrompt?: boolean;
   /** Base behavior template for the system prompt. */
   instructions?: string | ((sessionId?: SessionId) => string | undefined);
+  /** Immutable session-scoped instructions appended without replacing the base behavior template. */
+  additionalInstructions?: string | ((sessionId?: SessionId) => string | undefined);
   /** User-editable prompt slots (e.g. SOUL/AGENT/USER), resolved per turn. */
   promptSlots?: UserPromptSlots | ((sessionId?: SessionId) => UserPromptSlots | undefined);
   /** Non-secret Agent Credential manifest, resolved per turn. */

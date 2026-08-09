@@ -32,6 +32,7 @@ import {
 
 type SendHandler = (
   args: {
+    humanDisplayName?: string;
     sessionId: SessionId;
     onComplete?: (text: string) => void | Promise<void>;
     origin?: MessageOrigin;
@@ -182,6 +183,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
           text: route.text,
           attachments,
           generate: false,
+          humanDisplayName: cfg?.user.displayName ?? 'User',
           replyToMessageId,
           origin
         });
@@ -210,6 +212,7 @@ export function createSendProjectMessageHandler(ctx: SessionContext, deps: SendP
         attachments,
         replyToMessageId,
         generate: routeGenerate,
+        ...(isWorkplaceProject ? { humanDisplayName: cfg?.user.displayName ?? 'User' } : {}),
         ambientContext,
         onComplete: dispatchStructuredNext,
         origin

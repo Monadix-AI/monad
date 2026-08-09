@@ -23,8 +23,11 @@ type CodexMessageGroup = {
   raw: Record<string, unknown>[];
   rawLines: string[];
   fragments: string[];
+  summaryFragments: string[];
   startedText?: string;
+  startedSummaries?: string[];
   completedText?: string;
+  completedSummaries?: string[];
   startedAt?: string;
   completedAt?: string;
 };
@@ -58,9 +61,9 @@ export function codexItemText(item: Record<string, unknown> | undefined): string
   const direct = rawTextValue(item.text);
   if (direct !== undefined) return direct;
   if (item.type === 'reasoning' || item.type === 'thinking') {
-    for (const value of [item.summary, item.content]) {
-      if (!Array.isArray(value)) continue;
-      const text = value.filter((part): part is string => typeof part === 'string').join('\n\n');
+    const content = item.content;
+    if (Array.isArray(content)) {
+      const text = content.filter((part): part is string => typeof part === 'string').join('\n\n');
       if (text) return text;
     }
   }
@@ -73,6 +76,19 @@ export function codexItemText(item: Record<string, unknown> | undefined): string
     return text === undefined ? [] : [text];
   });
   return parts.length > 0 ? parts.join('') : undefined;
+}
+
+export function codexItemSummaries(item: Record<string, unknown> | undefined): string[] {
+  if (!item || (item.type !== 'reasoning' && item.type !== 'thinking') || !Array.isArray(item.summary)) return [];
+  return item.summary
+    .filter((part): part is string => typeof part === 'string')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+export function codexItemSummary(item: Record<string, unknown> | undefined): string | undefined {
+  const summary = codexItemSummaries(item).join('\n\n');
+  return summary || undefined;
 }
 
 function codexObservationGroup(
@@ -133,33 +149,42 @@ function codexObservationGroup(
 
 function codexMessageLifecycleText(record: Record<string, unknown>): {
   completedAt?: string;
+  completedSummaries?: string[];
   completedText?: string;
   fragment?: string;
+  summaryFragment?: string;
   startedAt?: string;
+  startedSummaries?: string[];
   startedText?: string;
 } {
   const method = textValue(record.method);
   const params = recordValue(record.params);
   if (!method || !params) return {};
-  if (
-    method === 'item/agentMessage/delta' ||
-    method === 'item/reasoning/summaryTextDelta' ||
-    method === 'item/reasoning/textDelta'
-  )
+  if (method === 'item/reasoning/summaryTextDelta') return { summaryFragment: rawTextValue(params.delta, params.text) };
+  if (method === 'item/agentMessage/delta' || method === 'item/reasoning/textDelta')
     return { fragment: rawTextValue(params.delta, params.text) };
   const item = recordValue(params.item);
   const itemType = textValue(item?.type);
   if (itemType !== 'agentMessage' && itemType !== 'reasoning' && itemType !== 'userMessage') return {};
   const text = codexItemText(item);
+  const summaries = codexItemSummaries(item);
   if (method === 'item/started')
-    return { startedAt: providerEpochMsTimestamp(numberValue(params.startedAtMs)), startedText: text };
+    return {
+      startedAt: providerEpochMsTimestamp(numberValue(params.startedAtMs)),
+      ...(summaries.length > 0 ? { startedSummaries: summaries } : {}),
+      startedText: text
+    };
   if (method === 'item/completed')
-    return { completedAt: providerEpochMsTimestamp(numberValue(params.completedAtMs)), completedText: text };
+    return {
+      completedAt: providerEpochMsTimestamp(numberValue(params.completedAtMs)),
+      ...(summaries.length > 0 ? { completedSummaries: summaries } : {}),
+      completedText: text
+    };
   return {};
 }
 
 function codexMessageGroupInit(key: string, kind: CodexMessageGroup['kind']): CodexMessageGroup {
-  return { key, kind, raw: [], rawLines: [], fragments: [] };
+  return { key, kind, raw: [], rawLines: [], fragments: [], summaryFragments: [] };
 }
 
 function codexMessageGroupAppend(group: CodexMessageGroup, entry: MeshAgentObservationJsonRecordEntry): void {
@@ -167,8 +192,11 @@ function codexMessageGroupAppend(group: CodexMessageGroup, entry: MeshAgentObser
   group.rawLines.push(entry.raw);
   const text = codexMessageLifecycleText(entry.record);
   if (text.fragment !== undefined) group.fragments.push(text.fragment);
+  if (text.summaryFragment !== undefined) group.summaryFragments.push(text.summaryFragment);
   if (text.startedText !== undefined) group.startedText = text.startedText;
+  if (text.startedSummaries !== undefined) group.startedSummaries = text.startedSummaries;
   if (text.completedText !== undefined) group.completedText = text.completedText;
+  if (text.completedSummaries !== undefined) group.completedSummaries = text.completedSummaries;
   if (text.startedAt !== undefined) group.startedAt = text.startedAt;
   if (text.completedAt !== undefined) group.completedAt = text.completedAt;
 }
@@ -201,21 +229,28 @@ function codexToolGroupAppend(group: CodexToolGroup, entry: MeshAgentObservation
 function codexMessageGroupEvent(id: string, group: CodexMessageGroup): MeshAgentObservationEvent[] {
   const text = group.completedText ?? group.startedText ?? group.fragments.join('');
   if (group.kind === 'reasoning') {
+    const streamedSummary = group.summaryFragments.join('');
+    const summaries =
+      group.completedSummaries ?? group.startedSummaries ?? (streamedSummary ? [streamedSummary] : [undefined]);
     const startedAtMs = group.startedAt ? Date.parse(group.startedAt) : Number.NaN;
     const completedAtMs = group.completedAt ? Date.parse(group.completedAt) : Number.NaN;
     const durationMs =
       Number.isFinite(startedAtMs) && Number.isFinite(completedAtMs) && completedAtMs >= startedAtMs
         ? completedAtMs - startedAtMs
         : undefined;
-    return thinkingObservation({
-      id: `${id}:json:${group.key}:reasoning`,
-      text,
-      source: 'codex-app-server',
-      providerEventType: 'item/reasoning/delta',
-      durationMs,
-      createdAt: group.completedAt ?? group.startedAt,
-      rawEvents: group.raw
-    });
+    const multiple = summaries.length > 1;
+    return summaries.flatMap((summary, index) =>
+      thinkingObservation({
+        id: `${id}:json:${group.key}:reasoning${multiple ? `:summary:${index}` : ''}`,
+        text: index === summaries.length - 1 ? text : undefined,
+        source: 'codex-app-server',
+        providerEventType: multiple ? 'item/reasoning/summary' : 'item/reasoning/delta',
+        durationMs: index === summaries.length - 1 ? durationMs : undefined,
+        summary,
+        createdAt: group.completedAt ?? group.startedAt,
+        rawEvents: group.raw
+      })
+    );
   }
   return observation({
     id: `${id}:json:${group.key}:${group.kind}-message`,

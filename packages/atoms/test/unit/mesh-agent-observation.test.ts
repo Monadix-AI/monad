@@ -401,9 +401,23 @@ test('Codex app-server observation renders reasoning and diff streams', () => {
   ].join('\n');
 
   const items = meshAgentStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output });
-  expect(items.map((item) => ({ role: item.role, type: item.providerEventType, text: item.text }))).toEqual([
-    { role: 'agent', type: 'item/reasoning/delta', text: 'Considering the plan.' },
-    { role: 'tool', type: 'turn/diff/updated', text: '--- a\n+++ b\n' }
+  expect(
+    items.map((item) => ({
+      hasContent: item.hasContent,
+      role: item.role,
+      summary: item.summary,
+      type: item.providerEventType,
+      text: item.text
+    }))
+  ).toEqual([
+    {
+      hasContent: false,
+      role: 'agent',
+      summary: 'Considering the plan.',
+      type: 'item/reasoning/delta',
+      text: 'Thinking…'
+    },
+    { hasContent: undefined, role: 'tool', summary: undefined, type: 'turn/diff/updated', text: '--- a\n+++ b\n' }
   ]);
 });
 
@@ -520,12 +534,23 @@ test('Codex app-server observation renders the completed reasoning summary when 
   expect(
     [summaryItem, contentItem].map((item) =>
       meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output: lifecycle(item) }).map(
-        ({ kind, text }) => ({ kind, text })
+        ({ kind, summary, text }) => ({ kind, summary, text })
       )
     )
   ).toEqual([
-    [{ kind: 'reasoning', text: 'Inspecting the project.\n\nChecking the tests.' }],
-    [{ kind: 'reasoning', text: 'Raw reasoning fallback.' }]
+    [
+      {
+        kind: 'reasoning',
+        summary: 'Inspecting the project.',
+        text: 'Thinking…'
+      },
+      {
+        kind: 'reasoning',
+        summary: 'Checking the tests.',
+        text: 'Raw reasoning fallback.'
+      }
+    ],
+    [{ kind: 'reasoning', summary: undefined, text: 'Raw reasoning fallback.' }]
   ]);
 });
 
@@ -535,11 +560,11 @@ test('MeshAgent observation projects thinking records from all adapters', () => 
       provider: 'claude-code',
       output: JSON.stringify({
         type: 'assistant',
-        message: { content: [{ type: 'thinking', thinking: '' }] }
+        message: { content: [{ type: 'thinking', thinking: 'checking files' }] }
       }),
       source: 'claude-code-sdk',
       type: 'thinking',
-      text: 'Thinking…'
+      text: 'checking files'
     },
     {
       provider: 'qwen',
@@ -622,6 +647,31 @@ test('MeshAgent observation merges streaming thinking deltas', () => {
       source: 'qwen-code-sdk',
       providerEventType: 'thinking_delta',
       text: 'Checking state.'
+    }
+  ]);
+});
+
+test('Claude Code observation keeps partial thinking and drops the empty settled block', () => {
+  const output = [
+    JSON.stringify({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'Inspecting ' } }
+    }),
+    JSON.stringify({
+      type: 'stream_event',
+      event: { type: 'content_block_delta', delta: { type: 'thinking_delta', thinking: 'the project.' } }
+    }),
+    JSON.stringify({
+      type: 'assistant',
+      message: { content: [{ type: 'thinking', thinking: '', signature: 'signed' }] }
+    })
+  ].join('\n');
+
+  expect(meshAgentNeutralStreamItems({ id: 'mesh_claude000000', provider: 'claude-code', output })).toMatchObject([
+    {
+      kind: 'reasoning',
+      streaming: true,
+      text: 'Inspecting the project.'
     }
   ]);
 });
@@ -1461,10 +1511,10 @@ test('Codex turns page history projects explicit turn boundaries around each ret
 
   expect(items.map(({ at, kind, reason, text }) => ({ at, kind, reason, text }))).toEqual([
     { at: '2026-07-14T03:33:20.000Z', kind: 'turn-start', reason: undefined, text: 'Turn started' },
-    { at: undefined, kind: 'assistant-message', reason: undefined, text: 'first turn answer' },
+    { at: '2026-07-14T03:33:25.000Z', kind: 'assistant-message', reason: undefined, text: 'first turn answer' },
     { at: '2026-07-14T03:33:25.000Z', kind: 'turn-end', reason: 'completed', text: 'Turn completed' },
     { at: '2026-07-14T03:33:30.000Z', kind: 'turn-start', reason: undefined, text: 'Turn started' },
-    { at: undefined, kind: 'assistant-message', reason: undefined, text: 'second turn answer' },
+    { at: '2026-07-14T03:33:35.000Z', kind: 'assistant-message', reason: undefined, text: 'second turn answer' },
     { at: '2026-07-14T03:33:35.000Z', kind: 'turn-end', reason: 'completed', text: 'Turn completed' }
   ]);
 });
@@ -1786,6 +1836,45 @@ test('Codex app-server observation projects turns page responses', () => {
   ]);
 });
 
+test('Codex app-server full turn reasoning projects each summary as a separate item', () => {
+  const output = JSON.stringify({
+    id: 'turn_with_summary',
+    items: [
+      {
+        type: 'reasoning',
+        id: 'item_reasoning',
+        summary: ['**Enumerating MCP tools by server grouping**', '**Checking tool availability**'],
+        content: []
+      }
+    ],
+    itemsView: 'full',
+    status: 'completed',
+    startedAt: 1_786_250_334,
+    completedAt: 1_786_250_362
+  });
+
+  expect(
+    meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }).map(
+      ({ hasContent, kind, summary, text }) => ({ hasContent, kind, summary, text })
+    )
+  ).toEqual([
+    { hasContent: undefined, kind: 'turn-start', summary: undefined, text: 'Turn started' },
+    {
+      hasContent: false,
+      kind: 'reasoning',
+      summary: '**Enumerating MCP tools by server grouping**',
+      text: 'Thinking…'
+    },
+    {
+      hasContent: false,
+      kind: 'reasoning',
+      summary: '**Checking tool availability**',
+      text: 'Thinking…'
+    },
+    { hasContent: undefined, kind: 'turn-end', summary: undefined, text: 'Turn completed' }
+  ]);
+});
+
 test('Codex app-server observation projects web search and compaction items', () => {
   const output = [
     JSON.stringify({
@@ -1795,10 +1884,16 @@ test('Codex app-server observation projects web search and compaction items', ()
           type: 'webSearch',
           id: 'ws_1',
           query: 'react-native-libsodium GitHub crypto_kx',
+          results: [
+            {
+              title: 'react-native-libsodium',
+              url: 'https://github.com/example/react-native-libsodium'
+            }
+          ],
           action: {
             type: 'search',
             query: 'react-native-libsodium GitHub crypto_kx',
-            queries: ['react-native-libsodium GitHub crypto_kx']
+            queries: null
           }
         }
       }
@@ -1819,7 +1914,13 @@ test('Codex app-server observation projects web search and compaction items', ()
       role: 'tool',
       source: 'codex-app-server',
       providerEventType: 'function_call',
-      text: 'Tool call webSearch {"type":"search","query":"react-native-libsodium GitHub crypto_kx","queries":["react-native-libsodium GitHub crypto_kx"]}'
+      text: 'Tool call Search {"type":"search","query":"react-native-libsodium GitHub crypto_kx","queries":null}'
+    },
+    {
+      role: 'tool',
+      source: 'codex-app-server',
+      providerEventType: 'function_call_output',
+      text: '[{"title":"react-native-libsodium","url":"https://github.com/example/react-native-libsodium"}]'
     },
     {
       role: 'system',
@@ -1828,17 +1929,76 @@ test('Codex app-server observation projects web search and compaction items', ()
       text: 'Context compacted'
     }
   ]);
+  const neutralEvents = meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output });
   expect(
-    meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }).map((event) => ({
+    neutralEvents.map((event) => ({
       kind: event.kind,
       text: event.text
     }))
   ).toEqual([
     {
       kind: 'tool-call',
-      text: 'Tool call webSearch {"type":"search","query":"react-native-libsodium GitHub crypto_kx","queries":["react-native-libsodium GitHub crypto_kx"]}'
+      text: 'Tool call Search {"type":"search","query":"react-native-libsodium GitHub crypto_kx","queries":null}'
+    },
+    {
+      kind: 'tool-result',
+      text: '[{"title":"react-native-libsodium","url":"https://github.com/example/react-native-libsodium"}]'
     },
     { kind: 'context-compaction', text: 'Context compacted' }
+  ]);
+  expect(
+    agentObservationCards(neutralEvents, 'codex')
+      .filter((card) => card.kind === 'tool')
+      .map((card) => ({
+        name: cardToolCallPayload(card)?.tool?.name,
+        output: cardToolResultPayload(card)?.tool?.output
+      }))
+  ).toEqual([
+    {
+      name: 'Search',
+      output: [
+        {
+          title: 'react-native-libsodium',
+          url: 'https://github.com/example/react-native-libsodium'
+        }
+      ]
+    }
+  ]);
+});
+
+test('Codex app-server observation recovers every generic tool name from its semantic input', () => {
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_codex_generic_tools',
+    provider: 'codex',
+    output: JSON.stringify({
+      method: 'item/completed',
+      params: {
+        item: {
+          type: 'tool',
+          id: 'tool_fetch_1',
+          input: { type: 'fetch_page', url: 'https://example.com' },
+          output: 'Fetched page.'
+        }
+      }
+    })
+  });
+
+  expect(
+    agentObservationCards(events, 'codex').map((card) => ({
+      callId: cardToolCallPayload(card)?.tool?.callId,
+      input: cardToolCallPayload(card)?.tool?.input,
+      kind: card.kind,
+      name: cardToolCallPayload(card)?.tool?.name,
+      output: cardToolResultPayload(card)?.tool?.output
+    }))
+  ).toEqual([
+    {
+      callId: 'tool_fetch_1',
+      input: { type: 'fetch_page', url: 'https://example.com' },
+      kind: 'tool',
+      name: 'Fetch Page',
+      output: 'Fetched page.'
+    }
   ]);
 });
 

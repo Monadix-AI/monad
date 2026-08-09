@@ -13,7 +13,6 @@ import {
   buildCodexAuthLaunch,
   CODEX_APP_BIN,
   CODEX_NON_INTERACTIVE_ENV,
-  CODEX_SUPPORTED_MODELS,
   codexManagedMcpConfigArgs,
   parseCodexArgumentSupport,
   parseCodexModelOptions
@@ -77,7 +76,7 @@ export const codexMeshAgentAdapter: MeshAgentProviderAdapter = {
     return resolveBinary(command, command === 'codex' ? [CODEX_APP_BIN] : [], probes);
   },
   listSupportedModels(agent) {
-    return agent?.modelOptions?.length ? agent.modelOptions : CODEX_SUPPORTED_MODELS;
+    return agent?.modelOptions || [];
   },
   archiveSession: archiveCodexSession,
   unarchiveSession: unarchiveCodexSession,

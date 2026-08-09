@@ -3,6 +3,8 @@ import type { Event, ManagedMeshAgentLifecycleLogEvent, MeshSessionView, Session
 import type { SessionContext } from '#/handlers/session/context.ts';
 import type { MeshAgentTargetId } from '#/store/db/mesh-sessions.ts';
 
+import { mkdirSync } from 'node:fs';
+
 import { extractError } from '#/agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
 import {
@@ -10,6 +12,7 @@ import {
   meshAgentInputText
 } from '#/handlers/session/handlers/messaging-notices.ts';
 import { makeEvent } from '#/services/event-bus.ts';
+import { managedProjectSharedWorkspace } from '#/services/mesh-agent/managed-project.ts';
 
 const MANAGED_MESH_AGENT_RESUME_FAILED_COLD_START_EVENT =
   'project.managed_mesh.resume_failed_cold_start' satisfies ManagedMeshAgentLifecycleLogEvent;
@@ -30,6 +33,7 @@ export type StartManagedMeshAgentRuntimeArgs = {
   runtimeAgentName: string;
   templateAgentName: string;
   displayName?: string;
+  workingDirectoryOverride?: string;
   modelName?: string;
   modelId?: string;
   reasoningEffort?: string;
@@ -47,7 +51,7 @@ export type StartManagedMeshAgentRuntimeArgs = {
  *  lifecycle, with no dependency on the delivery/thinking-message machinery that calls it. */
 export function createManagedMeshAgentRuntime(ctx: SessionContext) {
   const {
-    deps: { log, meshAgentHost },
+    deps: { log, meshAgentHost, paths },
     makeEmit,
     persistAndRetire
   } = ctx;
@@ -68,6 +72,7 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
     runtimeAgentName,
     templateAgentName,
     displayName,
+    workingDirectoryOverride,
     modelName,
     modelId,
     reasoningEffort,
@@ -78,16 +83,28 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
     input
   }: StartManagedMeshAgentRuntimeArgs): Promise<MeshSessionView> {
     if (!meshAgentHost) throw new HandlerError('internal', 'MeshAgent host not configured');
-    if (!session.cwd) throw new HandlerError('invalid', `MeshAgent "${spec.name}" requires a project working path`);
-    if (!session.projectId) throw new HandlerError('invalid', `MeshAgent "${spec.name}" requires a project binding`);
+    const currentSession = ctx.requireSession(session.id);
+    if (!currentSession.projectId)
+      throw new HandlerError('invalid', `MeshAgent "${spec.name}" requires a project binding`);
+    const configuredWorkingPath = workingDirectoryOverride?.trim() || currentSession.cwd;
+    const workingPath =
+      configuredWorkingPath ??
+      (paths?.home
+        ? managedProjectSharedWorkspace({
+            monadHome: paths.home,
+            projectId: currentSession.projectId
+          })
+        : undefined);
+    if (!workingPath) throw new HandlerError('invalid', `MeshAgent "${spec.name}" requires a project working path`);
+    if (!configuredWorkingPath) mkdirSync(workingPath, { recursive: true });
     const startArgs = {
       transcriptTargetId: session.id,
-      projectId: session.projectId,
+      projectId: currentSession.projectId,
       agentName: runtimeAgentName,
       projectMemberId,
       displayName,
       templateAgentName,
-      workingPath: session.cwd,
+      workingPath,
       allowAutopilot,
       runtimeRole: 'managed-project-agent' as const,
       modelName,

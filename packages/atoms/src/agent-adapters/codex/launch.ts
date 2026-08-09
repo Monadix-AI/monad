@@ -8,7 +8,6 @@ import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
 
 export const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
 export const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };
-export const CODEX_SUPPORTED_MODELS = ['gpt-5.5', 'gpt-5.4', 'gpt-5.4-mini', 'gpt-5.3-codex', 'gpt-5.2'];
 
 function codexSkipApprovalArgs(args: string[], skipProviderApprovals: boolean): string[] {
   if (!skipProviderApprovals || hasFlag(args, '--ask-for-approval')) return [];

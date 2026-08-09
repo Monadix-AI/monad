@@ -13,7 +13,7 @@
 // close over `target` without socket-keyed lookups, and works under both Node and Bun (Bun does not
 // implement server.emit('connection', socket)).
 
-import type { ClientRequest, Server as HttpServer, IncomingMessage, ServerResponse } from 'node:http';
+import type { ClientRequest, Server as HttpServer, IncomingMessage } from 'node:http';
 import type { Socket as NodeSocket } from 'node:net';
 import type { Readable } from 'node:stream';
 import type { MitmCA } from './ca.ts';
@@ -33,6 +33,7 @@ import {
   isCredentialTextualContentType,
   type ProtectedResponseBudget,
   type ProtectedResponseFailure,
+  type ProtectedResponseWriter,
   type ResponseRedactions
 } from '../credential-redaction-stream.ts';
 
@@ -228,7 +229,7 @@ async function forwardUpstream(
   trackUpstream: (upstream: ClientRequest) => void,
   trackResponse: (response: IncomingMessage) => void,
   req: IncomingMessage,
-  res: ServerResponse,
+  res: ProtectedResponseWriter,
   target: TerminateTarget,
   secure: boolean
 ): Promise<void> {

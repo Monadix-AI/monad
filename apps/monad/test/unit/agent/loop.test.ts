@@ -6,6 +6,7 @@ import { messageIdSchema, newId } from '@monad/protocol';
 
 import {
   AgentLoop,
+  createAgent,
   type ImageAttachment,
   InMemoryMessageRepo,
   type MessageRepo,
@@ -610,6 +611,35 @@ test('system prompt uses custom instructions + renders the environment block', a
   expect(sys).toContain('<environment>');
   expect(sys).toContain('date: 2026-06-15');
   expect(sys).toContain('cwd: /work');
+});
+
+test('per-session immutable instructions stay in the native system message', async () => {
+  let captured: ModelMessage[] = [];
+  const model: ModelRouter = {
+    async *stream() {},
+    async complete(req): Promise<ModelResult> {
+      captured = req.messages;
+      return { text: 'ok', finishReason: 'stop' };
+    }
+  };
+  const agent = createAgent({
+    model,
+    sessionRepo: { insertSession() {}, getSession: () => null }
+  });
+  const loop = agent.loop(() => {}, { instructions: 'Managed session instructions' });
+
+  await loop.runBlock(newId('ses') as SessionId, 'hello');
+
+  expect(captured[0]?.role).toBe('system');
+  expect(captured[0]?.content).toContain('You are an interactive engineering agent.');
+  expect(captured[0]?.content).toEndWith('\n\nManaged session instructions');
+  const userContent = captured[1]?.content;
+  if (!Array.isArray(userContent)) throw new Error('multipart user message required');
+  expect(userContent.at(-1)).toEqual({
+    type: 'text',
+    text: 'hello'
+  });
+  expect(JSON.stringify(captured[1])).not.toContain('Managed session instructions');
 });
 
 test('system prompt injects user-editable prompt slots separately from behavior', async () => {

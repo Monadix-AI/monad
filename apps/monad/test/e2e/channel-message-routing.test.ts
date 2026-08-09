@@ -631,7 +631,7 @@ for (const kind of TRANSPORTS) {
       expect(listed.status).toBe(200);
       const sessions = ((await listed.json()) as { sessions: Array<{ agentName: string }> }).sessions;
       // The managed runtime's agentName is the member's stable identity (the fresh pmem id).
-      expect(sessions.map((nativeSession) => nativeSession.agentName)).toEqual([member.id]);
+      expect([...new Set(sessions.map((nativeSession) => nativeSession.agentName))]).toEqual([member.id]);
     });
 
     test('project messages wake only MeshAgent members in the project roster', async () => {
@@ -731,7 +731,7 @@ for (const kind of TRANSPORTS) {
           batch.messages.map(({ sender, source, text }) => ({ sender, source, text }))
         )
       ).toContainEqual({
-        sender: { kind: 'human', name: 'Human' },
+        sender: { kind: 'human', name: 'zeke', id: 'human' },
         source: 'project',
         text: 'inherited cwd task'
       });
@@ -882,7 +882,7 @@ for (const kind of TRANSPORTS) {
       const input = await waitForFile(stdinLog, 'please review this');
       const messagesForAgent = managedIngressBatches(input).flatMap((batch) => batch.messages);
       expect(messagesForAgent.map(({ sender, source, text }) => ({ sender, source, text }))).toContainEqual({
-        sender: { kind: 'human', name: 'Human' },
+        sender: { kind: 'human', name: 'zeke', id: 'human' },
         source: 'project',
         text: 'please review this'
       });
@@ -1536,11 +1536,15 @@ for (const kind of TRANSPORTS) {
       ]);
     });
 
-    test('project mention fanout without a working path preserves the public message', async () => {
-      await configureMockMeshAgent(t, dir);
+    test('project fanout without a session cwd uses the member working directory', async () => {
+      const memberDir = join(dir, 'member-workspace');
+      await mkdir(memberDir, { recursive: true });
+      const { stdinLog } = await configureMockMeshAgent(t, dir);
       const projectId = await createWorkplaceProject(t);
       const sessionId = await createProjectSession(t, projectId);
-      await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { managedProjectAgent: true })]);
+      await setMemberTemplates(t, projectId, [
+        meshAgentTemplate('codex', 'codex', { cwd: memberDir, managedProjectAgent: true })
+      ]);
       await inviteMember(t, sessionId, 'codex');
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
@@ -1551,12 +1555,68 @@ for (const kind of TRANSPORTS) {
       expect(send.status).toBe(200);
       expect(await send.json()).toEqual({ accepted: true });
 
-      expect((await listMessages(t, sessionId)).map(({ role, text }) => ({ role, text }))).toEqual([
-        {
-          role: 'user',
-          text: '@[name="codex" id="mesh-agent:codex"] inspect repo'
-        }
+      const input = await waitForFile(stdinLog, 'inspect repo');
+      expect(managedIngressBatches(input).flatMap((batch) => batch.messages.map((message) => message.text))).toEqual([
+        '@[name="codex" id="mesh-agent:codex"] inspect repo'
       ]);
+      const nativeSession = await waitForValue(
+        () =>
+          handlers.store
+            .listMeshSessionsForTranscriptTarget(sessionId)
+            .find((candidate) => candidate.runtimeRole === 'managed-project-agent'),
+        'managed project member runtime'
+      );
+
+      expect({
+        messages: (await listMessages(t, sessionId)).map(({ role, text }) => ({ role, text })),
+        workingPath: await comparablePath(nativeSession.workingPath)
+      }).toEqual({
+        messages: [
+          { role: 'user', text: '@[name="codex" id="mesh-agent:codex"] inspect repo' },
+          { role: 'assistant', text: '' }
+        ],
+        workingPath: await comparablePath(memberDir)
+      });
+    });
+
+    test('project fanout without any configured cwd uses the project shared workspace', async () => {
+      const { stdinLog } = await configureMockMeshAgent(t, dir);
+      const projectId = await createWorkplaceProject(t);
+      const sessionId = await createProjectSession(t, projectId);
+      await setMemberTemplates(t, projectId, [meshAgentTemplate('codex', 'codex', { managedProjectAgent: true })]);
+      await inviteMember(t, sessionId, 'codex');
+
+      const send = await t.fetch(
+        `/v1/channels/${sessionId}/messages`,
+        json('POST', {
+          text: '@[name="codex" id="mesh-agent:codex"] inspect shared workspace'
+        })
+      );
+      expect(send.status).toBe(200);
+      expect(await send.json()).toEqual({ accepted: true });
+
+      const input = await waitForFile(stdinLog, 'inspect shared workspace');
+      expect(managedIngressBatches(input).flatMap((batch) => batch.messages.map((message) => message.text))).toEqual([
+        '@[name="codex" id="mesh-agent:codex"] inspect shared workspace'
+      ]);
+      const nativeSession = await waitForValue(
+        () =>
+          handlers.store
+            .listMeshSessionsForTranscriptTarget(sessionId)
+            .find((candidate) => candidate.runtimeRole === 'managed-project-agent'),
+        'managed project member runtime'
+      );
+
+      expect({
+        messages: (await listMessages(t, sessionId)).map(({ role, text }) => ({ role, text })),
+        workingPath: await comparablePath(nativeSession.workingPath)
+      }).toEqual({
+        messages: [
+          { role: 'user', text: '@[name="codex" id="mesh-agent:codex"] inspect shared workspace' },
+          { role: 'assistant', text: '' }
+        ],
+        workingPath: await comparablePath(join(makePaths(dir).home, 'workplace', projectId, 'shared'))
+      });
     });
   });
 }

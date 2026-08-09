@@ -27,6 +27,7 @@ test('Monad app-server requests preserve the complete control contract', () => {
         agentId,
         cwd: '/workspace',
         afterEventId: 'evt_1234567890ab',
+        immutableInstructions: 'Managed Monad instructions',
         mcpServers: [
           {
             name: 'monad',

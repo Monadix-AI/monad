@@ -38,7 +38,15 @@ type ClaudeSystemMessage = Partial<SDKSystemMessage | SDKCompactBoundaryMessage>
   Record<string, unknown> & { type: 'system' };
 
 export function isClaudeObservationMessage(record: Record<string, unknown>): record is ClaudeObservationMessage {
-  return typeof record.type === 'string';
+  return (
+    record.type === 'assistant' ||
+    record.type === 'user' ||
+    record.type === 'result' ||
+    record.type === 'stream_event' ||
+    record.type === 'system' ||
+    record.type === 'rate_limit_event' ||
+    record.type === 'tool_result'
+  );
 }
 
 function resetIso(value: unknown): string | undefined {
@@ -136,9 +144,11 @@ function claudeContentEvents(args: {
       });
     }
     if (item.type === 'thinking' || item.type === 'reasoning') {
+      const text = textValue(item.thinking, item.text, item.content);
+      if (!text) return [];
       return thinkingObservation({
         id: claudeProjectionId(args.id, args.recordIndex, `thinking:${partIndex}`, args.indexedId),
-        text: textValue(item.thinking, item.text, item.content),
+        text,
         source: 'claude-code-sdk',
         providerEventType: String(item.type),
         createdAt: args.createdAt,
@@ -294,20 +304,22 @@ export function claudeRecordEvents(
     if (e.type === 'content_block_delta' && delta && typeof delta === 'object' && !Array.isArray(delta)) {
       const d = delta as Record<string, unknown>;
       if (d.type === 'thinking_delta' || d.thinking !== undefined) {
+        const text = rawTextValue(d.thinking, d.text);
+        if (text === undefined || text.length === 0) return [];
         return thinkingObservation({
           id: claudeProjectionId(base, recordIndex, 'thinking-delta', indexedId),
-          text: rawTextValue(d.thinking, d.text),
+          text,
           source: 'claude-code-sdk',
           providerEventType: 'thinking_delta',
           raw: record,
           preserveWhitespace: true
         });
       }
-      const text = rawTextValue(d.text, d.partial_json);
-      const role = d.type === 'input_json_delta' || d.partial_json ? 'tool' : 'agent';
+      if (d.type === 'input_json_delta' || d.partial_json !== undefined) return [];
+      const text = rawTextValue(d.text);
       return observation({
         id: claudeProjectionId(base, recordIndex, 'delta', indexedId),
-        role,
+        role: 'agent',
         text,
         source: 'claude-code-sdk',
         providerEventType: String(e.type),
@@ -316,20 +328,8 @@ export function claudeRecordEvents(
       });
     }
     if (e.type === 'content_block_start') {
-      const block = e.content_block;
-      if (block && typeof block === 'object' && !Array.isArray(block)) {
-        const b = block as Record<string, unknown>;
-        if (b.type === 'tool_use') {
-          return observation({
-            id: claudeProjectionId(base, recordIndex, 'tool-start', indexedId),
-            role: 'tool',
-            text: `Tool call ${textValue(b.name) ?? 'tool'}`,
-            source: 'claude-code-sdk',
-            providerEventType: String(e.type),
-            raw: record
-          });
-        }
-      }
+      const block = recordValue(e.content_block);
+      if (block?.type === 'tool_use') return [];
     }
   }
   if (isClaudeSystemMessage(record)) {

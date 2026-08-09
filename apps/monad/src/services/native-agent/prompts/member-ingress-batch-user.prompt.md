@@ -1,4 +1,4 @@
-Process this single managed project inbox batch.
+New messages have been received in the managed project inbox.
 
 <%= it.batchJson %>
 

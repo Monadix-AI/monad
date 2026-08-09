@@ -20,7 +20,7 @@ const MANAGED_MESH_AGENT_JOIN_GREETING_PROMPT = await definePrompt({
 
 /** Cold-starts (or resumes) one managed-project-agent member's runtime for the given session and
  *  greets it with the join notice — the explicit-invite counterpart of a member joining a project.
- *  No-ops (returns `started: false`) if the member is already running, the host/cwd aren't ready,
+ *  No-ops (returns `started: false`) if the member is already running, the host isn't ready,
  *  or the provider isn't authenticated (a `connection_required` lifecycle event is emitted instead). */
 export function createManagedMeshAgentJoin(ctx: SessionContext) {
   const {
@@ -52,7 +52,7 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
     session: Session,
     member: ManagedMeshAgentProjectMember
   ): Promise<{ started: boolean; nativeSessionId?: string }> {
-    if (!meshAgentHost || !paths || !session.cwd) return { started: false };
+    if (!meshAgentHost || !paths) return { started: false };
     const { spec, runtimeAgentName, templateAgentName, displayName, configuredDisplayName, settings } = member;
     const managedSessions = meshAgentHost
       .list(session.id)
@@ -85,6 +85,7 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
         runtimeAgentName,
         templateAgentName,
         displayName: configuredDisplayName,
+        workingDirectoryOverride: settings.cwd,
         modelName: settings.modelName ?? settings.modelId,
         modelId: settings.modelId,
         reasoningEffort: settings.reasoningEffort,

@@ -9,6 +9,7 @@ const candidate = {
   displayName: 'Reviewer',
   provider: 'monad',
   productIcon: 'monad',
+  icon: { title: 'Monad adapter', path: 'M1 1h22v22H1z' },
   enabled: true,
   allowAutopilot: true,
   capabilities: {
