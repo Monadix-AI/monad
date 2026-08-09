@@ -23,6 +23,7 @@ import type {
 
 import { entityAvatarUrl, workplaceProjectMemberStableId } from '@monad/protocol';
 
+import { mergeMeshAgentSessions } from '../../experience/mesh-agent-sessions.ts';
 import { foldMeshAgentExperienceState, meshAgentLifecycleNotices } from '../../experience/mesh-agent-state.ts';
 import { productIcon } from '../../experience/project-members.ts';
 import {
@@ -127,7 +128,9 @@ export function toChatRoomCanvas(
       ]
     : genericLiveItems;
   const liveTools = meshAgentState ? rawLiveTools.filter((tool) => !tool.tool.startsWith('mesh-agent:')) : rawLiveTools;
-  const meshSessions = meshAgentState ? [...meshAgentState.sessions.values()] : source.meshSessions;
+  const meshSessions = meshAgentState
+    ? mergeMeshAgentSessions(source.meshSessions, [...meshAgentState.sessions.values()])
+    : source.meshSessions;
   const chronologicalItems =
     c.transcriptMode === 'history' ? source.transcriptItems : [...source.transcriptItems, ...liveItems];
   const chronologicalLiveTools = c.transcriptMode === 'history' ? [] : liveTools;
