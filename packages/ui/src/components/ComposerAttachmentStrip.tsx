@@ -56,14 +56,14 @@ export function ComposerAttachmentStrip({
   return (
     <ul
       aria-label={labels.attachments}
-      className="flex list-none gap-2 overflow-x-auto overscroll-x-contain p-0 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+      className="scrollbar-none flex list-none gap-2 overflow-x-auto overscroll-x-contain p-0 [&::-webkit-scrollbar]:hidden"
     >
       {composerAttachmentRows(attachments).map((attachment) => {
         const thumbnail = (
-          <span className="flex size-[38px] shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-secondary">
+          <span className="flex size-9.5 shrink-0 items-center justify-center overflow-hidden rounded-lg border bg-secondary">
             {attachment.imageSrc ? (
               <ImageZoom
-                className="[&_[data-rmiz-content]]:h-full [&_[data-rmiz-content]]:w-full [&_[data-rmiz]]:h-full [&_[data-rmiz]]:w-full [&_img]:h-full [&_img]:w-full [&_img]:object-cover"
+                className="**:data-rmiz-content:h-full **:data-rmiz:h-full **:data-rmiz-content:w-full **:data-rmiz:w-full [&_img]:h-full [&_img]:w-full [&_img]:object-cover"
                 zoomMargin={24}
               >
                 {/* biome-ignore lint/performance/noImgElement: local data URLs cannot use an image optimizer. */}
@@ -75,7 +75,7 @@ export function ComposerAttachmentStrip({
               </ImageZoom>
             ) : (
               <FileIcon
-                className="size-[18px] text-muted-foreground"
+                className="size-4.5 text-muted-foreground"
                 contentType={attachment.contentType}
                 fileName={attachment.name}
               />
@@ -89,13 +89,13 @@ export function ComposerAttachmentStrip({
           </span>
         );
         const contentClassName = [
-          'flex h-full min-w-0 items-center gap-2 border-0 bg-transparent py-[7px] pl-2 text-left text-foreground',
-          onRemove ? 'pr-8' : 'pr-2'
+          'flex h-full w-full min-w-0 items-center gap-2 border-0 bg-transparent py-[7px] pl-2 text-left text-foreground',
+          onRemove ? 'pr-10' : 'pr-2'
         ].join(' ');
 
         return (
           <li
-            className="relative h-14 w-[168px] shrink-0 overflow-hidden rounded-[10px] border bg-card"
+            className="relative h-14 w-42 shrink-0 overflow-hidden rounded-md border bg-card"
             key={attachment.id}
           >
             {attachment.openable && onOpen && !attachment.imageSrc ? (
