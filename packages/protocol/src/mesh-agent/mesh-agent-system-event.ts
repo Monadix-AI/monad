@@ -1,9 +1,12 @@
 import { z } from 'zod';
 
-export const meshAgentIdleSuspendedSystemEventSchema = z
-  .object({
-    agentId: z.string(),
-    agentName: z.string(),
+const meshAgentNamedSystemEventSchema = z.object({
+  agentId: z.string(),
+  agentName: z.string()
+});
+
+export const meshAgentIdleSuspendedSystemEventVariantSchema = meshAgentNamedSystemEventSchema
+  .extend({
     type: z.literal('idle_suspended'),
     payload: z
       .object({
@@ -13,12 +16,9 @@ export const meshAgentIdleSuspendedSystemEventSchema = z
       .strict()
   })
   .strict();
-export type MeshAgentIdleSuspendedSystemEvent = z.infer<typeof meshAgentIdleSuspendedSystemEventSchema>;
 
-export const meshAgentIdleResumedSystemEventSchema = z
-  .object({
-    agentId: z.string(),
-    agentName: z.string(),
+export const meshAgentIdleResumedSystemEventVariantSchema = meshAgentNamedSystemEventSchema
+  .extend({
     type: z.literal('idle_resumed'),
     payload: z
       .object({
@@ -27,10 +27,42 @@ export const meshAgentIdleResumedSystemEventSchema = z
       .strict()
   })
   .strict();
-export type MeshAgentIdleResumedSystemEvent = z.infer<typeof meshAgentIdleResumedSystemEventSchema>;
+
+const meshAgentTerminalSystemEventSchema = meshAgentNamedSystemEventSchema.extend({
+  payload: z
+    .object({
+      meshSessionId: z.string(),
+      exitCode: z.number().int().nullable()
+    })
+    .strict()
+});
 
 export const meshAgentSystemEventSchema = z.discriminatedUnion('type', [
-  meshAgentIdleSuspendedSystemEventSchema,
-  meshAgentIdleResumedSystemEventSchema
+  meshAgentIdleSuspendedSystemEventVariantSchema,
+  meshAgentIdleResumedSystemEventVariantSchema,
+  meshAgentNamedSystemEventSchema
+    .extend({
+      type: z.literal('resume_failed'),
+      payload: z
+        .object({
+          provider: z.string(),
+          providerSessionRef: z.string()
+        })
+        .strict()
+    })
+    .strict(),
+  meshAgentNamedSystemEventSchema
+    .extend({
+      type: z.literal('connection_required'),
+      payload: z
+        .object({
+          meshSessionId: z.string().optional()
+        })
+        .strict()
+    })
+    .strict(),
+  meshAgentTerminalSystemEventSchema.extend({ type: z.literal('exited') }).strict(),
+  meshAgentTerminalSystemEventSchema.extend({ type: z.literal('failed') }).strict(),
+  meshAgentTerminalSystemEventSchema.extend({ type: z.literal('stopped') }).strict()
 ]);
 export type MeshAgentSystemEvent = z.infer<typeof meshAgentSystemEventSchema>;

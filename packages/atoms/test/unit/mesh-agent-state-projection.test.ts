@@ -270,28 +270,74 @@ test('projects canonical lifecycle events into localized experience notices', ()
   });
 
   expect(
-    meshAgentLifecycleNotices(state).map(({ kind, agentName, text, tone }) => ({
+    meshAgentLifecycleNotices(state).map(({ kind, agentName, event, text, tone }) => ({
       kind,
       agentName,
+      event,
       text,
       tone
     }))
   ).toEqual([
-    { kind: 'idle-suspended', agentName: 'Reviewer', text: 'fell asleep.', tone: 'info' },
-    { kind: 'idle-resumed', agentName: 'Reviewer', text: 'woke up.', tone: 'info' },
+    {
+      kind: 'idle-suspended',
+      agentName: 'Reviewer',
+      event: {
+        agentId: 'codex',
+        agentName: 'Reviewer',
+        type: 'idle_suspended',
+        payload: { meshSessionId, idleTimeoutMs: 300_000 }
+      },
+      text: 'fell asleep.',
+      tone: 'info'
+    },
+    {
+      kind: 'idle-resumed',
+      agentName: 'Reviewer',
+      event: {
+        agentId: 'codex',
+        agentName: 'Reviewer',
+        type: 'idle_resumed',
+        payload: { meshSessionId }
+      },
+      text: 'woke up.',
+      tone: 'info'
+    },
     {
       kind: 'resume-failed',
       agentName: 'codex',
+      event: {
+        agentId: 'codex',
+        agentName: 'codex',
+        type: 'resume_failed',
+        payload: { provider: 'codex', providerSessionRef: 'thread-old' }
+      },
       text: 'codex resume failed for provider session thread-old; started a new runtime.',
       tone: 'warning'
     },
     {
       kind: 'connection-required',
       agentName: 'codex',
+      event: {
+        agentId: 'codex',
+        agentName: 'codex',
+        type: 'connection_required',
+        payload: { meshSessionId }
+      },
       text: 'codex needs to reconnect in Studio.',
       tone: 'error'
     },
-    { kind: 'failed', agentName: 'codex', text: 'codex failed (1).', tone: 'error' }
+    {
+      kind: 'failed',
+      agentName: 'codex',
+      event: {
+        agentId: 'codex',
+        agentName: 'codex',
+        type: 'failed',
+        payload: { meshSessionId, exitCode: 1 }
+      },
+      text: 'codex failed (1).',
+      tone: 'error'
+    }
   ]);
 });
 
@@ -340,6 +386,12 @@ test('projects a failed lifecycle fallback only when its runtime snapshot is una
     {
       id: 'mesh-agent-failed:mesh_1234567890ab:evt_000000000005',
       agentName: 'mesh_1234567890ab',
+      event: {
+        agentId: 'mesh_1234567890ab',
+        agentName: 'mesh_1234567890ab',
+        type: 'failed',
+        payload: { meshSessionId, exitCode: 1 }
+      },
       kind: 'failed',
       meshSessionId,
       observedAt: '2026-07-23T00:00:05.000Z',

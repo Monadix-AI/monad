@@ -82,7 +82,7 @@ test('sessionUiEventSchema accepts snapshot and upsert payloads', () => {
   });
 });
 
-test('mesh-agent system events preserve exact typed variants and legacy system items', () => {
+test('mesh-agent system events preserve exact typed lifecycle variants', () => {
   const suspended = {
     agentId: 'pmem_codex_1',
     agentName: 'Reviewer',
@@ -95,6 +95,18 @@ test('mesh-agent system events preserve exact typed variants and legacy system i
     type: 'idle_resumed' as const,
     payload: { meshSessionId: 'mesh_idle00000000' }
   };
+  const resumeFailed = {
+    agentId: 'codex',
+    agentName: 'Codex',
+    type: 'resume_failed' as const,
+    payload: { provider: 'codex', providerSessionRef: 'thread-old' }
+  };
+  const failed = {
+    agentId: 'codex',
+    agentName: 'Codex',
+    type: 'failed' as const,
+    payload: { meshSessionId: 'mesh_idle00000000', exitCode: 1 }
+  };
   const current = sessionUiEventSchema.parse({
     kind: 'upsert',
     item: {
@@ -105,13 +117,15 @@ test('mesh-agent system events preserve exact typed variants and legacy system i
       seq: 'evt_1'
     }
   });
-  const legacy = sessionUiEventSchema.parse({
+  const generic = sessionUiEventSchema.parse({
     kind: 'upsert',
-    item: { kind: 'system', id: 'legacy', text: 'Legacy notice', seq: 'evt_0' }
+    item: { kind: 'system', id: 'generic', text: 'System notice', seq: 'evt_0' }
   });
 
   expect(meshAgentSystemEventSchema.parse(suspended)).toEqual(suspended);
   expect(meshAgentSystemEventSchema.parse(resumed)).toEqual(resumed);
+  expect(meshAgentSystemEventSchema.parse(resumeFailed)).toEqual(resumeFailed);
+  expect(meshAgentSystemEventSchema.parse(failed)).toEqual(failed);
   expect(meshAgentIdleSuspendedPayloadSchema.parse(suspended)).toEqual(suspended);
   expect(meshAgentIdleResumedPayloadSchema.parse(resumed)).toEqual(resumed);
   expect(current).toEqual({
@@ -124,9 +138,9 @@ test('mesh-agent system events preserve exact typed variants and legacy system i
       seq: 'evt_1'
     }
   });
-  expect(legacy).toEqual({
+  expect(generic).toEqual({
     kind: 'upsert',
-    item: { kind: 'system', id: 'legacy', text: 'Legacy notice', seq: 'evt_0' }
+    item: { kind: 'system', id: 'generic', text: 'System notice', seq: 'evt_0' }
   });
 });
 

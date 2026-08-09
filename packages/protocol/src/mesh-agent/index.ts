@@ -123,11 +123,7 @@ export type {
   MeshAgentStateSession,
   MeshAgentStateSnapshot
 } from './mesh-agent-state.ts';
-export type {
-  MeshAgentIdleResumedSystemEvent,
-  MeshAgentIdleSuspendedSystemEvent,
-  MeshAgentSystemEvent
-} from './mesh-agent-system-event.ts';
+export type { MeshAgentSystemEvent } from './mesh-agent-system-event.ts';
 export type {
   InviteSessionMemberRequest,
   RemoveSessionMemberResponse,
@@ -338,11 +334,7 @@ export {
   meshAgentStateSnapshotSchema,
   meshStateFrameWithinBudget
 } from './mesh-agent-state.ts';
-export {
-  meshAgentIdleResumedSystemEventSchema,
-  meshAgentIdleSuspendedSystemEventSchema,
-  meshAgentSystemEventSchema
-} from './mesh-agent-system-event.ts';
+export { meshAgentSystemEventSchema } from './mesh-agent-system-event.ts';
 export {
   defaultWorkplaceProjectMemberSettings,
   inviteSessionMemberRequestSchema,

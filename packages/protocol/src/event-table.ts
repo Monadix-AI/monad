@@ -22,8 +22,8 @@ import { agentSessionChangedPayloadSchema } from './mesh-agent/agent-session-sta
 import { meshAgentProductIconSchema, meshAgentProviderSchema } from './mesh-agent/mesh-agent-config.ts';
 import { nativeAgentProjectQuestionSchema } from './mesh-agent/mesh-agent-project-messaging.ts';
 import {
-  meshAgentIdleResumedSystemEventSchema,
-  meshAgentIdleSuspendedSystemEventSchema
+  meshAgentIdleResumedSystemEventVariantSchema,
+  meshAgentIdleSuspendedSystemEventVariantSchema
 } from './mesh-agent/mesh-agent-system-event.ts';
 import { messageProducerSchema } from './message-ingress.ts';
 import { sessionPlanTodoRemovedPayloadSchema, sessionPlanTodoUpsertedPayloadSchema } from './session-plan.ts';
@@ -342,8 +342,8 @@ export const meshAgentApprovalResolvedPayloadSchema = z.object({
   reason: z.string().optional()
 });
 
-export const meshAgentIdleSuspendedPayloadSchema = meshAgentIdleSuspendedSystemEventSchema;
-export const meshAgentIdleResumedPayloadSchema = meshAgentIdleResumedSystemEventSchema;
+export const meshAgentIdleSuspendedPayloadSchema = meshAgentIdleSuspendedSystemEventVariantSchema;
+export const meshAgentIdleResumedPayloadSchema = meshAgentIdleResumedSystemEventVariantSchema;
 
 export const meshAgentResumeFailedPayloadSchema = z.object({
   agentName: z.string(),
