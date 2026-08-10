@@ -194,6 +194,7 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
 
     expect(await proc.exit).toEqual({ code: null, signal: 15 });
     await output;
+    // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
     await Bun.sleep(2500);
     expect(existsSync(survived)).toBe(false);
   }, 600_000);
@@ -225,6 +226,7 @@ describe.skipIf(!ENABLED)('net:none confinement (fs escape, credential, privileg
 
     expect(await proc.exit).toEqual({ code: null, signal: 15 });
     await output;
+    // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
     await Bun.sleep(2500);
     expect(existsSync(survived)).toBe(false);
   }, 600_000);

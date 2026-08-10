@@ -86,7 +86,10 @@ async function comparablePath(path: string): Promise<string> {
 }
 
 async function removeTestDirectory(path: string): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
+  // Windows keeps the directory locked until every child the test spawned has fully exited, which
+  // outlasts a fixed attempt count on a loaded runner; bound the retry by the shared budget instead.
+  const deadline = Date.now() + DAEMON_E2E_TIMEOUT_BUDGET.conditionMs;
+  for (;;) {
     try {
       await rm(path, { recursive: true, force: true });
       return;
@@ -95,7 +98,7 @@ async function removeTestDirectory(path: string): Promise<void> {
       if (
         process.platform !== 'win32' ||
         !['EACCES', 'EBUSY', 'EFAULT', 'EPERM'].includes(code ?? '') ||
-        attempt === 49
+        Date.now() >= deadline
       ) {
         throw error;
       }
@@ -103,6 +106,11 @@ async function removeTestDirectory(path: string): Promise<void> {
     }
   }
 }
+
+// Windows terminates a child unconditionally — SIGTERM is never delivered as a catchable signal —
+// so the mock agent's own `exit:` line only ever lands elsewhere. The daemon-reported lifecycle
+// state is the cross-platform contract; the child's self-report only tightens it where observable.
+const CHILD_RECORDS_ITS_OWN_EXIT = process.platform !== 'win32';
 
 const json = (method: string, body?: unknown, headers?: Record<string, string>): RequestInit => ({
   method,
@@ -703,6 +711,7 @@ for (const kind of TRANSPORTS) {
       expect(turnInput).not.toContain(
         'When member availability is relevant or uncertain, call the `session_members` tool before delegating, mentioning, or sending a private message.'
       );
+      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
       await Bun.sleep(100);
       expect(await readLogIfExists(claude.argsLog)).toBe('');
       expect(await readLogIfExists(claude.stdinLog)).toBe('');
@@ -1200,6 +1209,7 @@ for (const kind of TRANSPORTS) {
         );
       const responseOrTimeout = await Promise.race([
         postResult,
+        // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
         Bun.sleep(5_000).then(() => ({ kind: 'timeout' as const }))
       ]);
       if (responseOrTimeout.kind === 'timeout') abort.abort();
@@ -1227,6 +1237,7 @@ for (const kind of TRANSPORTS) {
         sender: { id: codexMember.id, kind: 'mesh-agent', name: 'codex' },
         text: mentionedText
       });
+      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
       await Bun.sleep(100);
       // presence-ok: a strict managed-agent mention targets Claude, so the unrelated reviewer receives no input.
       expect(await readLogIfExists(reviewerStdinLog)).toBe(reviewerInputBeforePost);
@@ -1250,6 +1261,7 @@ for (const kind of TRANSPORTS) {
           createdAt: expect.any(String)
         }
       });
+      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
       await Bun.sleep(100);
       expect(await readLogIfExists(reviewerStdinLog)).toBe(reviewerInputBeforePost);
       expect(await readLogIfExists(claudeStdinLog)).toBe(claudeInput);
@@ -1379,7 +1391,7 @@ for (const kind of TRANSPORTS) {
       await waitFor(
         async () =>
           (await listMessages(t, sessionId)).every((message) => message.role !== 'assistant' || message.text !== ''),
-        { timeoutMs: 10_000, message: 'authenticated member placeholder did not settle' }
+        { timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.conditionMs, message: 'authenticated member placeholder did not settle' }
       );
       expect((await listMessages(t, sessionId)).map((message) => [message.role, message.text])).toEqual([
         ['user', 'initial project task']
@@ -1471,8 +1483,18 @@ for (const kind of TRANSPORTS) {
         );
         expect(stopped.status).toBe(200);
       }
-      lifecycle = (await readLogIfExists(lifecycleLog)).trim().split('\n').filter(Boolean);
-      expect(oldPids.map((pid) => lifecycle.includes(`exit:${pid}`))).toEqual(oldPids.map(() => true));
+      if (CHILD_RECORDS_ITS_OWN_EXIT) {
+        // A 200 from stop only means the request was accepted; the child appends its lifecycle
+        // line afterwards, so read it on a condition rather than immediately.
+        await waitFor(
+          async () => {
+            lifecycle = (await readLogIfExists(lifecycleLog)).trim().split('\n').filter(Boolean);
+            return oldPids.every((pid) => lifecycle.includes(`exit:${pid}`));
+          },
+          { message: 'stopped managed runtimes never recorded their exit' }
+        );
+        expect(oldPids.map((pid) => lifecycle.includes(`exit:${pid}`))).toEqual(oldPids.map(() => true));
+      }
       await waitFor(
         async () => {
           const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
@@ -1536,11 +1558,13 @@ for (const kind of TRANSPORTS) {
       lifecycle = (await readLogIfExists(lifecycleLog)).trim().split('\n').filter(Boolean);
       const starts = lifecycle.filter((entry) => entry.startsWith('start:'));
       expect(starts.length).toBe(expectedAgentNames.length * 2);
-      for (const oldPid of oldPids) {
-        const exitIndex = lifecycle.indexOf(`exit:${oldPid}`);
-        expect(exitIndex).toBeGreaterThanOrEqual(0);
-        for (const newStart of starts.slice(expectedAgentNames.length)) {
-          expect(exitIndex).toBeLessThan(lifecycle.indexOf(newStart));
+      if (CHILD_RECORDS_ITS_OWN_EXIT) {
+        for (const oldPid of oldPids) {
+          const exitIndex = lifecycle.indexOf(`exit:${oldPid}`);
+          expect(exitIndex).toBeGreaterThanOrEqual(0);
+          for (const newStart of starts.slice(expectedAgentNames.length)) {
+            expect(exitIndex).toBeLessThan(lifecycle.indexOf(newStart));
+          }
         }
       }
       expect(

@@ -177,7 +177,9 @@ export function leaveSessionMember(ctx: SessionContext, sessionId: SessionId, me
   // throws when a live entry has no session runtime, but the binding still has to reach 'left'.
   const runtimeId = binding?.currentNativeRuntimeSessionId ?? legacyMember?.meshSessionId ?? null;
   if (runtimeId) {
-    void meshAgentHost?.stop(runtimeId).catch((error) => {
+    // `stop` rejects for an already-dead runtime but throws synchronously for one that was never
+    // live, so `.catch` alone would let the second kind escape and abandon the leave.
+    void (async () => meshAgentHost?.stop(runtimeId))().catch((error) => {
       log?.warn({ sessionId, memberId, meshSessionId: runtimeId, err: error }, 'mesh runtime stop failed on leave');
     });
   }

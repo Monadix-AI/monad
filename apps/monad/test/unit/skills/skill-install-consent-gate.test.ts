@@ -82,6 +82,7 @@ async function startGitDaemon(): Promise<{ daemon: ChildProcess; port: number }>
         probe.on('error', () => resolve(false));
       });
       if (ready) return { daemon: proc, port: candidate };
+      // biome-ignore lint/plugin: poll interval inside a deadline-guarded loop; the loop's own condition decides when to stop, not this delay.
       await Bun.sleep(100);
     }
 

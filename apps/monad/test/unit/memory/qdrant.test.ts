@@ -314,6 +314,7 @@ test('a process that can never stay up stops after maxRestarts', async () => {
   // initial + maxRestarts, then it stops trying: reaching 3 proves it retried, and staying at 3
   // across a further settle proves it gave up rather than looping.
   await waitFor(() => spawns === 3, { timeoutMs: 10_000, message: 'supervisor never exhausted its restarts' });
+  // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
   await Bun.sleep(200);
   expect(spawns).toBe(3);
   await m.stop();

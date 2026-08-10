@@ -20,6 +20,7 @@ import { registerMemoryHooks } from '#/services/memory/hooks.ts';
 import { createMemoryService } from '#/services/memory/index.ts';
 import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import { buildHandlers, mockModel, serveTransport, stubMemoryService, stubModelDeps, TRANSPORTS } from '../helpers.ts';
 import { waitFor } from '../wait.ts';
 
@@ -119,7 +120,7 @@ for (const kind of TRANSPORTS) {
       });
       const events = await tr.sse(`/v1/sessions/${sid}/events`, {
         until: (e) => e.type === 'session.message.completed',
-        timeoutMs: 4000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
       const completed = events.find((e) => e.type === 'session.message.completed');
       if (!completed) throw new Error('missing completed message');

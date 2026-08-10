@@ -10,6 +10,7 @@ import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 import { InteractionService } from '#/interactions/service.ts';
 import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import {
   buildHandlers,
   mockModel,
@@ -126,7 +127,7 @@ for (const kind of TRANSPORTS) {
       expect(response.status).toBe(200);
 
       await waitFor(() => store.listExperienceState('monad-power-pack', projectId, 'task/').length === 0, {
-        timeoutMs: 1_000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.conditionMs,
         message: 'deleting the session never removed its Kanban task state'
       });
 
@@ -184,7 +185,7 @@ test('member assignment and confirmed removal are inert until Start and moving r
 
     const removal = post('/tasks/members/remove', { projectId, taskId, memberId: assignedMemberId });
     await waitFor(() => interactions.listPending().length > 0, {
-      timeoutMs: 1_000,
+      timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.conditionMs,
       message: 'member removal never raised its confirmation interaction'
     });
     const pending = interactions.listPending()[0];
@@ -231,7 +232,11 @@ test('member assignment and confirmed removal are inert until Start and moving r
         task = (await list()).tasks.find((candidate) => candidate.id === taskId);
         return task?.displayState === 'ready';
       },
-      { timeoutMs: 4_000, intervalMs: 10, message: 'task never finished Product Design' }
+      {
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.conditionMs,
+        intervalMs: 10,
+        message: 'task never finished Product Design'
+      }
     );
     store.insertMessage(newId('msg'), sessionId, 'Published product design', new Date().toISOString(), 'assistant', {
       data: {
@@ -266,6 +271,7 @@ test('member assignment and confirmed removal are inert until Start and moving r
       displayState: 'waiting',
       availableActions: { start: true, moveNext: false }
     });
+    // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
     await Bun.sleep(100);
     expect((await list()).tasks.find((candidate) => candidate.id === taskId)).toMatchObject({
       stage: 'tech_design',
