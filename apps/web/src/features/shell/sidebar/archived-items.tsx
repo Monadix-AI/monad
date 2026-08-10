@@ -10,6 +10,7 @@ import { archivedSessionBuckets, visibleArchivedBucketItems } from '#/features/s
 import { projectSessionPath } from '#/features/shell/routing/paths';
 import { useServerSessionSearch } from '#/features/shell/session-server-search';
 import { SIDEBAR_ITEM_ROW_CLASS, SidebarNavItem, SidebarNavSection } from './nav-item';
+import { SidebarScrollArea } from './scroll-area';
 import { SidebarMoreLessControls } from './session-preview-controls';
 import { WorkspaceSection } from './workspace-section';
 import { WorkspaceTreeItem } from './workspace-tree-item';
@@ -91,7 +92,7 @@ export function ArchivedSidebarItems({
           value={query}
         />
       </div>
-      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+      <SidebarScrollArea>
         <div className="flex flex-col gap-px px-2.5 py-3">
           {showLoading ? <p className="px-2 py-2 text-muted-foreground text-xs">{t('web.common.loading')}</p> : null}
           {!showLoading && visibleProjectSessions.length === 0 && visibleChatSessions.length === 0 ? (
@@ -134,7 +135,7 @@ export function ArchivedSidebarItems({
             </WorkspaceSection>
           ) : null}
         </div>
-      </div>
+      </SidebarScrollArea>
     </>
   );
 }
