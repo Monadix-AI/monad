@@ -10,6 +10,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { isPreviewableAttachmentMime } from '@monad/protocol';
 import { useDownloadAttachmentMutation, useGetAttachmentQuery } from '@monad/sdk-experience/react';
 import { FileIcon } from '@monad/ui/components/FileIcon';
+import { SHIKI_THEME_NAMES, SHIKI_THEMES } from '@monad/ui/lib/shiki';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createHighlighter } from 'shiki';
 
@@ -73,12 +74,12 @@ async function highlightFile(content: string, language: BundledLanguage): Promis
   if (cached) return cached;
   let highlighter = highlighterCache.get(language);
   if (!highlighter) {
-    highlighter = createHighlighter({ langs: [language], themes: ['github-light', 'github-dark'] });
+    highlighter = createHighlighter({ langs: [language], themes: SHIKI_THEME_NAMES });
     highlighterCache.set(language, highlighter);
   }
   const result = (await highlighter).codeToTokens(content, {
     lang: language,
-    themes: { dark: 'github-dark', light: 'github-light' }
+    themes: SHIKI_THEMES
   });
   const highlighted = {
     background: result.bg ?? 'transparent',

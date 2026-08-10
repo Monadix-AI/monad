@@ -71,6 +71,7 @@ function visibleText(markup: string): string {
     .replace(/<[^>]+>/g, ' ')
     .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
+    .replace(/\/ /g, '/')
     .trim();
 }
 
@@ -198,10 +199,10 @@ test('Codex fileChange controls reveal the remaining files and an individual dif
 
   const initialButtons = mounted.root.findAllByType('button');
   await act(() => initialButtons.at(-1)?.props.onClick?.());
-  const expandedFiles = renderedText(mounted.toJSON()).replace(/\s+/g, ' ').trim();
+  const expandedFiles = renderedText(mounted.toJSON()).replace(/\s+/g, ' ').replace(/\/ /g, '/').trim();
   const fileButtons = mounted.root.findAllByType('button');
   await act(() => fileButtons[0]?.props.onClick?.());
-  const expandedDiff = renderedText(mounted.toJSON()).replace(/\s+/g, ' ').trim();
+  const expandedDiff = renderedText(mounted.toJSON()).replace(/\s+/g, ' ').replace(/\/ /g, '/').trim();
   await act(() => mounted.unmount());
 
   expect({
@@ -212,5 +213,35 @@ test('Codex fileChange controls reveal the remaining files and an individual dif
       'Edited 4 files + 6 - 2 docs/plan.md + 2 - 1 @@ -1,2 +1,3 @@ 1 - old 1 + new 2 + verified packages/atoms/src/adapter.ts + 1 - 1 packages/atoms/src/index.ts + 1 - 0 packages/atoms/test/adapter.test.ts + 2 - 0 Show fewer files',
     expandedFiles:
       'Edited 4 files + 6 - 2 docs/plan.md + 2 - 1 packages/atoms/src/adapter.ts + 1 - 1 packages/atoms/src/index.ts + 1 - 0 packages/atoms/test/adapter.test.ts + 2 - 0 Show fewer files'
+  });
+});
+
+test('Codex fileChange rows truncate directories while retaining the complete filename', () => {
+  const path = '/Users/zeke/Projects/monad/apps/web/src/components/workspace/research-desk-final.md';
+  const markup = renderToStaticMarkup(
+    <CodexFileChangeCard
+      view={{
+        additions: 1,
+        deletions: 0,
+        files: [{ additions: 1, deletions: 0, kind: 'update', path }],
+        status: 'completed'
+      }}
+    />
+  );
+  const pathTag = markup.match(/<span[^>]*data-file-change-path="path"[^>]*>/)?.[0];
+  const directoryTag = markup.match(/<span[^>]*data-slot="compact-file-path-directory"[^>]*>/)?.[0];
+  const filenameTag = markup.match(/<span[^>]*data-slot="compact-file-path-filename"[^>]*>/)?.[0];
+
+  // behavior-ok: rendering a long edit path compresses only its directory while preserving the exact filename text.
+  expect({
+    directoryCanShrink: directoryTag?.includes('min-w-0 truncate'),
+    filename: markup.match(/data-slot="compact-file-path-filename"[^>]*>([^<]+)</)?.[1],
+    filenameDoesNotShrink: filenameTag?.includes('shrink-0'),
+    reusablePathLayout: pathTag?.includes('data-slot="compact-file-path"')
+  }).toEqual({
+    directoryCanShrink: true,
+    filename: 'research-desk-final.md',
+    filenameDoesNotShrink: true,
+    reusablePathLayout: true
   });
 });

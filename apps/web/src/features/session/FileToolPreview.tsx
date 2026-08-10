@@ -2,6 +2,7 @@ import type { CSSProperties } from 'react';
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from 'shiki';
 
 import { cn, FileIcon, UnifiedDiff } from '@monad/ui';
+import { SHIKI_THEME_NAMES, SHIKI_THEMES } from '@monad/ui/lib/shiki';
 import { useEffect, useMemo, useState } from 'react';
 import { createHighlighter } from 'shiki';
 
@@ -41,14 +42,14 @@ async function highlight(code: string, language: BundledLanguage): Promise<Highl
 
   let highlighterPromise = highlighterCache.get(language);
   if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({ langs: [language], themes: ['github-light', 'github-dark'] });
+    highlighterPromise = createHighlighter({ langs: [language], themes: SHIKI_THEME_NAMES });
     highlighterCache.set(language, highlighterPromise);
   }
 
   const highlighter = await highlighterPromise;
   const result = highlighter.codeToTokens(code, {
     lang: language,
-    themes: { dark: 'github-dark', light: 'github-light' }
+    themes: SHIKI_THEMES
   });
   const highlighted = {
     background: result.bg ?? 'transparent',
@@ -92,7 +93,7 @@ function Token({ token }: { token: ThemedToken }) {
   const fontStyle = token.fontStyle ?? 0;
   return (
     <span
-      className="dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)]"
+      className="dark:bg-(--shiki-dark-bg)! dark:text-(--shiki-dark)!"
       style={
         {
           backgroundColor: token.bgColor,
@@ -137,7 +138,7 @@ export function FileReadPreview({ output, path, offset }: { output: string; path
     >
       <FileHeader path={path ?? 'file'} />
       <pre
-        className="max-h-80 overflow-auto font-mono text-[12px] leading-[1.5]"
+        className="max-h-80 overflow-auto font-mono text-[12px] leading-normal"
         data-selectable="true"
         style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
       >

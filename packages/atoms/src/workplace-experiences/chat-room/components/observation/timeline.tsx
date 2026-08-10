@@ -1,22 +1,25 @@
 import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
-import type { MeshAgentStreamView } from '../../../experience/types.ts';
+import type { MeshAgentStreamView, Participant } from '../../../experience/types.ts';
 import type { ObservationItem, ObservationTimelineEntry } from './types.ts';
 
 import { DefaultObservationToolPair, ObservationMeta, ObservationText } from '@monad/ui';
 import { memo } from 'react';
 
 import { codexItemSummary } from '../../../../agent-adapters/codex/observation/observation-message-group.ts';
+import { workplaceExperienceT } from '../../../i18n.ts';
 import { renderPrivateObservationCard } from './adapters.ts';
 import { ObservationCardShell, ObservationToolCardShell, toolCallSummary } from './card-shell.tsx';
-import { CodexFileChangeCard, codexFileChangeView } from './codex-file-change-card.tsx';
+import { CodexFileChangeCard, claudeFileChangeView, codexFileChangeView } from './codex-file-change-card.tsx';
 import { CodexMcpStartupProgressCard, type CodexMcpStartupUpdate } from './codex-startup-progress.tsx';
 import { CommandToolCard, CommandToolHeader, commandToolView } from './command-card.tsx';
 import { ContextCompactionCard } from './context-compaction-card.tsx';
+import { ObservationDisclosureScope } from './disclosure.tsx';
 import { FileReadToolCard, FileReadToolHeader, fileReadToolView } from './file-read-card.tsx';
 import { ObservationMessageCard } from './message-card.tsx';
 import { MonadMcpToolCard, MonadMcpToolHeader } from './monad-mcp-card.tsx';
 import { monadMcpToolView } from './monad-mcp-projection.ts';
 import { observationContractRawEvents } from './provenance.ts';
+import { ShellToolCard, ShellToolHeader, shellToolView } from './shell-card.tsx';
 
 export type ObservationTimelineRow = {
   id: string;
@@ -169,11 +172,14 @@ export function observationToolVisualStatus({
 
 function ObservationTimelineCard({
   entry,
+  memberIdentities,
   provider
 }: {
   entry: ObservationTimelineEntry;
+  memberIdentities?: ReadonlyMap<string, Participant>;
   provider: string;
 }): React.ReactElement {
+  const t = workplaceExperienceT();
   if (entry.kind === 'private') {
     const rendered = renderPrivateObservationCard(entry.card);
     if (rendered) {
@@ -196,7 +202,12 @@ function ObservationTimelineCard({
       );
     }
   }
-  const fileChange = entry.kind === 'public' ? codexFileChangeView(entry.contractEvents) : null;
+  const toolCall = entry.kind === 'public' && entry.card.kind === 'tool' ? cardToolCall(entry.card) : undefined;
+  const toolResult = entry.kind === 'public' && entry.card.kind === 'tool' ? cardToolResult(entry.card) : undefined;
+  const fileChange =
+    entry.kind === 'public'
+      ? (codexFileChangeView(entry.contractEvents) ?? claudeFileChangeView(toolCall, toolResult))
+      : null;
   if (fileChange) {
     return (
       <CodexFileChangeCard
@@ -206,8 +217,8 @@ function ObservationTimelineCard({
     );
   }
   if (entry.kind === 'public' && entry.card.kind === 'tool') {
-    const call = cardToolCall(entry.card);
-    const result = cardToolResult(entry.card);
+    const call = toolCall;
+    const result = toolResult;
     const toolEvent = call ?? result;
 
     if (call) {
@@ -218,6 +229,7 @@ function ObservationTimelineCard({
             error={monadMcp.isError}
             header={
               <MonadMcpToolHeader
+                memberIdentities={memberIdentities}
                 quiet
                 view={monadMcp}
               />
@@ -230,7 +242,10 @@ function ObservationTimelineCard({
             })}
             timestamp={entry.timestamp}
           >
-            <MonadMcpToolCard view={monadMcp} />
+            <MonadMcpToolCard
+              memberIdentities={memberIdentities}
+              view={monadMcp}
+            />
           </ObservationToolCardShell>
         );
       }
@@ -250,7 +265,32 @@ function ObservationTimelineCard({
             status="success"
             timestamp={entry.timestamp}
           >
-            <FileReadToolCard view={fileRead} />
+            <FileReadToolCard
+              copyCodeLabel={t('web.copyCode')}
+              copyPathLabel={t('web.copyPath')}
+              view={fileRead}
+            />
+          </ObservationToolCardShell>
+        );
+      }
+    }
+    if (call) {
+      const shell = shellToolView(call, result, provider);
+      if (shell) {
+        const failed = shell.exitCode !== undefined ? shell.exitCode !== 0 : shell.status === 'failed';
+        return (
+          <ObservationToolCardShell
+            error={failed}
+            header={<ShellToolHeader view={shell} />}
+            kind="command"
+            status={observationToolVisualStatus({ completed: !!result, error: failed, status: shell.status })}
+            timestamp={entry.timestamp}
+          >
+            <ShellToolCard
+              copyCommandLabel={t('web.copyCommand')}
+              copyOutputLabel={t('web.copyOutput')}
+              view={shell}
+            />
           </ObservationToolCardShell>
         );
       }
@@ -271,7 +311,7 @@ function ObservationTimelineCard({
                 view={command}
               />
             }
-            kind="command"
+            kind="tool"
             status={observationToolVisualStatus({
               completed: !!result,
               error:
@@ -540,9 +580,11 @@ export function reconcileObservationTimelineRows(
 }
 
 function ObservationTimelineRowViewImpl({
+  memberIdentities,
   row,
   provider
 }: {
+  memberIdentities?: ReadonlyMap<string, Participant>;
   row: ObservationTimelineRow;
   provider: string;
 }): React.ReactElement | null {
@@ -570,10 +612,13 @@ function ObservationTimelineRowViewImpl({
     }
   }
   return first ? (
-    <ObservationTimelineCard
-      entry={first}
-      provider={provider}
-    />
+    <ObservationDisclosureScope id={row.id}>
+      <ObservationTimelineCard
+        entry={first}
+        memberIdentities={memberIdentities}
+        provider={provider}
+      />
+    </ObservationDisclosureScope>
   ) : null;
 }
 
@@ -581,9 +626,11 @@ export const ObservationTimelineRowView = memo(ObservationTimelineRowViewImpl);
 
 function _ObservationTimelineCards({
   entries,
+  memberIdentities,
   provider
 }: {
   entries: ObservationTimelineEntry[];
+  memberIdentities?: ReadonlyMap<string, Participant>;
   provider: string;
 }): React.ReactElement {
   return (
@@ -591,6 +638,7 @@ function _ObservationTimelineCards({
       {observationTimelineRows(entries).map((row) => (
         <ObservationTimelineRowView
           key={row.id}
+          memberIdentities={memberIdentities}
           provider={provider}
           row={row}
         />

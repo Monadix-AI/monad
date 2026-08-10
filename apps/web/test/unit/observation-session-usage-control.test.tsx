@@ -58,3 +58,26 @@ test('opens a compact session usage summary with context and token totals', asyn
     'Context window42%42K / 100KInput tokens30,000Cached input1,200Output tokens8,000Reasoning output2,800Total tokens42,000'
   );
 });
+
+test('renders an unrecoverable native session notice above the observation body', () => {
+  render(
+    <MeshAgentObservationPanel
+      agentName="Claude"
+      nativeSessionUnavailable
+      observationUnavailable
+    />
+  );
+
+  const notice = screen.getByRole('status');
+  const emptyState = document.querySelector('[data-observation-state="unavailable"]');
+  if (!emptyState) throw new Error('Expected unavailable observation body');
+  expect({
+    copy: notice.textContent,
+    genericCopyHidden: screen.queryByText('Agent events unavailable') === null,
+    noticeBeforeBody: Boolean(notice.compareDocumentPosition(emptyState) & Node.DOCUMENT_POSITION_FOLLOWING)
+  }).toEqual({
+    copy: 'Native session history unavailableThe original session was deleted or archived and cannot be restored.',
+    genericCopyHidden: true,
+    noticeBeforeBody: true
+  });
+});

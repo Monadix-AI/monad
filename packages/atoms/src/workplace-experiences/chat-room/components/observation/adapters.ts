@@ -8,6 +8,7 @@ import type {
 
 import { commandToolView } from './command-card.tsx';
 import { fileReadToolView } from './file-read-card.tsx';
+import { shellToolView } from './shell-card.tsx';
 
 function isThinkingObservation(item: ObservationItem): boolean {
   return item.kind === 'reasoning';
@@ -36,6 +37,17 @@ const commandToolCardAdapter: PublicObservationCardAdapter = {
   }
 };
 
+const shellToolCardAdapter: PublicObservationCardAdapter = {
+  projectItem(item, provider) {
+    const view = shellToolView(item, undefined, provider);
+    return view ? { type: 'shell-tool', view } : null;
+  },
+  projectPair(call, result, provider) {
+    const view = shellToolView(call, result, provider);
+    return view ? { type: 'shell-tool', view } : null;
+  }
+};
+
 const fileReadToolCardAdapter: PublicObservationCardAdapter = {
   projectPair(call, result, provider) {
     const view = fileReadToolView(call, result, provider);
@@ -47,6 +59,7 @@ const publicObservationCardAdapters: PublicObservationCardAdapter[] = [
   diagnosticCardAdapter,
   thinkingCardAdapter,
   fileReadToolCardAdapter,
+  shellToolCardAdapter,
   commandToolCardAdapter
 ];
 const privateObservationCardAdapters: PrivateObservationCardAdapter[] = [];

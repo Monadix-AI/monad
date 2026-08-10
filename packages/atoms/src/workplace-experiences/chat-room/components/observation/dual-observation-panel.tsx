@@ -3,6 +3,7 @@ import type { MeshAgentStreamView, Participant } from '../../../experience/types
 import type { RawDisplayMode } from './raw-view.ts';
 import type { ObservationPanelHooks } from './use-observation-panel.ts';
 
+import { MESH_NATIVE_SESSION_UNAVAILABLE_REASON } from '@monad/protocol';
 import { useEffect, useRef, useState } from 'react';
 
 import { ObservationModeToggle, RawDisplayModeToggle } from './observation-mode-toggle.tsx';
@@ -18,6 +19,7 @@ export interface DualObservationPanelProps {
   agentName: string;
   provider: string;
   agent?: Participant;
+  memberIdentities?: ReadonlyMap<string, Participant>;
   icon?: MeshAgentStreamView['icon'];
   hooks: ObservationPanelHooks;
   connectionSignal?: string;
@@ -96,6 +98,8 @@ export function DualObservationPanel(props: DualObservationPanelProps): React.Re
       icon={icon}
       key={meshSessionId}
       loadingOlderEvents={controller.loadingOlderEvents}
+      memberIdentities={props.memberIdentities}
+      nativeSessionUnavailable={controller.unavailableReason === MESH_NATIVE_SESSION_UNAVAILABLE_REASON}
       observationLoading={controller.loading}
       observationUnavailable={Boolean(controller.unavailableReason)}
       onBack={onBack}

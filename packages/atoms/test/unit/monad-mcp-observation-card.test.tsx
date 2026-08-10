@@ -1,5 +1,6 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
+import type { Participant } from '../../src/workplace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
 import React from 'react';
@@ -62,7 +63,11 @@ function visibleText(markup: string): string {
     .trim();
 }
 
-function providerPipeline(provider: 'codex' | 'claude-code' | 'hermes' | 'monad', records: readonly unknown[]) {
+function providerPipeline(
+  provider: 'codex' | 'claude-code' | 'hermes' | 'monad',
+  records: readonly unknown[],
+  memberIdentities?: ReadonlyMap<string, Participant>
+) {
   const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === provider);
   if (!adapter) throw new Error(`Missing ${provider} adapter`);
   const events = meshAgentNeutralStreamItems({
@@ -74,7 +79,7 @@ function providerPipeline(provider: 'codex' | 'claude-code' | 'hermes' | 'monad'
   const cards = agentObservationCards(events, provider);
   const entries = observationTimelineEntries(cards, provider);
   const markup = observationTimelineRows(entries).map((row) =>
-    renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider, row }))
+    renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { memberIdentities, provider, row }))
   );
   return { cards, events, markup };
 }
@@ -173,7 +178,7 @@ ${JSON.stringify({ result: JSON.stringify(payload) })}
       text: 'Joined and ready.',
       attachments: []
     },
-    timeline: ['Post to project Ok Yes Message ID msg_hermes Joined and ready.']
+    timeline: ['Post to project Message ID msg_hermes Joined and ready.']
   });
 });
 
@@ -287,7 +292,7 @@ test('projects an actual Codex completed Monad MCP record through the semantic t
       {
         cardCollapseTrigger: false,
         toolActivityCollapsed: true,
-        text: 'Post to project Completed 232ms Message Posted to the project. Message ID message_1 Accepted Yes Ready for review.',
+        text: 'Post to project Completed 232ms Accepted Yes Message Posted to the project. Message ID message_1 Ready for review.',
         visualRole: 'tool'
       }
     ]
@@ -500,7 +505,7 @@ test('renders a completed rollout MCP Err result as a localized error card', () 
 });
 
 test('routes actual Claude Monad tool_use and matching tool_result records to a semantic card', () => {
-  const input = { to: 'agent_alice', text: 'Please review the patch.' };
+  const input = { to: 'pmem_alice', text: 'Please review the patch.' };
   const call = {
     type: 'assistant',
     message: {
@@ -516,7 +521,22 @@ test('routes actual Claude Monad tool_use and matching tool_result records to a 
     }
   };
 
-  const pipeline = providerPipeline('claude-code', [call, result]);
+  const memberIdentities = new Map<string, Participant>([
+    [
+      'pmem_alice',
+      {
+        av: 'CC',
+        icon: 'claude-code',
+        id: 'pmem_alice',
+        kind: 'agent',
+        metadata: { agent: 'claude-code' },
+        name: 'Claude Code',
+        presence: 'online',
+        tag: 'Claude'
+      }
+    ]
+  ]);
+  const pipeline = providerPipeline('claude-code', [call, result], memberIdentities);
   const card = pipeline.cards[0];
   if (!card) throw new Error('Expected Claude Monad MCP card');
 
@@ -543,13 +563,13 @@ test('routes actual Claude Monad tool_use and matching tool_result records to a 
       output: 'Delivered.',
       isError: false,
       action: 'agent-send',
-      to: 'agent_alice',
+      to: 'pmem_alice',
       text: 'Please review the patch.',
       attachments: []
     },
     timeline: [
       {
-        text: 'Send private message Completed Delivered.',
+        text: 'Send a private message to CC Claude Code Claude Code Completed Delivered. Please review the patch.',
         visualRole: 'tool'
       }
     ]
@@ -608,40 +628,147 @@ test('renders Claude project-post MCP content blocks like the equivalent Codex r
       attachments: []
     },
     timeline: [
-      'Post to project Completed Ok Yes Message ID message_claude_post Session ID session_claude_post Created At 2026-08-09T12:25:52.512Z Claude joined the project.'
+      'Post to project Completed Message ID message_claude_post Session ID session_claude_post Created At 2026-08-09T12:25:52.512Z Claude joined the project.'
     ]
+  });
+});
+
+test('renders Claude project-read content blocks through the friendly message view', () => {
+  const input = { limit: 1 };
+  const output = {
+    messages: [
+      {
+        id: 'message_claude_read',
+        role: 'assistant',
+        text: 'Review complete.',
+        data: { agentName: 'claude-code', agentDisplayName: 'Claude' },
+        createdAt: '2026-08-09T12:30:00.000Z'
+      }
+    ]
+  };
+  const pipeline = providerPipeline('claude-code', [
+    {
+      type: 'assistant',
+      message: {
+        role: 'assistant',
+        content: [{ type: 'tool_use', id: 'toolu_claude_read', name: 'mcp__monad__project_read', input }]
+      }
+    },
+    {
+      type: 'user',
+      message: {
+        role: 'user',
+        content: [
+          {
+            type: 'tool_result',
+            tool_use_id: 'toolu_claude_read',
+            content: [{ type: 'text', text: JSON.stringify(output) }]
+          }
+        ]
+      }
+    }
+  ]);
+  const card = pipeline.cards[0];
+  if (!card) throw new Error('Expected Claude project_read card');
+
+  expect({
+    friendlyMessage: pipeline.markup[0]?.includes('data-slot="monad-mcp-message"') === true,
+    view: pairedToolView(card)
+  }).toEqual({
+    friendlyMessage: true,
+    view: {
+      toolName: 'project_read',
+      callId: 'toolu_claude_read',
+      status: 'completed',
+      input,
+      output: JSON.stringify([{ type: 'text', text: JSON.stringify(output) }]),
+      isError: false,
+      action: 'project-read',
+      limit: 1,
+      messages: [
+        {
+          id: 'message_claude_read',
+          agentName: 'claude-code',
+          attachments: [],
+          createdAt: '2026-08-09T12:30:00.000Z',
+          name: 'Claude',
+          role: 'assistant',
+          text: 'Review complete.'
+        }
+      ]
+    }
   });
 });
 
 test('routes session member availability through the semantic Monad MCP card', () => {
   const input = {};
   const output = {
+    ok: true,
     members: [
-      { id: 'builder', displayName: 'Builder', status: 'online' },
-      { id: 'reviewer', displayName: 'Reviewer', status: 'offline' }
+      { id: 'pmem_claw', displayName: 'Claw', status: 'online' },
+      { id: 'monad--agt_eAmWnO0FDkBJ', displayName: 'monad--agt_eAmWnO0FDkBJ', status: 'online' }
     ]
   };
-  const pipeline = providerPipeline('codex', [
-    {
-      method: 'item/completed',
-      params: {
-        item: {
-          type: 'mcpToolCall',
-          id: 'call_members',
-          server: 'monad',
-          tool: 'session_members',
-          status: 'completed',
-          arguments: input,
-          result: output
+  const memberIdentities = new Map<string, Participant>([
+    [
+      'pmem_claw',
+      {
+        av: 'CL',
+        icon: 'openclaw',
+        id: 'pmem_claw',
+        kind: 'agent',
+        metadata: { agent: 'openclaw' },
+        name: 'Claw',
+        presence: 'online',
+        tag: 'OpenClaw'
+      }
+    ],
+    [
+      'monad--agt_eAmWnO0FDkBJ',
+      {
+        av: 'DD',
+        icon: 'monad',
+        id: 'monad--agt_eAmWnO0FDkBJ',
+        kind: 'agent',
+        metadata: { agent: 'monad' },
+        name: 'Default Dev Agent',
+        presence: 'online',
+        tag: 'Monad'
+      }
+    ]
+  ]);
+  const pipeline = providerPipeline(
+    'codex',
+    [
+      {
+        method: 'item/completed',
+        params: {
+          item: {
+            type: 'mcpToolCall',
+            id: 'call_members',
+            server: 'monad',
+            tool: 'session_members',
+            status: 'completed',
+            arguments: input,
+            result: output
+          }
         }
       }
-    }
-  ]);
+    ],
+    memberIdentities
+  );
   const card = pipeline.cards[0];
   if (!card) throw new Error('Expected session members card');
 
   expect({
     view: pairedToolView(card),
+    memberListLayout:
+      pipeline.markup[0]?.includes('data-slot="monad-mcp-members"') === true &&
+      pipeline.markup[0]?.match(/data-slot="monad-mcp-member"/g)?.length === 2,
+    providerIcons:
+      pipeline.markup[0]?.includes('aria-label="OpenClaw"') === true &&
+      pipeline.markup[0]?.includes('aria-label="Monad"') === true,
+    staleIdHidden: pipeline.markup[0]?.includes('monad--agt_eAmWnO0FDkBJ') === false,
     timeline: pipeline.markup.map((markup) => ({ text: visibleText(markup), visualRole: timelineVisualRole(markup) }))
   }).toEqual({
     view: {
@@ -653,9 +780,12 @@ test('routes session member availability through the semantic Monad MCP card', (
       action: 'session-members',
       callId: 'call_members'
     },
+    memberListLayout: true,
+    providerIcons: true,
+    staleIdHidden: true,
     timeline: [
       {
-        text: 'List session members Completed Members Builder online Reviewer offline',
+        text: 'List session members Completed CL Claw OpenClaw online DD Default Dev Agent online',
         visualRole: 'tool'
       }
     ]
@@ -823,7 +953,15 @@ test('projects an unprefixed Codex Monad call only with exact server and tool pr
     threadId: 'msg_123',
     attachments: [{ path: '/workspace/report.md', name: 'report.md', mime: 'text/markdown' }]
   };
-  const output = { messageId: 'msg_124', accepted: true };
+  const registeredAttachment = {
+    id: 'att_report',
+    path: '/workspace/report.md',
+    name: 'report.md',
+    mime: 'text/markdown',
+    bytes: 4096,
+    createdAt: '2026-08-09T12:00:00.000Z'
+  };
+  const output = { messageId: 'msg_124', accepted: true, message: { attachments: [registeredAttachment] } };
   const call = toolEvent({ id: 'call', kind: 'tool-call', name: 'project_post', callId: 'call_123', input });
   const result = toolEvent({
     id: 'result',
@@ -845,7 +983,7 @@ test('projects an unprefixed Codex Monad call only with exact server and tool pr
     action: 'project-post',
     text: 'I am investigating the failed deploy.',
     threadId: 'msg_123',
-    attachments: [{ path: '/workspace/report.md', name: 'report.md', mime: 'text/markdown' }]
+    attachments: [registeredAttachment]
   });
 });
 
@@ -1009,7 +1147,7 @@ test('renders project-post output while hiding its input contract', () => {
     name: 'mcp__monad__project_post',
     input: {
       requestId: 'request_should_not_render',
-      text: 'The deployment is ready for review.',
+      text: 'The deployment is ready for @[name="Reviewer" id="pmid_reviewer"].',
       threadId: 'thread_42',
       attachments: [{ path: '/workspace/release.md', name: 'release.md', mime: 'text/markdown' }]
     }
@@ -1033,14 +1171,22 @@ test('renders project-post output while hiding its input contract', () => {
     )
   );
 
-  expect(visibleText(markup)).toEqual(
-    'Post to project Completed Message ID message_43 Accepted Yes The deployment is ready for review.'
-  );
+  expect({
+    attachmentCard: markup.includes('data-slot="monad-mcp-attachment-card"'),
+    attachmentMeta: markup.includes('data-slot="monad-mcp-attachment-meta"'),
+    mentionChip: markup.includes('data-composer-chip="mention"'),
+    text: visibleText(markup)
+  }).toEqual({
+    attachmentCard: true,
+    attachmentMeta: true,
+    mentionChip: true,
+    text: 'Post to project Completed Accepted Yes Message ID message_43 The deployment is ready for Reviewer . release.md text/markdown Path /workspace/ release.md MIME type text/markdown'
+  });
   // presence-ok: semantic rendering must not expose request identifiers.
   expect(markup.includes('request_should_not_render')).toEqual(false);
 });
 
-test('renders project-read message metadata in columns with each body last', () => {
+test('renders project-read messages with friendly identity, body, and reusable attachment cards', () => {
   const call = toolEvent({
     id: 'call',
     kind: 'tool-call',
@@ -1054,8 +1200,23 @@ test('renders project-read message metadata in columns with each body last', () 
     output: {
       messages: [
         {
-          text: 'Review the release notes before publishing.',
-          messageId: 'message_44',
+          id: 'message_44',
+          role: 'assistant',
+          text: 'Ask @[name="Reviewer" id="pmid_reviewer"] to review the release notes before publishing.',
+          data: {
+            agentName: 'claude-code',
+            agentDisplayName: 'Claude',
+            attachments: [
+              {
+                id: 'att_release_notes',
+                path: '/workspace/release-notes.md',
+                name: 'release-notes.md',
+                mime: 'text/markdown',
+                bytes: 2048,
+                createdAt: '2026-08-09T11:59:00.000Z'
+              }
+            ]
+          },
           createdAt: '2026-08-09T12:00:00.000Z'
         }
       ]
@@ -1074,9 +1235,29 @@ test('renders project-read message metadata in columns with each body last', () 
     )
   );
 
-  expect(visibleText(markup)).toEqual(
-    'Read project messages Completed Messages Message ID message_44 Created At 2026-08-09T12:00:00.000Z Review the release notes before publishing.'
-  );
+  expect({
+    attachmentCard: markup.includes('data-slot="monad-mcp-attachment-card"'),
+    attachmentFields: ['path', 'mime', 'size', 'id', 'createdAt'].every((field) =>
+      markup.includes(`data-attachment-meta-field="${field}"`)
+    ),
+    attachmentMeta: markup.includes('data-slot="monad-mcp-attachment-meta"'),
+    body: markup.includes('data-slot="monad-mcp-message-body"'),
+    identity: markup.includes('data-slot="monad-mcp-message-header"') && markup.includes('aria-label="Claude Code"'),
+    mentionChip: markup.includes('data-composer-chip="mention"'),
+    message: markup.includes('data-slot="monad-mcp-message"'),
+    text:
+      visibleText(markup).includes('Claude') &&
+      visibleText(markup).includes('Ask Reviewer to review the release notes before publishing.')
+  }).toEqual({
+    attachmentCard: true,
+    attachmentFields: true,
+    attachmentMeta: true,
+    body: true,
+    identity: true,
+    mentionChip: true,
+    message: true,
+    text: true
+  });
 });
 
 test('renders a placeholder when a Monad MCP card has no displayable fields', () => {
@@ -1110,14 +1291,118 @@ test('renders a placeholder when a Monad MCP card has no displayable fields', ()
   expect(visibleText(markup)).toEqual('Check project inbox Completed No details');
 });
 
+test('renders every project question and its choices before the ask result', () => {
+  const input = {
+    requestId: 'ask_input_contract',
+    questions: [
+      { id: 'scope', question: 'Choose the implementation scope.', options: ['Focused', 'Complete'], mode: 'single' },
+      { id: 'reviewers', question: 'Who should review it?', options: ['Alice', 'Bob'], mode: 'multiple' }
+    ]
+  };
+  const call = toolEvent({ id: 'call', kind: 'tool-call', name: 'mcp__monad__project_ask', input });
+  const result = toolEvent({
+    id: 'result',
+    kind: 'tool-result',
+    name: 'mcp__monad__project_ask',
+    output: { requestId: 'ask_result', status: 'pending' },
+    status: 'completed'
+  });
+  const view = monadMcpToolView(call, result, []);
+  if (!view) throw new Error('Expected Monad project_ask view');
+
+  const markup = renderToStaticMarkup(
+    React.createElement(
+      'div',
+      undefined,
+      React.createElement(MonadMcpToolHeader, { view }),
+      React.createElement(MonadMcpToolCard, { view })
+    )
+  );
+
+  // behavior-ok: rendering a multi-question ask preserves the complete question and option sequence before its result.
+  expect({
+    questionCount: markup.match(/data-slot="monad-mcp-question"/g)?.length,
+    text: visibleText(markup),
+    view
+  }).toEqual({
+    questionCount: 2,
+    text: 'Ask for input Completed Choose the implementation scope. Focused Complete Who should review it? Alice Bob pending Request ID ask_result',
+    view: {
+      action: 'project-ask',
+      input,
+      isError: false,
+      options: [],
+      output: { requestId: 'ask_result', status: 'pending' },
+      questions: [
+        {
+          id: 'scope',
+          mode: 'single',
+          options: ['Focused', 'Complete'],
+          question: 'Choose the implementation scope.'
+        },
+        {
+          id: 'reviewers',
+          mode: 'multiple',
+          options: ['Alice', 'Bob'],
+          question: 'Who should review it?'
+        }
+      ],
+      status: 'completed',
+      toolName: 'project_ask'
+    }
+  });
+});
+
+test('renders mentions in private message read results as chips', () => {
+  const call = toolEvent({
+    id: 'call',
+    kind: 'tool-call',
+    name: 'mcp__monad__agent_read',
+    input: { with: 'agent_alice' }
+  });
+  const result = toolEvent({
+    id: 'result',
+    kind: 'tool-result',
+    name: 'mcp__monad__agent_read',
+    output: {
+      messages: [
+        {
+          id: 'message_private_1',
+          from: 'agent_alice',
+          text: 'Ask @[name="Reviewer" id="pmid_reviewer"] to check the migration.'
+        }
+      ]
+    },
+    status: 'completed'
+  });
+  const view = monadMcpToolView(call, result, []);
+  if (!view) throw new Error('Expected Monad agent_read view');
+
+  const markup = renderToStaticMarkup(
+    React.createElement(
+      'div',
+      undefined,
+      React.createElement(MonadMcpToolHeader, { view }),
+      React.createElement(MonadMcpToolCard, { view })
+    )
+  );
+  const text = visibleText(markup);
+
+  expect({
+    body: text.includes('Ask Reviewer to check the migration.'),
+    mentionChip: markup.includes('data-composer-chip="mention"'),
+    rawMentionHidden: !text.includes('@[name=')
+  }).toEqual({ body: true, mentionChip: true, rawMentionHidden: true });
+});
+
 test('renders agent-send output while hiding its input contract', () => {
   const call = toolEvent({
     id: 'call',
     kind: 'tool-call',
     name: 'mcp__monad__agent_send',
     input: {
-      to: 'agent_alice',
-      text: 'Please check the migration.',
+      to: 'pmem_claude',
+      text: 'Please ask @[name="Reviewer" id="pmid_reviewer"] to check the migration.',
       attachments: [{ path: '/workspace/migration.md', name: 'migration.md' }]
     }
   });
@@ -1131,17 +1416,53 @@ test('renders agent-send output while hiding its input contract', () => {
   });
   const view = monadMcpToolView(call, result, []);
   if (!view) throw new Error('Expected Monad agent_send view');
+  const memberIdentities = new Map([
+    [
+      'pmem_claude',
+      {
+        av: 'CC',
+        icon: 'claude-code' as const,
+        id: 'pmem_claude',
+        kind: 'agent' as const,
+        metadata: { agent: 'claude-code' },
+        name: 'Claude Code',
+        presence: 'online' as const,
+        tag: 'Claude'
+      }
+    ]
+  ]);
 
   const markup = renderToStaticMarkup(
     React.createElement(
       'div',
       undefined,
-      React.createElement(MonadMcpToolHeader, { view }),
+      React.createElement(MonadMcpToolHeader, { memberIdentities, view }),
       React.createElement(MonadMcpToolCard, { view })
     )
   );
 
-  expect(visibleText(markup)).toEqual('Send private message Running 48ms Delivered Yes');
+  const text = visibleText(markup);
+  expect({
+    attachmentCard: markup.includes('data-slot="monad-mcp-attachment-card"'),
+    body: text.includes('Please ask Reviewer to check the migration.'),
+    mentionChip: markup.includes('data-composer-chip="mention"'),
+    providerIcon: markup.includes('aria-label="Claude Code"'),
+    rawMemberIdHidden: !text.includes('pmem_claude'),
+    rawMentionHidden: !text.includes('@[name='),
+    recipient: markup.includes('data-slot="monad-mcp-recipient"') && text.includes('Claude Code'),
+    recipientInTitle: /data-slot="observation-meta-title"[^>]*>[\s\S]*data-slot="monad-mcp-recipient"/.test(markup),
+    title: text.includes('Send a private message to')
+  }).toEqual({
+    attachmentCard: true,
+    body: true,
+    mentionChip: true,
+    providerIcon: true,
+    rawMemberIdHidden: true,
+    rawMentionHidden: true,
+    recipient: true,
+    recipientInTitle: true,
+    title: true
+  });
 });
 
 test('hides Monad MCP input while keeping friendly Monad and raw third-party output', () => {
@@ -1199,7 +1520,8 @@ test('hides Monad MCP input while keeping friendly Monad and raw third-party out
     renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { provider: 'codex', row }))
   );
 
-  expect(markup.map(visibleText)).toEqual([
+  const visibleRows = markup.map(visibleText);
+  expect([visibleRows[0], visibleRows[1]?.replace(/\s*:\s*/g, ': ')]).toEqual([
     'Post to project Completed Accepted Yes Always visible.',
     'tool call project_post running input { "text": "Third-party payload." } output { "accepted": true }'
   ]);

@@ -1,5 +1,5 @@
 import type { AgentObservationEvent } from '@monad/protocol';
-import type { CommandCardView, FileReadCardView } from '@monad/ui';
+import type { CommandCardView, FileReadCardView, ShellCardView } from '@monad/ui';
 import type React from 'react';
 import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
 
@@ -17,6 +17,7 @@ export type PublicObservationCard =
   | { type: 'thinking'; item: ObservationItem }
   | { type: 'tool-pair'; call: ObservationItem; result: ObservationItem }
   | { type: 'command-tool'; view: CommandToolView }
+  | { type: 'shell-tool'; view: ShellCardView }
   | { type: 'file-read-tool'; view: FileReadToolView };
 
 export type PrivateObservationCard = {

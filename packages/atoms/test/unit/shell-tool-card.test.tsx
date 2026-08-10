@@ -1,0 +1,166 @@
+import type { AgentObservationEvent, MeshAgentObservationEvent } from '@monad/protocol';
+
+import { expect, test } from 'bun:test';
+import { renderToStaticMarkup } from 'react-dom/server';
+
+import { claudeCodeObservationProjection } from '../../src/agent-adapters/claude-code/observation.ts';
+import { codexObservationProjection } from '../../src/agent-adapters/codex/observation/index.ts';
+import { geminiObservationProjection } from '../../src/agent-adapters/gemini/observation.ts';
+import { hermesObservationProjection } from '../../src/agent-adapters/hermes/observation.ts';
+import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { openClawObservationProjection } from '../../src/agent-adapters/openclaw/observation.ts';
+import { qwenObservationProjection } from '../../src/agent-adapters/qwen/observation.ts';
+import {
+  ShellToolHeader,
+  shellToolView
+} from '../../src/workplace-experiences/chat-room/components/observation/shell-card.tsx';
+import {
+  ObservationTimelineRowView,
+  observationTimelineEntries,
+  observationTimelineRows
+} from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
+
+const observation = {
+  id: 'observation-shell',
+  role: 'tool',
+  text: 'Tool call shell',
+  source: 'unknown',
+  provenance: { rawEvents: [{}] }
+} satisfies MeshAgentObservationEvent;
+
+test('provider adapters classify their native shell tools into the neutral shell category', () => {
+  const classifications = [
+    codexObservationProjection.toolCategory?.(observation, { name: 'command_execution' }),
+    claudeCodeObservationProjection.toolCategory?.(observation, { name: 'Bash' }),
+    geminiObservationProjection.toolCategory?.(observation, { name: 'run_shell_command' }),
+    qwenObservationProjection.toolCategory?.(observation, { name: 'run_shell_command' }),
+    hermesObservationProjection.toolCategory?.(observation, { name: 'terminal' }),
+    openClawObservationProjection.toolCategory?.(observation, { name: 'exec' }),
+    codexObservationProjection.toolCategory?.(observation, { name: 'Read' })
+  ];
+  expect(classifications).toEqual(['shell', 'shell', 'shell', 'shell', 'shell', 'shell', undefined]);
+});
+
+test('the shell card projection normalizes provider command inputs and result metadata', () => {
+  const call = {
+    id: 'shell-call',
+    kind: 'tool-call',
+    streaming: false,
+    tool: {
+      name: 'command_execution',
+      category: 'shell',
+      callId: 'shell-1',
+      input: { cmd: ['bun', 'test'] },
+      cwd: '/workspace'
+    },
+    provenance: { contractEvents: [{}] }
+  } satisfies AgentObservationEvent;
+  const result = {
+    id: 'shell-result',
+    kind: 'tool-result',
+    streaming: false,
+    tool: {
+      name: 'command_execution',
+      callId: 'shell-1',
+      output: ' .../canvas.ts | 1 +\n .../projection.ts | 59 +++\n',
+      status: 'completed',
+      exitCode: 0,
+      durationMs: 420
+    },
+    provenance: { contractEvents: [{}] }
+  } satisfies AgentObservationEvent;
+
+  expect(shellToolView(call, result, 'codex')).toEqual({
+    command: 'bun test',
+    cwd: '/workspace',
+    durationMs: 420,
+    exitCode: 0,
+    output: ' .../canvas.ts | 1 +\n .../projection.ts | 59 +++',
+    provider: 'codex',
+    status: 'completed',
+    type: 'command_execution'
+  });
+  expect(shellToolView(call, undefined, 'codex')).toEqual({
+    command: 'bun test',
+    cwd: '/workspace',
+    provider: 'codex',
+    type: 'command_execution'
+  });
+});
+
+test('the Claude shell card uses the Bash description as its title', () => {
+  const call = {
+    id: 'claude-shell-call',
+    kind: 'tool-call',
+    streaming: false,
+    tool: {
+      name: 'Bash',
+      category: 'shell',
+      callId: 'claude-shell-1',
+      input: {
+        command: 'git status --short && ls packages/atoms/src/workplace-experiences/chat-room/',
+        description: 'Check repo status and chat-room dir'
+      }
+    },
+    provenance: { contractEvents: [{}] }
+  } satisfies AgentObservationEvent;
+
+  const view = shellToolView(call, undefined, 'claude-code');
+  if (!view) throw new Error('Expected Claude shell card view');
+  const header = renderToStaticMarkup(<ShellToolHeader view={view} />);
+
+  expect({ header: visibleText(header), view }).toEqual({
+    header: 'Tool call Check repo status and chat-room dir In progress',
+    view: {
+      command: 'git status --short && ls packages/atoms/src/workplace-experiences/chat-room/',
+      provider: 'claude-code',
+      title: 'Check repo status and chat-room dir',
+      type: 'Bash'
+    }
+  });
+});
+
+test('shell and generic tool timeline cards render with distinct icon kinds', () => {
+  const toolKind = (category: 'shell' | undefined, name: string) => {
+    const callId = `${name}-call`;
+    const call = {
+      id: `${callId}-input`,
+      kind: 'tool-call',
+      streaming: false,
+      tool: {
+        name,
+        ...(category ? { category } : {}),
+        callId,
+        input: category === 'shell' ? { command: 'git status' } : { query: 'read tool' }
+      },
+      provenance: { contractEvents: [{}] }
+    } satisfies AgentObservationEvent;
+    const result = {
+      id: `${callId}-output`,
+      kind: 'tool-result',
+      streaming: false,
+      tool: { name, callId, output: 'done', status: 'completed' },
+      provenance: { contractEvents: [{}] }
+    } satisfies AgentObservationEvent;
+    const cards = agentObservationCards([call, result], 'claude-code');
+    const row = observationTimelineRows(observationTimelineEntries(cards, 'claude-code'))[0];
+    if (!row) throw new Error(`Expected ${name} timeline row`);
+    const markup = renderToStaticMarkup(
+      <ObservationTimelineRowView
+        provider="claude-code"
+        row={row}
+      />
+    );
+    return /data-tool-kind="([^"]+)"/.exec(markup)?.[1];
+  };
+
+  expect([toolKind('shell', 'Bash'), toolKind(undefined, 'ToolSearch')]).toEqual(['command', 'tool']);
+});
+
+function visibleText(markup: string): string {
+  return markup
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}

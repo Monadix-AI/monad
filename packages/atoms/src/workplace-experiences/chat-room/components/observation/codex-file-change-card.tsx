@@ -1,10 +1,12 @@
+import type { AgentObservationEvent } from '@monad/protocol';
+
 import { FileCodeIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { FileIcon, UnifiedDiff } from '@monad/ui';
-import { useState } from 'react';
+import { CompactFilePath, FileIcon, UnifiedDiff } from '@monad/ui';
 
 import { workplaceExperienceT } from '../../../i18n.ts';
 import { type ObservationToolStatus, ObservationToolStatusIndicator } from './card-shell.tsx';
+import { useObservationDisclosure } from './disclosure.tsx';
 import { observationContractRawEvents } from './provenance.ts';
 
 const INITIAL_FILE_COUNT = 3;
@@ -16,6 +18,9 @@ type CodexFileChange = {
   kind: string;
   movePath?: string;
   path: string;
+  /** The diff was reconstructed from tool arguments that never said where the edit landed, so its
+   *  hunk positions are placeholders and must not be rendered as file line numbers. */
+  positionUnknown?: boolean;
 };
 
 export type CodexFileChangeView = {
@@ -60,6 +65,35 @@ export function codexFileChangeView(contractEvents: readonly unknown[]): CodexFi
   };
 }
 
+export function claudeFileChangeView(
+  call: AgentObservationEvent | undefined,
+  result: AgentObservationEvent | undefined
+): CodexFileChangeView | null {
+  if (!call) return null;
+  const toolName = call.tool?.name;
+  if (toolName !== 'Write' && toolName !== 'Edit' && toolName !== 'MultiEdit') return null;
+  const input = recordValue(call.tool?.input);
+  const path = stringValue(input?.file_path, input?.filePath);
+  if (!input || !path) return null;
+  const diff = claudeFileToolDiff(toolName, input);
+  const stats = diffStats(diff);
+  return {
+    additions: stats.additions,
+    deletions: stats.deletions,
+    files: [
+      {
+        additions: stats.additions,
+        deletions: stats.deletions,
+        ...(diff ? { diff } : {}),
+        kind: toolName === 'Write' ? 'write' : 'update',
+        path,
+        ...(toolName === 'Write' ? {} : { positionUnknown: true })
+      }
+    ],
+    status: result?.tool?.status ?? call.tool?.status ?? (result ? 'completed' : 'running')
+  };
+}
+
 export function CodexFileChangeCard({
   timestamp,
   view
@@ -68,7 +102,7 @@ export function CodexFileChangeCard({
   view: CodexFileChangeView;
 }): React.ReactElement {
   const t = workplaceExperienceT();
-  const [showAll, setShowAll] = useState(false);
+  const [showAll, setShowAll] = useObservationDisclosure('file-change/all');
   const visibleFiles = showAll ? view.files : view.files.slice(0, INITIAL_FILE_COUNT);
   const hiddenCount = view.files.length - visibleFiles.length;
   const status = fileChangeStatus(view.status);
@@ -133,16 +167,43 @@ function fileChangeStatus(status: string | undefined): ObservationToolStatus {
   return 'success';
 }
 
+function CodexFileChangePath({ file }: { file: CodexFileChange }): React.ReactElement {
+  if (!file.movePath) {
+    return (
+      <CompactFilePath
+        className="flex-1 font-mono text-foreground text-xs"
+        data-file-change-path="path"
+        path={file.path}
+      />
+    );
+  }
+
+  return (
+    <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1">
+      <CompactFilePath
+        className="font-mono text-foreground text-xs"
+        data-file-change-path="from"
+        path={file.path}
+      />
+      <span className="shrink-0 font-mono text-muted-foreground text-xs">→</span>
+      <CompactFilePath
+        className="font-mono text-foreground text-xs"
+        data-file-change-path="to"
+        path={file.movePath}
+      />
+    </span>
+  );
+}
+
 function CodexFileChangeRow({ file }: { file: CodexFileChange }): React.ReactElement {
-  const [diffOpen, setDiffOpen] = useState(false);
-  const path = file.movePath ? `${file.path} → ${file.movePath}` : file.path;
+  const [diffOpen, setDiffOpen] = useObservationDisclosure(`file-change/diff/${file.path}`);
   const summary = (
     <>
       <FileIcon
         className="size-4 shrink-0"
         fileName={file.movePath ?? file.path}
       />
-      <span className="min-w-0 flex-1 truncate font-mono text-foreground text-xs">{path}</span>
+      <CodexFileChangePath file={file} />
       <FileChangeStats
         additions={file.additions}
         deletions={file.deletions}
@@ -155,7 +216,7 @@ function CodexFileChangeRow({ file }: { file: CodexFileChange }): React.ReactEle
         <button
           aria-expanded={diffOpen}
           className="flex w-full min-w-0 items-center gap-3 px-4 py-3 text-left hover:bg-secondary/45"
-          onClick={() => setDiffOpen((open) => !open)}
+          onClick={() => setDiffOpen(!diffOpen)}
           type="button"
         >
           {summary}
@@ -171,6 +232,7 @@ function CodexFileChangeRow({ file }: { file: CodexFileChange }): React.ReactEle
           path={file.movePath ?? file.path}
           removed={file.deletions}
           showHeader={false}
+          showLineNumbers={!file.positionUnknown}
         />
       ) : null}
     </section>
@@ -202,6 +264,45 @@ function fileChangeItemFromRaw(value: unknown): Record<string, unknown> | undefi
   return candidates.find((candidate) => stringValue(candidate?.type) === 'fileChange');
 }
 
+function claudeFileToolDiff(
+  toolName: 'Write' | 'Edit' | 'MultiEdit',
+  input: Record<string, unknown>
+): string | undefined {
+  if (toolName === 'Write') return replacementDiff('', rawStringValue(input.content) ?? '');
+  if (toolName === 'Edit') {
+    return replacementDiff(
+      rawStringValue(input.old_string, input.oldString) ?? '',
+      rawStringValue(input.new_string, input.newString) ?? ''
+    );
+  }
+  if (!Array.isArray(input.edits)) return undefined;
+  const hunks = input.edits.flatMap((edit) => {
+    const record = recordValue(edit);
+    if (!record) return [];
+    const oldText = rawStringValue(record.old_string, record.oldString) ?? '';
+    const newText = rawStringValue(record.new_string, record.newString) ?? '';
+    const diff = replacementDiff(oldText, newText);
+    return diff ? [diff] : [];
+  });
+  return hunks.length > 0 ? hunks.join('\n') : undefined;
+}
+
+function replacementDiff(oldText: string, newText: string): string | undefined {
+  const oldLines = diffTextLines(oldText);
+  const newLines = diffTextLines(newText);
+  if (oldLines.length === 0 && newLines.length === 0) return undefined;
+  return [
+    `@@ -1,${oldLines.length} +1,${newLines.length} @@`,
+    ...oldLines.map((line) => `-${line}`),
+    ...newLines.map((line) => `+${line}`)
+  ].join('\n');
+}
+
+function diffTextLines(text: string): string[] {
+  if (!text) return [];
+  return text.endsWith('\n') ? text.slice(0, -1).split('\n') : text.split('\n');
+}
+
 function diffStats(diff: string | undefined): { additions: number; deletions: number } {
   if (!diff) return { additions: 0, deletions: 0 };
   let additions = 0;
@@ -220,4 +321,8 @@ function recordValue(value: unknown): Record<string, unknown> | undefined {
 
 function stringValue(...values: unknown[]): string | undefined {
   return values.find((value): value is string => typeof value === 'string' && value.trim().length > 0);
+}
+
+function rawStringValue(...values: unknown[]): string | undefined {
+  return values.find((value): value is string => typeof value === 'string');
 }

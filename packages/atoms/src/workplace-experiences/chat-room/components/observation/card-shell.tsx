@@ -12,6 +12,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { ObservationCard } from '@monad/ui';
 import { requestVirtualListRowMeasurement } from '@monad/ui/components/VirtualList';
 
+import { useObservationDisclosure } from './disclosure.tsx';
+
 export function ObservationCardShell({
   children,
   header,
@@ -61,6 +63,7 @@ export function ObservationToolStatusIndicator({
 
 export function ObservationToolCardShell({
   children,
+  defaultOpen = false,
   error = false,
   header,
   kind,
@@ -68,6 +71,7 @@ export function ObservationToolCardShell({
   timestamp
 }: {
   children: React.ReactNode;
+  defaultOpen?: boolean;
   error?: boolean;
   header: React.ReactNode;
   kind: ObservationToolKind;
@@ -75,22 +79,29 @@ export function ObservationToolCardShell({
   timestamp?: string;
 }): React.ReactElement {
   const resolvedStatus = error ? 'error' : status;
+  const [open, setOpen] = useObservationDisclosure('card', defaultOpen);
   return (
     <details
       className="group/tool rounded-md open:bg-secondary/15"
       data-slot="observation-tool-card"
       data-tool-kind={kind}
       data-visual-role={resolvedStatus === 'error' ? 'error' : 'tool'}
-      onToggle={(event) => requestVirtualListRowMeasurement(event.currentTarget)}
+      onToggle={(event) => {
+        setOpen(event.currentTarget.open);
+        requestVirtualListRowMeasurement(event.currentTarget);
+      }}
+      open={open}
     >
-      <summary className="flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-1.5 py-0 text-left font-sans text-muted-foreground text-sm leading-5 transition-colors hover:bg-secondary/40 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
+      <summary className="group/tool-trigger flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-0 py-0 text-left font-sans text-muted-foreground text-sm leading-5 transition-colors hover:bg-secondary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
         <HugeiconsIcon
           aria-hidden="true"
-          className="shrink-0 text-muted-foreground/80"
+          className="shrink-0 text-muted-foreground/80 transition-colors group-hover/tool-trigger:text-foreground"
           icon={observationToolIcon(kind)}
           size={16}
         />
-        <div className="min-w-0 flex-[0_1_auto]">{header}</div>
+        <div className="min-w-0 flex-[0_1_auto] [&_span]:transition-colors group-hover/tool-trigger:[&_span]:text-foreground">
+          {header}
+        </div>
         <ObservationToolStatusIndicator status={resolvedStatus} />
         <HugeiconsIcon
           aria-hidden="true"

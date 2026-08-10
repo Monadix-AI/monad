@@ -53,7 +53,7 @@ export function ObservationMessageCard({
       isStreaming={reasoningState.streaming}
     >
       <ReasoningTrigger
-        className="min-h-6 min-w-0 overflow-hidden px-1.5 py-0 font-sans text-muted-foreground text-sm leading-5 disabled:pointer-events-none"
+        className="min-h-6 min-w-0 overflow-hidden px-0 py-0 font-sans text-muted-foreground text-sm leading-5 disabled:pointer-events-none"
         disabled={!hasReasoningContent}
         getThinkingMessage={reasoningTitle ? () => <p className="min-w-0 truncate">{reasoningTitle}</p> : undefined}
         hideChevron={!hasReasoningContent}

@@ -2,7 +2,7 @@ import type { AgentObservationEvent } from '@monad/protocol';
 
 import { observationContractRawEvents } from './provenance.ts';
 
-const MONAD_MCP_TOOL_NAMES = [
+export const MONAD_MCP_TOOL_NAMES = [
   'project_post',
   'project_ask',
   'project_read',
@@ -26,8 +26,29 @@ export type MonadMcpToolName = (typeof MONAD_MCP_TOOL_NAMES)[number];
 
 export type MonadMcpAttachment = {
   path: string;
+  bytes?: number;
+  createdAt?: string;
+  id?: string;
   name?: string;
   mime?: string;
+};
+
+export type MonadMcpMessage = {
+  id: string;
+  agentName?: string;
+  attachments: MonadMcpAttachment[];
+  createdAt?: string;
+  name?: string;
+  role?: string;
+  text: string;
+};
+
+export type MonadMcpQuestion = {
+  allowOther?: boolean;
+  id?: string;
+  mode?: 'single' | 'multiple';
+  options: string[];
+  question: string;
 };
 
 type MonadMcpToolBase = {
@@ -51,6 +72,7 @@ export type MonadMcpToolView =
       action: 'project-ask';
       question?: string;
       options: string[];
+      questions?: MonadMcpQuestion[];
       mode?: 'single' | 'multiple';
       allowOther?: boolean;
     })
@@ -61,6 +83,7 @@ export type MonadMcpToolView =
       after?: string;
       around?: string;
       limit?: number;
+      messages?: MonadMcpMessage[];
     })
   | (MonadMcpToolBase & { action: 'project-inbox-check' })
   | (MonadMcpToolBase & { action: 'project-inbox-ack'; cursor?: number })
@@ -111,24 +134,31 @@ export function monadMcpToolView(
     isError: statusIsError(status) || rawMcpResultIsError(rawEvents)
   };
   switch (toolName) {
-    case 'project_post':
+    case 'project_post': {
+      const inputAttachments = attachments(record.attachments);
+      const outputAttachments = messageAttachments(output);
       return {
         ...base,
         action: 'project-post',
         ...optionalString('text', record.text),
         ...optionalString('threadId', record.threadId),
-        attachments: attachments(record.attachments)
+        attachments: outputAttachments.length > 0 ? outputAttachments : inputAttachments
       };
-    case 'project_ask':
+    }
+    case 'project_ask': {
+      const questions = questionArray(record.questions);
       return {
         ...base,
         action: 'project-ask',
         ...optionalString('question', record.question),
         options: stringArray(record.options),
+        ...(questions.length > 0 ? { questions } : {}),
         ...optionalMode(record.mode),
         ...optionalBoolean('allowOther', record.allowOther)
       };
-    case 'project_read':
+    }
+    case 'project_read': {
+      const messages = projectMessages(output);
       return {
         ...base,
         action: 'project-read',
@@ -136,20 +166,25 @@ export function monadMcpToolView(
         ...optionalString('before', record.before),
         ...optionalString('after', record.after),
         ...optionalString('around', record.around),
-        ...optionalNumber('limit', record.limit)
+        ...optionalNumber('limit', record.limit),
+        ...(messages === undefined ? {} : { messages })
       };
+    }
     case 'project_inbox_check':
       return { ...base, action: 'project-inbox-check' };
     case 'project_inbox_ack':
       return { ...base, action: 'project-inbox-ack', ...optionalNumber('cursor', record.cursor) };
-    case 'agent_send':
+    case 'agent_send': {
+      const inputAttachments = attachments(record.attachments);
+      const outputAttachments = messageAttachments(output);
       return {
         ...base,
         action: 'agent-send',
         ...optionalString('to', record.to),
         ...optionalString('text', record.text),
-        attachments: attachments(record.attachments)
+        attachments: outputAttachments.length > 0 ? outputAttachments : inputAttachments
       };
+    }
     case 'agent_read':
       return {
         ...base,
@@ -292,11 +327,111 @@ function attachments(value: unknown): MonadMcpAttachment[] {
     return [
       {
         path: record.path,
+        ...optionalNumber('bytes', record.bytes),
+        ...optionalString('createdAt', record.createdAt),
+        ...optionalString('id', record.id),
         ...optionalString('name', record.name),
         ...optionalString('mime', record.mime)
       }
     ];
   });
+}
+
+function questionArray(value: unknown): MonadMcpQuestion[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const record = recordValue(entry);
+    if (!record || typeof record.question !== 'string' || !record.question.trim()) return [];
+    return [
+      {
+        ...optionalBoolean('allowOther', record.allowOther),
+        ...optionalString('id', record.id),
+        ...optionalMode(record.mode),
+        options: stringArray(record.options),
+        question: record.question
+      }
+    ];
+  });
+}
+
+function projectMessages(value: unknown): MonadMcpMessage[] | undefined {
+  const record = projectMessageRecord(value, 0);
+  if (!record || !Array.isArray(record.messages)) return undefined;
+  return record.messages.flatMap((entry, index) => {
+    const message = recordValue(entry);
+    if (!message || typeof message.text !== 'string') return [];
+    const data = recordValue(message.data);
+    const name = [data?.agentDisplayName, data?.displayName, data?.agentName, message.name].find(
+      (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
+    );
+    const agentName = [data?.agentName, message.agentName].find(
+      (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
+    );
+    const id = [message.id, message.messageId].find(
+      (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
+    );
+    return [
+      {
+        id: id ?? `message-${index}`,
+        ...(agentName ? { agentName } : {}),
+        attachments: attachments(data?.attachments ?? message.attachments),
+        ...optionalString('createdAt', message.createdAt),
+        ...(name ? { name } : {}),
+        ...optionalString('role', message.role),
+        text: message.text
+      }
+    ];
+  });
+}
+
+function messageAttachments(value: unknown): MonadMcpAttachment[] {
+  const record = messageResultRecord(value, 0);
+  if (!record) return [];
+  const message = recordValue(record.message);
+  return attachments(message?.attachments ?? record.attachments);
+}
+
+function messageResultRecord(value: unknown, depth: number): Record<string, unknown> | undefined {
+  if (depth >= 4) return undefined;
+  const parsed = jsonValue(value);
+  if (Array.isArray(parsed)) {
+    for (const entry of parsed) {
+      const block = recordValue(entry);
+      const nested = messageResultRecord(block?.text ?? entry, depth + 1);
+      if (nested) return nested;
+    }
+    return undefined;
+  }
+  const record = recordValue(parsed);
+  if (!record) return undefined;
+  const message = recordValue(record.message);
+  if (Array.isArray(record.attachments) || Array.isArray(message?.attachments)) return record;
+  for (const candidate of [record.Ok, record.result, record.structuredContent, record.content]) {
+    const nested = messageResultRecord(candidate, depth + 1);
+    if (nested) return nested;
+  }
+  return undefined;
+}
+
+function projectMessageRecord(value: unknown, depth: number): Record<string, unknown> | undefined {
+  if (depth >= 4) return undefined;
+  const parsed = jsonValue(value);
+  if (Array.isArray(parsed)) {
+    for (const entry of parsed) {
+      const block = recordValue(entry);
+      const nested = projectMessageRecord(block?.text ?? entry, depth + 1);
+      if (nested) return nested;
+    }
+    return undefined;
+  }
+  const record = recordValue(parsed);
+  if (!record) return undefined;
+  if (Array.isArray(record.messages)) return record;
+  for (const candidate of [record.Ok, record.result, record.structuredContent, record.content]) {
+    const nested = projectMessageRecord(candidate, depth + 1);
+    if (nested) return nested;
+  }
+  return undefined;
 }
 
 function stringArray(value: unknown): string[] {
