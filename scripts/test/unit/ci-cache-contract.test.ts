@@ -21,9 +21,11 @@ interface WorkflowJob {
 }
 
 interface Workflow {
+  env?: Record<string, unknown>;
   jobs?: Record<string, WorkflowJob>;
   on?: {
     workflow_call?: {
+      inputs?: Record<string, { default?: unknown; description?: string; required?: boolean; type?: string }>;
       secrets?: Record<string, { description?: string; required?: boolean }>;
     };
   };
@@ -77,19 +79,23 @@ test('every Bun dependency install restores the package cache first', async () =
   ]);
 });
 
-test('CI executes platform-sensitive test tasks instead of replaying remote results', async () => {
-  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
-  const testRuns = Object.entries(workflow.jobs ?? {}).flatMap(([job, definition]) =>
+test('CI caches PR tasks while the final release gate forces complete execution', async () => {
+  const ci = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const release = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release.yml')).text()) as Workflow;
+  const testRuns = Object.entries(ci.jobs ?? {}).flatMap(([job, definition]) =>
     (definition.steps ?? []).flatMap((step) =>
       step.run?.includes('turbo run test') ? [{ forced: step.run.includes('--force'), job }] : []
     )
   );
 
+  expect(ci.on?.workflow_call?.inputs?.force).toMatchObject({ default: false, required: false, type: 'boolean' });
+  expect(ci.env?.TURBO_FORCE).toBe('$'.concat("{{ inputs.force && 'true' || 'false' }}"));
   expect(testRuns).toEqual([
-    { forced: true, job: 'unit' },
-    { forced: true, job: 'hermetic-e2e' },
-    { forced: true, job: 'web-e2e' }
+    { forced: false, job: 'unit' },
+    { forced: false, job: 'hermetic-e2e' },
+    { forced: false, job: 'web-e2e' }
   ]);
+  expect(release.jobs?.['ci-gate']?.with).toMatchObject({ force: true, full: true });
 });
 
 test('CI preserves failures while running both unit test scopes', async () => {
@@ -104,7 +110,7 @@ test('CI preserves failures while running both unit test scopes', async () => {
     {
       condition: null,
       name: 'Test workspace unit',
-      run: 'bun scripts/quiet-run.ts bunx --bun turbo run test --force --output-logs=errors-only'
+      run: 'bun scripts/quiet-run.ts bunx --bun turbo run test --output-logs=errors-only'
     },
     {
       condition: '$'.concat('{{ !cancelled() }}'),
