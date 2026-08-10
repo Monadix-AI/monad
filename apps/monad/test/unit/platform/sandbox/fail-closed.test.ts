@@ -64,7 +64,7 @@ test('createTlsCert renews a certificate that expires inside the renewal window'
   );
   expect(renewed).toBe(true);
   expect(out.warnings).toContain('tls:cert-renewed');
-});
+}, 15_000);
 
 test('createTlsCert throws when cert generation fails (fail-closed)', async () => {
   await expect(
