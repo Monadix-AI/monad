@@ -12,6 +12,7 @@ import { createMessageIngress, messageIdempotencyKey } from '#/services/messages
 import { MessageLookup } from '#/services/messages/lookup.ts';
 import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportHandle } from '../helpers.ts';
 import { connectionGate, waitFor } from '../wait.ts';
 
@@ -165,7 +166,7 @@ for (const kind of TRANSPORTS) {
       const gate = connectionGate();
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (e) => e.type === 'session.message.completed',
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: gate.onConnected
       });
       await gate.ready;
@@ -221,7 +222,7 @@ for (const kind of TRANSPORTS) {
         until: (event) =>
           event.type === 'session.message.created' &&
           parseEventPayload('session.message.created', event.payload).message.text === 'follow-up reply',
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: gate.onConnected
       });
       await gate.ready;
@@ -820,7 +821,7 @@ for (const kind of TRANSPORTS) {
         until: (e) =>
           e.type === 'session.message.delta.appended' &&
           parseEventPayload('session.message.delta.appended', e.payload).index === 1,
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: gate.onConnected
       });
       await gate.ready;
@@ -833,7 +834,7 @@ for (const kind of TRANSPORTS) {
       const seenB = await t.sse(`/v1/sessions/${sessionId}/events`, {
         headers: { 'Last-Event-ID': cursor as string },
         until: (e) => e.type === 'session.message.completed',
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
 
       // The terminal message is always delivered on resume, carrying the full text…
@@ -861,7 +862,7 @@ for (const kind of TRANSPORTS) {
       const gate1 = connectionGate();
       const leg1 = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (e) => e.type === 'session.message.completed',
-        timeoutMs: 5000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: gate1.onConnected
       });
       await gate1.ready;
@@ -877,7 +878,7 @@ for (const kind of TRANSPORTS) {
       const leg2 = t.sse(`/v1/sessions/${sessionId}/events`, {
         headers: { 'Last-Event-ID': token },
         until: (e) => e.type === 'session.message.completed',
-        timeoutMs: 5000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: gate2.onConnected
       });
       await gate2.ready;
@@ -936,7 +937,7 @@ for (const kind of TRANSPORTS) {
             ev.item.status === 'done'
           );
         },
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: gate.onConnected
       });
 
@@ -994,7 +995,7 @@ for (const kind of TRANSPORTS) {
               ev.item.status === 'done'
             );
           },
-          timeoutMs: 3000,
+          timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
           onConnected: gate.onConnected
         });
         await gate.ready;
@@ -1031,11 +1032,11 @@ for (const kind of TRANSPORTS) {
           ? t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
               headers: { 'Last-Event-ID': anchorCursor },
               until: () => true,
-              timeoutMs: 3000
+              timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
             })
           : t.sse(`/v1/sessions/${sessionId}/ui-stream?after=${encodeURIComponent(anchorCursor)}`, {
               until: () => true,
-              timeoutMs: 3000
+              timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
             }));
         const resumedSnapshot = resumed[0] as unknown as SessionUiEvent;
         if (resumedSnapshot?.kind !== 'snapshot') throw new Error('missing resumed ui snapshot');
@@ -1074,7 +1075,7 @@ for (const kind of TRANSPORTS) {
         // Fresh subscribe delivers an authoritative snapshot first (no running mesh sessions yet).
         const fresh = (await served.sse(path, {
           until: () => true,
-          timeoutMs: 3000
+          timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
         })) as unknown as MeshAgentStateFrame[];
         expect(fresh[0]).toMatchObject({ kind: 'snapshot', sessions: [], loginRequirements: [], approvals: [] });
 
@@ -1085,7 +1086,7 @@ for (const kind of TRANSPORTS) {
         const resumed = (await served.sse(path, {
           headers: { 'Last-Event-ID': anchor.id },
           until: (frame) => (frame as unknown as MeshAgentStateFrame).kind === 'event',
-          timeoutMs: 3000
+          timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
         })) as unknown as MeshAgentStateFrame[];
         const replayedEventIds = resumed
           .filter((frame): frame is Extract<MeshAgentStateFrame, { kind: 'event' }> => frame.kind === 'event')
@@ -1096,7 +1097,7 @@ for (const kind of TRANSPORTS) {
         // An absent (well-formed) anchor yields a replacement snapshot, not an error.
         const replacement = (await served.sse(`${path}?after=${newId('evt')}`, {
           until: () => true,
-          timeoutMs: 3000
+          timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
         })) as unknown as MeshAgentStateFrame[];
         expect(replacement[0]).toMatchObject({ kind: 'snapshot' });
 

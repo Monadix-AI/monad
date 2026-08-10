@@ -262,6 +262,7 @@ test('heartbeat comments re-arm the idle watchdog so a busy stream never reconne
   });
 
   const dispose = c.stream('/x', numSchema, () => {}, { idleTimeoutMs: 40 });
+  // biome-ignore lint/plugin: waits out three times the injected idle window to prove the watchdog stays quiet; a reconnect that never happens has no event to await.
   await new Promise((r) => setTimeout(r, 120)); // 3× the idle window
   dispose();
   expect(calls).toBe(1); // never tripped the watchdog

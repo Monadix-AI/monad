@@ -7,6 +7,7 @@ interface WorkflowStep {
   if?: string;
   name?: string;
   run?: string;
+  shell?: string;
   uses?: string;
   with?: Record<string, unknown>;
 }
@@ -18,8 +19,16 @@ interface WorkflowJob {
   outputs?: Record<string, string>;
   secrets?: 'inherit' | Record<string, string>;
   steps?: WorkflowStep[];
+  strategy?: { matrix?: Record<string, unknown> };
   uses?: string;
   with?: Record<string, unknown>;
+}
+
+interface WorkflowInput {
+  default?: unknown;
+  description?: string;
+  required?: boolean;
+  type?: string;
 }
 
 interface Workflow {
@@ -27,9 +36,10 @@ interface Workflow {
   jobs?: Record<string, WorkflowJob>;
   on?: {
     workflow_call?: {
-      inputs?: Record<string, { default?: unknown; description?: string; required?: boolean; type?: string }>;
+      inputs?: Record<string, WorkflowInput>;
       secrets?: Record<string, { description?: string; required?: boolean }>;
     };
+    workflow_dispatch?: { inputs?: Record<string, WorkflowInput> };
   };
 }
 
@@ -121,6 +131,50 @@ test('CI preserves failures while running both unit test scopes', async () => {
       run: 'bun scripts/bun-test.ts scripts/test/unit/ --only-failures'
     }
   ]);
+});
+
+test('the cross-platform matrix is reachable without publishing a release', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const fullGate = "github.event_name == 'merge_group' || inputs.full";
+
+  expect(workflow.on?.workflow_dispatch?.inputs?.full).toEqual({
+    default: true,
+    description: 'Run the full cross-platform quality gate.',
+    required: false,
+    type: 'boolean'
+  });
+  // Dispatch defaults `full` to true, so all three matrix gates open on a manual run.
+  expect({
+    hermeticE2e: workflow.jobs?.['hermetic-e2e']?.if,
+    webE2e: workflow.jobs?.['web-e2e']?.if,
+    unitMatrixGate: String(workflow.jobs?.unit?.strategy?.matrix?.os ?? '').includes(fullGate)
+  }).toEqual({ hermeticE2e: fullGate, webE2e: fullGate, unitMatrixGate: true });
+});
+
+test('every Windows job drops Defender scanning before it writes to disk', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const windowsJobs = Object.entries(workflow.jobs ?? {}).filter(([, definition]) =>
+    JSON.stringify(definition.strategy?.matrix ?? {}).includes('windows-latest')
+  );
+
+  expect(
+    windowsJobs.map(([job, definition]) => {
+      const [first] = definition.steps ?? [];
+      return {
+        job,
+        first: { if: first?.if ?? null, run: first?.run ?? null, shell: first?.shell ?? null },
+        // Exclusions must precede checkout, or the cache extraction and install stay scanned.
+        precedesCheckout: (definition.steps ?? []).findIndex((step) => step.uses?.startsWith('actions/checkout@')) === 1
+      };
+    })
+  ).toEqual(
+    ['unit', 'hermetic-e2e'].map((job) => ({
+      job,
+      first: { if: "runner.os == 'Windows'", run: '$'.concat('{{ env.WINDOWS_DEFENDER_EXCLUSIONS }}'), shell: 'pwsh' },
+      precedesCheckout: true
+    }))
+  );
+  expect(String(workflow.env?.WINDOWS_DEFENDER_EXCLUSIONS)).toContain('Add-MpPreference');
 });
 
 test('release validation receives only the Turbo remote cache secret', async () => {

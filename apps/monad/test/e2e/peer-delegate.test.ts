@@ -22,6 +22,7 @@ import { MOCK_REPLY, mockModel } from '#/infra/mock-model.ts';
 import { createPeerDelegateTool, type PeerDelegateTarget } from '#/services/delegation/peer-delegate.ts';
 import { OversightService } from '#/services/oversight.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import { buildHandlers, type LiveApp, makeTestPaths, readSSE, seededProviderRegistry } from '../helpers.ts';
 
 const TOKEN = 'peer-secret-token';
@@ -255,7 +256,7 @@ test('HTTP end-to-end: client drives A over HTTP/SSE while A delegates to B over
     });
     const eventsP = readSSE(`${baseA}/v1/sessions/${sessionId}/events`, {
       until: (e) => e.type === 'session.message.completed',
-      timeoutMs: 10_000,
+      timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
       onConnected: sseReady
     });
     await readyP;

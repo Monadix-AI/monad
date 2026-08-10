@@ -110,6 +110,7 @@ describe.skipIf(!ENABLED)('real guest filesystem syscall observations', () => {
     const output = Promise.all([drainBytes(process.stdout), drainBytes(process.stderr)]);
     const violations = drainViolations(process.violations);
     await waitForGuestProcess(process);
+    // biome-ignore lint/plugin: guest-side work has no host-observable signal until it trips the limit being asserted.
     await Bun.sleep(250);
     process.kill('SIGTERM');
 

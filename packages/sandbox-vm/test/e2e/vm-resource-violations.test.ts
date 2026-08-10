@@ -52,6 +52,7 @@ describe.skipIf(!ENABLED)('real guest cgroup violations', () => {
     const output = Promise.all([drainBytes(process.stdout), drainBytes(process.stderr)]);
     const violations = drainViolations(process.violations);
     await waitForGuestProcess(process);
+    // biome-ignore lint/plugin: guest-side work has no host-observable signal until it trips the limit being asserted.
     await Bun.sleep(500);
     const alreadyExited = await Promise.race([process.exited.then(() => true), Bun.sleep(0).then(() => false)]);
     if (!alreadyExited) process.kill('SIGTERM');

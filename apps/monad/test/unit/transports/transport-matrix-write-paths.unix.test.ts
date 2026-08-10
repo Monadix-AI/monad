@@ -236,6 +236,7 @@ describe('transport parity — active generation restore', () => {
           await new Promise<void>((resolve) => {
             if (req.signal?.aborted) return resolve();
             req.signal?.addEventListener('abort', () => resolve(), { once: true });
+            // biome-ignore lint/plugin: this delay is the mock model's generation time, raced against the abort under test.
             setTimeout(resolve, 250);
           });
         },

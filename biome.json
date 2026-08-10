@@ -26,6 +26,10 @@
     {
       "path": "./config/biome/weak-test-assertions.grit",
       "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
+    },
+    {
+      "path": "./config/biome/timing-dependent-tests.grit",
+      "includes": ["**/*.test.ts", "**/*.test.tsx", "**/*.spec.ts", "**/*.spec.tsx"]
     }
   ],
   "formatter": {

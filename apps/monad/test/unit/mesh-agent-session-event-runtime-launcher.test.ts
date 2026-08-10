@@ -24,6 +24,7 @@ async function removeRuntimeRoot(path: string): Promise<void> {
       return;
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code !== 'EBUSY' || attempt === 49) throw error;
+      // biome-ignore lint/plugin: backoff inside a bounded retry loop; the next attempt is the condition, and Windows keeps directory handles open past the unlink.
       await Bun.sleep(100);
     }
   }
