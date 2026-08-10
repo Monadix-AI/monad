@@ -83,6 +83,17 @@ export class MeshSessionEventRuntimeLauncher {
     }
     const workingPath = this.resolveWorkingPath(args.workingPath);
     const id = newId('mesh');
+    this.ctx.log.debug(
+      {
+        event: 'mesh.runtime.start_requested',
+        sessionId: args.transcriptTargetId,
+        memberId: args.projectMemberId ?? null,
+        meshSessionId: id,
+        runtimeGeneration: id,
+        pid: null
+      },
+      'native cli start requested'
+    );
     const allowAutopilot = args.allowAutopilot ?? agent.allowAutopilot;
     if (willBeManaged && allowAutopilot && adapter.executionCapabilities?.autopilot !== true) {
       throw new MeshAgentError(
@@ -224,6 +235,7 @@ export class MeshSessionEventRuntimeLauncher {
     let rawDecoders = createRawStreamDecoders();
     let runtime: SessionEventRuntimeExecutor;
     let previousActivityState: MeshSessionView['activity']['state'] | undefined;
+    let lastPid: number | null = null;
     let resumePending = false;
     const live: LiveMeshSession = {
       id,
@@ -323,6 +335,7 @@ export class MeshSessionEventRuntimeLauncher {
         );
       },
       onSnapshot: (snapshot) => {
+        if (snapshot.activity.state === 'running') lastPid = snapshot.activity.pid;
         const idleTimeoutMs =
           definition.plan.processModel === 'resident' ? definition.plan.suspend?.idleTimeoutMs : undefined;
         if (snapshot.activity.state === 'suspended' && previousActivityState !== 'suspended' && idleTimeoutMs) {
@@ -363,7 +376,7 @@ export class MeshSessionEventRuntimeLauncher {
           state: terminal?.kind ?? (snapshot.lifecycle.state === 'active' ? 'running' : 'starting'),
           pid: snapshot.activity.state === 'running' ? snapshot.activity.pid : null,
           providerSessionRef: snapshot.providerSessionRef ?? null,
-          exitCode: terminal?.exitCode ?? null,
+          exitCode: terminal?.kind === 'stopped' ? null : (terminal?.exitCode ?? null),
           updatedAt,
           exitedAt: terminal?.at ?? null
         });
@@ -400,6 +413,20 @@ export class MeshSessionEventRuntimeLauncher {
         }
         if (terminal && terminal.kind !== 'stopped' && !terminalHandled) {
           terminalHandled = true;
+          this.ctx.log.debug(
+            {
+              event: 'mesh.runtime.exited',
+              sessionId: args.transcriptTargetId,
+              memberId: args.projectMemberId ?? null,
+              meshSessionId: id,
+              runtimeGeneration: id,
+              pid: lastPid,
+              exitCode: terminal.exitCode ?? null,
+              signal: terminal.signal ?? null,
+              state: terminal.kind
+            },
+            'native cli exited'
+          );
           this.ctx.live.delete(id);
           void this.ctx.fixtureTap?.flush(id, live.observationEpoch);
           void live.liveRawStore.closeAndDelete();
@@ -439,6 +466,17 @@ export class MeshSessionEventRuntimeLauncher {
       };
       this.ctx.deps.store.upsertMeshSession(row);
       if (!terminal) {
+        this.ctx.log.debug(
+          {
+            event: 'mesh.runtime.started',
+            sessionId: args.transcriptTargetId,
+            memberId: args.projectMemberId ?? null,
+            meshSessionId: id,
+            runtimeGeneration: id,
+            pid
+          },
+          'native cli started'
+        );
         this.ctx.events.emit(args.transcriptTargetId, 'mesh.started', {
           meshSessionId: id,
           agentName: args.agentName,

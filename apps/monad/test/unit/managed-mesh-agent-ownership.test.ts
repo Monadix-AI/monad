@@ -76,9 +76,9 @@ function agentView(provider: string, command: string, args: string[]): MeshAgent
   };
 }
 
-let cleanup: (() => void) | null = null;
-afterEach(() => {
-  cleanup?.();
+let cleanup: (() => Promise<void>) | null = null;
+afterEach(async () => {
+  await cleanup?.();
   cleanup = null;
 });
 
@@ -187,8 +187,8 @@ function buildManagedHost(opts: {
     bus: new EventBus(),
     agents: async () => [agentView(provider, process.execPath, [script])]
   });
-  cleanup = () => {
-    host.stopAll();
+  cleanup = async () => {
+    await host.stopAll();
     unregisterAgentAdapterImpl(provider);
     store.close();
     rmSync(workdir, { recursive: true, force: true });
@@ -290,7 +290,7 @@ test('stopping a managed runtime settles the owning binding: current cleared and
   const bound = store.getSessionBinding(SESSION_ID, MEMBER_ID);
   if (bound?.currentNativeRuntimeSessionId !== view.id) throw new Error('runtime was not owned before stop');
 
-  host.stop(view.id);
+  await host.stop(view.id);
 
   const binding = store.getSessionBinding(SESSION_ID, MEMBER_ID);
   expect({
@@ -512,8 +512,8 @@ function buildResidentTerminalHost(): {
       }
     }
   });
-  cleanup = () => {
-    host.stopAll();
+  cleanup = async () => {
+    await host.stopAll();
     unregisterAgentAdapterImpl(provider);
     store.close();
     rmSync(workdir, { recursive: true, force: true });

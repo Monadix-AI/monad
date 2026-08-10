@@ -8,7 +8,7 @@ test('daemon shutdown releases dependents before the runtime kernel', async () =
     schedule: { dispose: () => events.push('schedule') },
     watchers: { closeAll: () => events.push('watchers') },
     channels: { stop: async () => void events.push('channels') },
-    meshAgents: { stopAll: () => void events.push('meshAgents') },
+    meshAgents: { stopAll: async () => void events.push('meshAgents') },
     runtime: { stop: async () => void events.push('runtime') }
   });
 
@@ -26,7 +26,7 @@ test('daemon shutdown coalesces concurrent signal handlers', async () => {
     schedule: { dispose: () => {} },
     watchers: { closeAll: () => {} },
     channels: { stop: async () => {} },
-    meshAgents: { stopAll: () => {} },
+    meshAgents: { stopAll: async () => {} },
     runtime: {
       stop: async () => {
         stops += 1;

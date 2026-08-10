@@ -127,7 +127,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     clearProcessesForSession(id);
     clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
     if (session.projectId) await ctx.deps.meshAgentHost?.deleteSession(id);
-    ctx.deps.meshAgentHost?.stopSession(id);
+    await ctx.deps.meshAgentHost?.stopSession(id);
     oversight?.cancelSession(id, 'session_deleted');
     delegation?.cancelSession(id, 'session_deleted');
     // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
@@ -391,7 +391,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       aborts.delete(id);
       clearProcessesForSession(id);
       clearAcpDelegatesForSession(id); // the sub-agent's continued context no longer matches a reset parent
-      ctx.deps.meshAgentHost?.stopSession(id);
+      await ctx.deps.meshAgentHost?.stopSession(id);
       const clearedCount = store.clearMessages(id);
       emitLifecycle(id, 'session.updated', { reset: true });
       return { clearedCount };

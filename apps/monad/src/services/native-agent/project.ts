@@ -128,7 +128,9 @@ export function createNativeAgentProjectApi(
     stop: (meshSessionId) => {
       const meshSession = store.getMeshSession(meshSessionId);
       if (meshSession)
-        handlers.meshAgent.stop({ id: meshSessionId, transcriptTargetId: meshSession.transcriptTargetId });
+        void handlers.meshAgent
+          .stop({ id: meshSessionId, transcriptTargetId: meshSession.transcriptTargetId })
+          .catch(() => undefined);
     }
   });
   return {

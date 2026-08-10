@@ -38,7 +38,7 @@ export interface MeshAgentSettingsDeps {
   onCatalogUpdated?: (resources: EventPayload<'mesh.catalog.updated'>['resources']) => void;
   now?: () => number;
   meshSessions?: {
-    stopAgentProvider(provider: MeshAgentView['provider']): void;
+    stopAgentProvider(provider: MeshAgentView['provider']): Promise<void>;
   };
 }
 
@@ -272,7 +272,7 @@ export function createMeshAgentSettingsModule({
       const stored = cfg.meshAgents.find((a) => a.name === agent.name);
       cfg.meshAgents = [...cfg.meshAgents.filter((a) => a.name !== agent.name), fromView(agent, stored)];
       await commit(cfg);
-      if (!agent.enabled) meshSessions?.stopAgentProvider(agent.provider);
+      if (!agent.enabled) await meshSessions?.stopAgentProvider(agent.provider);
       return { ok: true };
     },
 
@@ -282,7 +282,7 @@ export function createMeshAgentSettingsModule({
       if (!target) throw new HandlerError('not_found', `MeshAgent not found: ${name}`);
       cfg.meshAgents = cfg.meshAgents.map((a) => (a.name === name ? { ...a, enabled } : a));
       await commit(cfg);
-      if (!enabled) meshSessions?.stopAgentProvider(target.provider);
+      if (!enabled) await meshSessions?.stopAgentProvider(target.provider);
       return { ok: true };
     },
 
@@ -292,7 +292,7 @@ export function createMeshAgentSettingsModule({
       if (!target) throw new HandlerError('not_found', `MeshAgent not found: ${name}`);
       cfg.meshAgents = cfg.meshAgents.filter((a) => a.name !== name);
       await commit(cfg);
-      meshSessions?.stopAgentProvider(target.provider);
+      await meshSessions?.stopAgentProvider(target.provider);
       return { ok: true };
     }
   };
