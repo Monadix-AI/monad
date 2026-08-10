@@ -28,7 +28,7 @@ export interface SystemUpgradeOptions {
   now?: () => Date;
 }
 
-export function upgradeAttemptPaths(cacheDir: string): { attempt: string; log: string; result: string } {
+function upgradeAttemptPaths(cacheDir: string): { attempt: string; log: string; result: string } {
   return {
     attempt: join(cacheDir, 'attempt.json'),
     log: join(cacheDir, 'updater.log'),
