@@ -6,6 +6,7 @@ import { join } from 'node:path';
 import {
   resolvePlaywrightBrowserChannel,
   resolvePlaywrightDaemonPort,
+  resolvePlaywrightRetryPolicy,
   resolvePlaywrightShard,
   resolvePlaywrightTrace,
   resolvePlaywrightWebPort,
@@ -90,6 +91,13 @@ test('resolvePlaywrightTrace keeps routine local runs lean and preserves opt-in 
     localDebug: resolvePlaywrightTrace({ PLAYWRIGHT_TRACE: '1' }),
     ci: resolvePlaywrightTrace({ CI: '1' })
   }).toEqual({ local: 'off', localDebug: 'retain-on-failure', ci: 'on-first-retry' });
+});
+
+test('CI retries once for trace collection but retry-pass remains a flaky gate failure', () => {
+  expect({ local: resolvePlaywrightRetryPolicy({}), ci: resolvePlaywrightRetryPolicy({ CI: '1' }) }).toEqual({
+    local: { retries: 0, failOnFlakyTests: false },
+    ci: { retries: 1, failOnFlakyTests: true }
+  });
 });
 
 test('resolvePlaywrightShard converts the CI matrix value into the Playwright contract', () => {

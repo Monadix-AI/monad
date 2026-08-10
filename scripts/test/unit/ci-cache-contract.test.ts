@@ -3,6 +3,7 @@ import { readdir } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 
 interface WorkflowStep {
+  'continue-on-error'?: boolean | string;
   if?: string;
   name?: string;
   run?: string;
@@ -11,6 +12,7 @@ interface WorkflowStep {
 }
 
 interface WorkflowJob {
+  'continue-on-error'?: boolean | string;
   if?: string;
   needs?: string | string[];
   outputs?: Record<string, string>;
@@ -187,4 +189,31 @@ test('stable releases publish only a fully validated pending manifest version', 
       targetCommitish: '$'.concat('{{ inputs.sha || inputs.tag }}')
     }
   });
+});
+
+test('critical daemon and browser E2E jobs cannot be softened or omitted from the full gate', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const critical = ['hermetic-e2e', 'web-e2e', 'e2e-deps'];
+
+  expect(
+    critical.map((job) => ({
+      job,
+      continueOnError: workflow.jobs?.[job]?.['continue-on-error'] ?? null,
+      softenedSteps: (workflow.jobs?.[job]?.steps ?? [])
+        .filter((step) => step['continue-on-error'] !== undefined)
+        .map((step) => step.name ?? step.run ?? step.uses)
+    }))
+  ).toEqual(critical.map((job) => ({ job, continueOnError: null, softenedSteps: [] })));
+  expect(workflow.jobs?.gate?.needs).toEqual(['checks', 'unit', 'hermetic-e2e', 'web-e2e', 'e2e-deps']);
+  expect(JSON.stringify(critical.map((job) => workflow.jobs?.[job]))).not.toMatch(/allow[-_]?failure|quarantine/i);
+});
+
+test('daemon E2E uses the first-failure-preserving wrapper and one centralized functional timeout budget', async () => {
+  const pkg = await Bun.file(join(root, 'apps/monad/package.json')).json();
+  const runner = await Bun.file(join(root, 'apps/monad/scripts/run-e2e-tests.ts')).text();
+
+  expect(pkg.scripts?.['test:e2e']).toBe('bun ../../scripts/quiet-run.ts bun scripts/run-e2e-tests.ts');
+  expect(runner).toContain("'../../scripts/bun-test.ts'");
+  expect(runner).toContain('DAEMON_E2E_TIMEOUT_BUDGET.testCaseMs');
+  expect(runner).not.toContain('--retry');
 });

@@ -83,7 +83,7 @@
     "start": "bun src/main.ts",
     "start:dev": "NODE_ENV=development bun --env-file=../../.env.local --watch ../cli/src/bin.ts daemon --dev",
     "test": "bun ../../scripts/quiet-run.ts bun scripts/run-unit-tests.ts",
-    "test:e2e": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/e2e/ --timeout=15000 --path-ignore-patterns='**/live-*.test.ts' --path-ignore-patterns='**/*.local.test.ts' --monad-shards=auto --only-failures",
+    "test:e2e": "bun ../../scripts/quiet-run.ts bun scripts/run-e2e-tests.ts",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
   },
   "type": "module"
