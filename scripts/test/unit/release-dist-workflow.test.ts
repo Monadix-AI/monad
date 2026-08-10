@@ -28,6 +28,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   const build = namedStep('build', 'Build target archive and updater')?.run;
   const crossCompilers = namedStep('build', 'Install Linux and Windows cross-compilers')?.run;
   const generate = namedStep('installers', 'Generate shell and PowerShell installers')?.run;
+  const installerBun = jobs.installers?.steps?.find((step) => step.uses?.startsWith('oven-sh/setup-bun@'));
   const upload = jobs.installers?.steps?.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
   const shellTest = namedStep('install-test', 'Test shell installer and updater receipt')?.run;
   const powerShellTest = namedStep('install-test', 'Test PowerShell installer and updater receipt')?.run;
@@ -39,6 +40,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(crossCompilers).toContain('binutils-aarch64-linux-gnu');
   expect(crossCompilers).toContain('libc6-dev-arm64-cross');
   expect(crossCompilers).not.toContain('musl-tools');
+  expect(installerBun?.with?.['bun-version']).toBe('1.3.14');
   expect(generate).toContain('--artifacts=global');
   expect(generate).toContain('bun scripts/enhance-dist-installers.ts');
   expect(upload?.with?.path).toContain('target/distrib/install.sh');
