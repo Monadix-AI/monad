@@ -3,6 +3,9 @@
 .impeccable/hook.pending.json
 .impeccable/config.local.json
 .impeccable/live/server.json
+.impeccable/live/roots.json
+.impeccable/live/app-root.json
+.impeccable/live/inject-journal.json
 .impeccable/live/sessions/
 .impeccable/live/previews/
 .impeccable/live/annotations/
