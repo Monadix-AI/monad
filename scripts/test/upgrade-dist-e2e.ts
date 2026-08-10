@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { chmodSync, mkdtempSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -141,9 +141,14 @@ async function runScenario(kind: 'cli' | 'web'): Promise<void> {
 }
 
 function releasePayload(base: string) {
-  const installerUrl = `${base}/new/${installerName}`;
+  const assets = readdirSync(newDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile())
+    .map((entry) => {
+      const assetUrl = `${base}/new/${encodeURIComponent(entry.name)}`;
+      return { name: entry.name, url: assetUrl, browser_download_url: assetUrl };
+    });
   return {
-    assets: [{ name: installerName, url: installerUrl, browser_download_url: installerUrl }],
+    assets,
     body: 'dist upgrade e2e',
     draft: false,
     name: targetTag,
