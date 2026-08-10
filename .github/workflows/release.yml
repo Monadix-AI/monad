@@ -126,7 +126,7 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu musl-tools gcc-mingw-w64-x86-64
+          sudo apt-get install -y --no-install-recommends binutils binutils-aarch64-linux-gnu gcc gcc-aarch64-linux-gnu libc6-dev-arm64-cross gcc-mingw-w64-x86-64
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Install dist
