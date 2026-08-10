@@ -59,6 +59,10 @@ import { OversightService } from '#/services/oversight.ts';
 import { RoundCache } from '#/services/round-cache.ts';
 import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../scripts/e2e-timeout-budget.ts';
+import { readSSE } from './sse.ts';
+
+export { readSSE } from './sse.ts';
 
 // Production populates the MeshAgent adapter registry at boot via the gated atom-pack path
 // (onAgentAdapter → registerAgentAdapterImpl); this harness builds handlers directly, so register the
@@ -318,14 +322,21 @@ export function buildHandlers(
     new OversightService({
       publish: (e) => bus.publish(e),
       engine: opts?.engine,
-      timeoutMs: opts?.oversightTimeoutMs ?? 2_000
+      timeoutMs: opts?.oversightTimeoutMs ?? DAEMON_E2E_TIMEOUT_BUDGET.serviceTimeoutMs
     });
   const interactions = opts?.interactions ?? new InteractionService();
   if (!interactions.clarifyEnabled) {
-    interactions.enableClarify({ ingress: messageIngress, publish: (e) => bus.publish(e), timeoutMs: 2_000 });
+    interactions.enableClarify({
+      ingress: messageIngress,
+      publish: (e) => bus.publish(e),
+      timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.serviceTimeoutMs
+    });
   }
   const clarify = interactions;
-  const delegation = new DelegationService({ publish: (e) => bus.publish(e), timeoutMs: 2_000 });
+  const delegation = new DelegationService({
+    publish: (e) => bus.publish(e),
+    timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.serviceTimeoutMs
+  });
   const agent = createAgent({
     model: modelRouter,
     tools: [...(opts?.tools ?? []), ...(opts?.clarifyTool ? [createClarifyTool(clarify.ask)] : [])],
@@ -544,61 +555,6 @@ export function serveTransport(kind: TransportKind, app: ReturnType<typeof creat
       await unlink(sock).catch(() => {});
     }
   };
-}
-
-/**
- * Read an SSE event stream until `until(event)` returns true or `timeoutMs` elapses,
- * then abort. Returns every parsed event seen. `headers` can carry Last-Event-ID.
- */
-export async function readSSE(
-  url: string,
-  opts: {
-    headers?: Record<string, string>;
-    until: (e: Event) => boolean;
-    timeoutMs?: number;
-    unix?: string;
-    /** Called as soon as the server accepts the SSE connection (response headers received). */
-    onConnected?: () => void;
-  }
-): Promise<Event[]> {
-  const controller = new AbortController();
-  const seen: Event[] = [];
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 2000);
-
-  try {
-    const res = await fetch(url, { headers: opts.headers, signal: controller.signal, unix: opts.unix });
-    opts.onConnected?.();
-    const reader = res.body?.getReader();
-    if (!reader) return seen;
-    const decoder = new TextDecoder();
-    let buf = '';
-    for (;;) {
-      const { done, value } = await reader.read();
-      if (done) break;
-      buf += decoder.decode(value, { stream: true });
-      // SSE frames are separated by a blank line.
-      let sep = buf.indexOf('\n\n');
-      while (sep !== -1) {
-        const frame = buf.slice(0, sep);
-        buf = buf.slice(sep + 2);
-        const dataLine = frame.split('\n').find((l) => l.startsWith('data: '));
-        if (dataLine) {
-          const event = JSON.parse(dataLine.slice(6)) as Event;
-          seen.push(event);
-          if (opts.until(event)) {
-            controller.abort();
-            return seen;
-          }
-        }
-        sep = buf.indexOf('\n\n');
-      }
-    }
-  } catch {
-    // aborted (timeout or satisfied) — fall through to return what we collected
-  } finally {
-    clearTimeout(timer);
-  }
-  return seen;
 }
 
 /**

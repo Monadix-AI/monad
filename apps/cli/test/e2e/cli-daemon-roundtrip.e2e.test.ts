@@ -103,6 +103,7 @@ async function startDaemon(): Promise<void> {
         await proc.exited;
         throw new Error(`daemon did not become reachable on port ${port}\n${output.join('')}`);
       }
+      // biome-ignore lint/plugin: poll interval inside a deadline-guarded loop; the loop's own condition decides when to stop, not this delay.
       await Bun.sleep(200);
     }
 
@@ -222,6 +223,7 @@ test('watch stops on the requested event instead of hanging', async () => {
 
   const watching = cli(['session', 'watch', sessionId, '--until', 'session.message.completed', '--timeout', '25']);
   // Give the subscription time to attach before the turn that should end it.
+  // biome-ignore lint/plugin: the CLI publishes no attach signal, so the subscription's readiness cannot be observed from here; an under-wait fails loudly on the watch timeout rather than passing.
   await Bun.sleep(500);
   await cli(['session', 'send', sessionId, 'wrap it up', '--detach']);
 

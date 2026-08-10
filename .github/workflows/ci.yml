@@ -21,6 +21,20 @@ on:
         description: Commit to validate. Defaults to the triggering commit.
         required: false
         type: string
+  # Runs the cross-platform matrix on demand. Without it the only ways to exercise the macOS and
+  # Windows legs are entering the merge queue or dispatching a real release, which publishes assets.
+  workflow_dispatch:
+    inputs:
+      full:
+        description: Run the full cross-platform quality gate.
+        required: false
+        type: boolean
+        default: true
+      force:
+        description: Execute every Turbo task instead of restoring task results from cache.
+        required: false
+        type: boolean
+        default: false
 
 # Cancel superseded runs on the same ref to save runner minutes.
 concurrency:
@@ -42,6 +56,33 @@ env:
   # PR and merge-queue validation reuse deterministic task results. The final release gate opts out
   # explicitly, while dependency/tool caches remain available to avoid repeated downloads.
   TURBO_FORCE: ${{ inputs.force && 'true' || 'false' }}
+  # Defender real-time protection scans every file Bun writes, and the dependency cache holds
+  # ~500 MB across hundreds of thousands of small files. Excluding the workspace is the single
+  # largest Windows win. TEMP is separate from RUNNER_TEMP and matters just as much: the suites
+  # build their homes under os.tmpdir(), and a scanner holding a handle there surfaces as EBUSY
+  # on rm and ENOENT on rename rather than as slowness. A composite action cannot carry this: it
+  # has to run before checkout, so the script is shared through this variable instead. Exclusions
+  # need admin rights the hosted runner has but a self-hosted one may not, so a failure here must
+  # not fail the job.
+  WINDOWS_DEFENDER_EXCLUSIONS: |
+    foreach ($path in @($env:GITHUB_WORKSPACE, "$env:RUNNER_TEMP", "$env:TEMP", "$env:TMP", "$env:USERPROFILE\.bun")) {
+      try { Add-MpPreference -ExclusionPath $path -ErrorAction Stop }
+      catch { Write-Host "::warning::Defender path exclusion failed for $path" }
+    }
+    foreach ($process in @('bun.exe', 'tar.exe', 'zstd.exe', 'node.exe')) {
+      try { Add-MpPreference -ExclusionProcess $process -ErrorAction Stop }
+      catch { Write-Host "::warning::Defender process exclusion failed for $process" }
+    }
+  # The hosted Windows image puts the workspace and RUNNER_TEMP on D: but leaves the user's TEMP on
+  # C:, whose IOPS are roughly an order of magnitude worse — and the suites build every throwaway
+  # home under os.tmpdir(). libuv reads TMP before TEMP, so both have to move. Deriving the target
+  # from RUNNER_TEMP rather than hardcoding D: keeps this correct on larger runners, which have no
+  # D: drive at all.
+  WINDOWS_FAST_TEMP: |
+    $fast = Join-Path $env:RUNNER_TEMP 'tmp'
+    New-Item -ItemType Directory -Force -Path $fast | Out-Null
+    "TMP=$fast" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+    "TEMP=$fast" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
 jobs:
   # OS-independent checks — typecheck, lint, knip in one job to share bun install.
@@ -60,15 +101,28 @@ jobs:
           version: 2026.6.11
           install: true
           cache: true
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Keep the Bun cache on the workspace volume
+        shell: bash
+        run: echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/bun-install-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: bun-cache
         with:
-          path: ~/.bun/install/cache
+          path: ${{ runner.temp }}/bun-install-cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
       - run: bun install --frozen-lockfile
       - run: bun run agents:sync
       - run: mise run --continue-on-error quality:check
       - run: git diff --exit-code
+
+      # Saves even when the job fails: a red Windows job used to skip the post step, so the next
+      # run paid a cold install again — the slowness kept itself alive.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.bun-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/bun-install-cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
   # Pull requests get the Linux leg as a low-cost feedback loop. Merge queue candidates get the
   # full cross-platform matrix before they are allowed onto main.
@@ -80,6 +134,17 @@ jobs:
       matrix:
         os: ${{ fromJSON((github.event_name == 'merge_group' || inputs.full) && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest"]') }}
     steps:
+      # Runs before checkout so the dependency-cache extraction and install are covered too.
+      - name: Exclude the workspace from Defender scanning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ${{ env.WINDOWS_DEFENDER_EXCLUSIONS }}
+
+      - name: Put temporary files on the fast volume
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ${{ env.WINDOWS_FAST_TEMP }}
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.sha || github.sha }}
@@ -89,9 +154,14 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Keep the Bun cache on the workspace volume
+        shell: bash
+        run: echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/bun-install-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: bun-cache
         with:
-          path: ~/.bun/install/cache
+          path: ${{ runner.temp }}/bun-install-cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
 
@@ -124,6 +194,14 @@ jobs:
             packages/*/coverage/lcov.info
           if-no-files-found: error
 
+      # Saves even when the job fails: a red Windows job used to skip the post step, so the next
+      # run paid a cold install again — the slowness kept itself alive.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.bun-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/bun-install-cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
   # Hermetic daemon E2E uses real HTTP/SSE/stdio transports and local subprocess fixtures, but
   # excludes live providers, host-installed provider sessions, and dependency-container tests
   # before Bun loads those files.
@@ -136,6 +214,16 @@ jobs:
       matrix:
         os: [ubuntu-latest, macos-latest, windows-latest]
     steps:
+      - name: Exclude the workspace from Defender scanning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ${{ env.WINDOWS_DEFENDER_EXCLUSIONS }}
+
+      - name: Put temporary files on the fast volume
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ${{ env.WINDOWS_FAST_TEMP }}
+
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.sha || github.sha }}
@@ -145,9 +233,14 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Keep the Bun cache on the workspace volume
+        shell: bash
+        run: echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/bun-install-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: bun-cache
         with:
-          path: ~/.bun/install/cache
+          path: ${{ runner.temp }}/bun-install-cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
 
@@ -185,6 +278,14 @@ jobs:
       - name: Test hermetic daemon E2E
         run: bunx --bun turbo run test:e2e --filter=@monad/monad --output-logs=errors-only
 
+      # Saves even when the job fails: a red Windows job used to skip the post step, so the next
+      # run paid a cold install again — the slowness kept itself alive.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.bun-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/bun-install-cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
   # Browser E2E for the web UI. The specs stub daemon responses with Playwright request routing and
   # Playwright starts its own Vite server, so this job needs no daemon and no provider credentials.
   web-e2e:
@@ -205,9 +306,14 @@ jobs:
         with:
           bun-version-file: package.json
 
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      - name: Keep the Bun cache on the workspace volume
+        shell: bash
+        run: echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/bun-install-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: bun-cache
         with:
-          path: ~/.bun/install/cache
+          path: ${{ runner.temp }}/bun-install-cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
 
@@ -239,6 +345,14 @@ jobs:
           name: playwright-report-${{ matrix.shard }}
           path: apps/web/playwright-report
           retention-days: 7
+
+      # Saves even when the job fails: a red Windows job used to skip the post step, so the next
+      # run paid a cold install again — the slowness kept itself alive.
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.bun-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/bun-install-cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
   # Real third-party dependency tests. The normal e2e suite uses mocks/local fixtures; tests that need
   # provider CLIs or host archive binaries run inside a cached container image with those dependencies

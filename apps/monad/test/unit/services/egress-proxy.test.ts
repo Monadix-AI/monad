@@ -378,6 +378,7 @@ test('close cancels a pending raw upstream connect and ignores its late resoluti
   });
 
   await connectStarted;
+  // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
   const closeResult = await Promise.race([proxy.close().then(() => 'closed'), Bun.sleep(200).then(() => 'timed_out')]);
   resolveConnected?.();
   await Bun.sleep(10);

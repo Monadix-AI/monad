@@ -24,6 +24,7 @@ import {
   TRANSPORTS,
   type TransportHandle
 } from '../helpers.ts';
+import { waitFor } from '../wait.ts';
 
 function makePaths(base: string): MonadPaths {
   return makeTestPaths(base);
@@ -383,11 +384,9 @@ for (const kind of TRANSPORTS) {
       expect(calls).toBe(2);
 
       releaseRefresh?.();
-      for (let i = 0; i < 100; i += 1) {
-        const cached = (await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id);
-        if (cached?.[0] === 'remote-fresh') break;
-        await Bun.sleep(100);
-      }
+      await waitFor(async () => (await readProviderModelCache(paths)).providers.oai?.models[0]?.id === 'remote-fresh', {
+        message: 'the released refresh never wrote its models to the cache'
+      });
       expect((await readProviderModelCache(paths)).providers.oai?.models.map((model) => model.id)).toEqual([
         'remote-fresh'
       ]);

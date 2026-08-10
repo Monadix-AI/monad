@@ -18,6 +18,7 @@ import {
 } from '@monad/protocol';
 
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import {
   buildHandlers,
   makeTestPaths,
@@ -650,7 +651,7 @@ for (const kind of TRANSPORTS) {
       const askGate = connectionGate();
       const requested = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'clarify.requested',
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: askGate.onConnected
       });
       await askGate.ready;
@@ -754,7 +755,7 @@ for (const kind of TRANSPORTS) {
       const askGate = connectionGate();
       const requested = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'clarify.requested',
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: askGate.onConnected
       });
       await askGate.ready;
@@ -847,7 +848,7 @@ for (const kind of TRANSPORTS) {
       // A viewer opening the session afterwards sees the same order + content in the projected UI.
       const events = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (e) => (e as unknown as SessionUiEvent).kind === 'snapshot',
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
       const snap = (events as unknown as SessionUiEvent[]).find((e) => e.kind === 'snapshot');
       if (snap?.kind !== 'snapshot') throw new Error('expected ui-stream snapshot');
@@ -912,7 +913,7 @@ for (const kind of TRANSPORTS) {
       // same completion order as the live project wall.
       const events = await t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
         until: (e) => (e as unknown as SessionUiEvent).kind === 'snapshot',
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
       const snap = (events as unknown as SessionUiEvent[]).find((e) => e.kind === 'snapshot');
       if (snap?.kind !== 'snapshot') throw new Error('expected ui-stream snapshot');
@@ -950,7 +951,7 @@ for (const kind of TRANSPORTS) {
             message.data.agentName === 'codex'
           );
         },
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: eventReady
       });
       const uiP = t.sse(`/v1/sessions/${sessionId}/ui-stream`, {
@@ -964,7 +965,7 @@ for (const kind of TRANSPORTS) {
             uiEvent.item.parts.some((part) => part.type === 'text' && part.text === 'live managed reply')
           );
         },
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: uiReady
       });
       await Promise.all([eventConnected, uiConnected]);

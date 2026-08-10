@@ -61,6 +61,7 @@ afterEach(async () => {
     } catch (err) {
       const code = (err as NodeJS.ErrnoException).code;
       if (code !== 'EBUSY' && code !== 'EPERM' && code !== 'ENOTEMPTY') throw err;
+      // biome-ignore lint/plugin: backoff inside a bounded retry loop; the next attempt is the condition, and Windows keeps directory handles open past the unlink.
       await Bun.sleep(100);
     }
   }

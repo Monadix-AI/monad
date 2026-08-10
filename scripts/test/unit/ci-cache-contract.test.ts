@@ -7,6 +7,7 @@ interface WorkflowStep {
   if?: string;
   name?: string;
   run?: string;
+  shell?: string;
   uses?: string;
   with?: Record<string, unknown>;
 }
@@ -18,8 +19,16 @@ interface WorkflowJob {
   outputs?: Record<string, string>;
   secrets?: 'inherit' | Record<string, string>;
   steps?: WorkflowStep[];
+  strategy?: { matrix?: Record<string, unknown> };
   uses?: string;
   with?: Record<string, unknown>;
+}
+
+interface WorkflowInput {
+  default?: unknown;
+  description?: string;
+  required?: boolean;
+  type?: string;
 }
 
 interface Workflow {
@@ -27,9 +36,10 @@ interface Workflow {
   jobs?: Record<string, WorkflowJob>;
   on?: {
     workflow_call?: {
-      inputs?: Record<string, { default?: unknown; description?: string; required?: boolean; type?: string }>;
+      inputs?: Record<string, WorkflowInput>;
       secrets?: Record<string, { description?: string; required?: boolean }>;
     };
+    workflow_dispatch?: { inputs?: Record<string, WorkflowInput> };
   };
 }
 
@@ -56,8 +66,8 @@ test('every Bun dependency install restores the package cache first', async () =
           .slice(0, index)
           .findLast(
             (candidate) =>
-              candidate.uses?.startsWith('actions/cache@') &&
-              String(candidate.with?.path ?? '').includes('~/.bun/install/cache')
+              (candidate.uses?.startsWith('actions/cache@') || candidate.uses?.startsWith('actions/cache/restore@')) &&
+              /(?:\.bun\/install\/cache|bun-install-cache)/.test(String(candidate.with?.path ?? ''))
           );
         return [{ cacheConfigured: Boolean(cache), job: `${basename(file)}:${job}` }];
       });
@@ -80,6 +90,75 @@ test('every Bun dependency install restores the package cache first', async () =
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:macos-vfkit' },
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:windows-hyperv' }
   ]);
+});
+
+test('a failing CI job still persists the dependency cache it just built', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+
+  // A red job that skips the save leaves the next run a cold install, which on Windows costs
+  // minutes — the slowness would keep itself alive for as long as the job stays red.
+  expect(
+    Object.entries(workflow.jobs ?? {})
+      .filter(([, definition]) =>
+        (definition.steps ?? []).some((step) => step.uses?.startsWith('actions/cache/restore@'))
+      )
+      .map(([job, definition]) => {
+        const save = (definition.steps ?? []).find((step) => step.uses?.startsWith('actions/cache/save@'));
+        return { job, savesOnFailure: save?.if?.includes('always()') ?? false };
+      })
+  ).toEqual([
+    { job: 'checks', savesOnFailure: true },
+    { job: 'unit', savesOnFailure: true },
+    { job: 'hermetic-e2e', savesOnFailure: true },
+    { job: 'web-e2e', savesOnFailure: true }
+  ]);
+});
+
+test('Windows jobs move temporary files off the slow system volume', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const windowsJobs = Object.entries(workflow.jobs ?? {}).filter(([, definition]) =>
+    JSON.stringify(definition.strategy?.matrix ?? {}).includes('windows-latest')
+  );
+  const script = String(workflow.env?.WINDOWS_FAST_TEMP);
+
+  expect(
+    windowsJobs.map(([job, definition]) => {
+      const steps = definition.steps ?? [];
+      const redirect = steps.findIndex((step) => step.run === '$'.concat('{{ env.WINDOWS_FAST_TEMP }}'));
+      return {
+        job,
+        // Must land before checkout so every later step, install included, sees the new TMP.
+        precedesCheckout: redirect < steps.findIndex((step) => step.uses?.startsWith('actions/checkout@')),
+        windowsOnly: steps[redirect]?.if === "runner.os == 'Windows'"
+      };
+    })
+  ).toEqual(['unit', 'hermetic-e2e'].map((job) => ({ job, precedesCheckout: true, windowsOnly: true })));
+  // libuv reads TMP before TEMP, so setting only one leaves os.tmpdir() on the slow volume.
+  expect({
+    setsBothVariables: ['TMP=', 'TEMP='].every((name) => script.includes(name)),
+    // Hardcoding D: breaks on larger runners, which have no D: drive.
+    derivedFromRunnerTemp: script.includes('$env:RUNNER_TEMP') && !script.includes('D:')
+  }).toEqual({ setsBothVariables: true, derivedFromRunnerTemp: true });
+});
+
+test('the Bun cache lives on the same volume as the workspace', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+
+  // Windows puts the workspace on D: and the home directory on C:. A cache under ~ cannot be
+  // hard-linked into node_modules across that boundary, so every install becomes a full copy.
+  const cacheSteps = Object.values(workflow.jobs ?? {}).flatMap((definition) =>
+    (definition.steps ?? []).filter((step) => step.uses?.startsWith('actions/cache/'))
+  );
+  const exports = Object.values(workflow.jobs ?? {}).flatMap((definition) =>
+    (definition.steps ?? []).filter((step) => step.run?.includes('BUN_INSTALL_CACHE_DIR'))
+  );
+
+  expect({
+    steps: cacheSteps.length,
+    allUnderRunnerTemp: cacheSteps.every((step) => String(step.with?.path ?? '').includes('runner.temp')),
+    exportsPerJob: exports.length,
+    exportsMatchTheCachedPath: exports.every((step) => step.run?.includes('$RUNNER_TEMP/bun-install-cache'))
+  }).toEqual({ steps: 8, allUnderRunnerTemp: true, exportsPerJob: 4, exportsMatchTheCachedPath: true });
 });
 
 test('CI caches PR tasks while the final release gate forces complete execution', async () => {
@@ -121,6 +200,62 @@ test('CI preserves failures while running both unit test scopes', async () => {
       run: 'bun scripts/bun-test.ts scripts/test/unit/ --only-failures'
     }
   ]);
+});
+
+test('the cross-platform matrix is reachable without publishing a release', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const fullGate = "github.event_name == 'merge_group' || inputs.full";
+
+  expect(workflow.on?.workflow_dispatch?.inputs?.full).toEqual({
+    default: true,
+    description: 'Run the full cross-platform quality gate.',
+    required: false,
+    type: 'boolean'
+  });
+  // Dispatch defaults `full` to true, so all three matrix gates open on a manual run.
+  expect({
+    hermeticE2e: workflow.jobs?.['hermetic-e2e']?.if,
+    webE2e: workflow.jobs?.['web-e2e']?.if,
+    unitMatrixGate: String(workflow.jobs?.unit?.strategy?.matrix?.os ?? '').includes(fullGate)
+  }).toEqual({ hermeticE2e: fullGate, webE2e: fullGate, unitMatrixGate: true });
+});
+
+test('every Windows job drops Defender scanning before it writes to disk', async () => {
+  const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
+  const windowsJobs = Object.entries(workflow.jobs ?? {}).filter(([, definition]) =>
+    JSON.stringify(definition.strategy?.matrix ?? {}).includes('windows-latest')
+  );
+
+  expect(
+    windowsJobs.map(([job, definition]) => {
+      const [first] = definition.steps ?? [];
+      return {
+        job,
+        first: { if: first?.if ?? null, run: first?.run ?? null, shell: first?.shell ?? null },
+        // Exclusions must precede checkout, or the cache extraction and install stay scanned.
+        precedesCheckout: (definition.steps ?? []).findIndex((step) => step.uses?.startsWith('actions/checkout@')) > 0
+      };
+    })
+  ).toEqual(
+    ['unit', 'hermetic-e2e'].map((job) => ({
+      job,
+      first: { if: "runner.os == 'Windows'", run: '$'.concat('{{ env.WINDOWS_DEFENDER_EXCLUSIONS }}'), shell: 'pwsh' },
+      precedesCheckout: true
+    }))
+  );
+  // TEMP is where the suites build their homes; RUNNER_TEMP is a different directory and
+  // excluding only it leaves every test's scratch files scanned.
+  const exclusions = String(workflow.env?.WINDOWS_DEFENDER_EXCLUSIONS);
+  expect({
+    excludesPaths: exclusions.includes('Add-MpPreference -ExclusionPath'),
+    covers: ['GITHUB_WORKSPACE', 'RUNNER_TEMP', 'TEMP', 'TMP'].filter((name) => exclusions.includes(`$env:${name}`)),
+    // A runner without admin rights must warn, not fail the job.
+    tolerates: exclusions.includes('::warning::')
+  }).toEqual({
+    excludesPaths: true,
+    covers: ['GITHUB_WORKSPACE', 'RUNNER_TEMP', 'TEMP', 'TMP'],
+    tolerates: true
+  });
 });
 
 test('release validation receives only the Turbo remote cache secret', async () => {

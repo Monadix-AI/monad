@@ -1,0 +1,24 @@
+// A test that parks on a wall-clock delay of 100ms or more is betting that the machine keeps up.
+// The bet loses on a loaded CI runner — Windows runs the same suite several times slower than
+// Linux — and the failure reads as an assertion bug rather than a scheduling one.
+//
+// Waiting for an observable condition (an event, a callback, a settled process, `waitFor`) has no
+// such ceiling: it returns as soon as the condition holds and only fails when the work truly hung.
+// Delays under 100ms are exempt because they yield to the event loop rather than wait for progress.
+//
+// Deliberate exceptions — retry backoff, a `Promise.race` safety net, or a product timer the test
+// is actually asserting — stay, with `// biome-ignore lint/plugin: <what it waits on and why a
+// condition cannot express it>`.
+or {
+  `Bun.sleep($ms)` as $match where { $ms <: r"^(?:[1-9][0-9]{2,}|[0-9]+_[0-9]{3,})$" },
+  `setTimeout($settle, $ms)` as $match where {
+    $settle <: or {
+      `resolve`,
+      `res`,
+      `r`
+    },
+    $ms <: r"^(?:[1-9][0-9]{2,}|[0-9]+_[0-9]{3,})$"
+  }
+} where {
+  register_diagnostic(span=$match, message="Wait on the observable condition instead of a wall-clock delay; a fixed delay this long fails on a slow runner.")
+}

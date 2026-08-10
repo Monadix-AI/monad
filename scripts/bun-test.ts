@@ -88,12 +88,13 @@ const windowsShardConcurrency = 1;
 const inputArgs = process.argv.slice(2);
 const shardArg = inputArgs.find((arg) => arg.startsWith('--monad-shards='));
 const shardValue = shardArg?.slice('--monad-shards='.length);
-const shardCount =
-  shardValue === 'auto'
-    ? Math.max(1, Math.min(autoShardCap, navigator.hardwareConcurrency - 2))
-    : shardValue
-      ? Number.parseInt(shardValue, 10)
-      : 1;
+// Windows runs its shards one at a time, so splitting there buys no parallelism and pays the
+// process startup and module-graph load once per shard for the same set of files.
+const autoShardCount =
+  process.platform === 'win32'
+    ? windowsShardConcurrency
+    : Math.max(1, Math.min(autoShardCap, navigator.hardwareConcurrency - 2));
+const shardCount = shardValue === 'auto' ? autoShardCount : shardValue ? Number.parseInt(shardValue, 10) : 1;
 if (!Number.isInteger(shardCount) || shardCount < 1) throw new Error(`invalid shard count: ${shardValue}`);
 const rawArgs = inputArgs.filter((arg) => arg !== shardArg);
 if (
