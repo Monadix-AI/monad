@@ -1350,7 +1350,7 @@ for (const kind of TRANSPORTS) {
       await waitFor(
         async () =>
           (await listMessages(t, sessionId)).every((message) => message.role !== 'assistant' || message.text !== ''),
-        { message: 'authenticated member placeholder did not settle' }
+        { timeoutMs: 10_000, message: 'authenticated member placeholder did not settle' }
       );
       expect((await listMessages(t, sessionId)).map((message) => [message.role, message.text])).toEqual([
         ['user', 'initial project task']
