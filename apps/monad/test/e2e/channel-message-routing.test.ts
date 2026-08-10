@@ -1410,14 +1410,38 @@ for (const kind of TRANSPORTS) {
       ]);
       const reviewer = await inviteMember(t, sessionId, 'pmem_codex_reviewer');
       const tester = await inviteMember(t, sessionId, 'pmem_codex_tester');
-      const initialSessionsRes = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
-      expect(initialSessionsRes.status).toBe(200);
-      const initialSessions = (await initialSessionsRes.json()) as {
-        sessions: Array<{ id: string }>;
-      };
-      for (const nativeSession of initialSessions.sessions) {
-        await t.fetch(`/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      const expectedAgentNames = [reviewer.id, tester.id].toSorted();
+      let initialSessions: Array<{ id: string; agentName: string; lifecycle: { state: string } }> = [];
+      await waitFor(
+        async () => {
+          const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
+          if (listed.status !== 200) return false;
+          const body = (await listed.json()) as { sessions: typeof initialSessions };
+          initialSessions = body.sessions.filter((nativeSession) => nativeSession.lifecycle.state === 'active');
+          const activeAgentNames = initialSessions.map((nativeSession) => nativeSession.agentName).toSorted();
+          return (
+            activeAgentNames.length === expectedAgentNames.length &&
+            activeAgentNames.every((name, index) => name === expectedAgentNames[index])
+          );
+        },
+        { message: 'invited member runtimes did not start' }
+      );
+      for (const nativeSession of initialSessions) {
+        const stopped = await t.fetch(
+          `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
+          json('POST')
+        );
+        expect(stopped.status).toBe(200);
       }
+      await waitFor(
+        async () => {
+          const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
+          if (listed.status !== 200) return false;
+          const body = (await listed.json()) as { sessions: Array<{ lifecycle: { state: string } }> };
+          return body.sessions.every((nativeSession) => nativeSession.lifecycle.state !== 'active');
+        },
+        { message: 'invited member runtimes did not stop' }
+      );
 
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
@@ -1445,7 +1469,6 @@ for (const kind of TRANSPORTS) {
           .filter((nativeSession) => nativeSession.lifecycle.state === 'active')
           .map((nativeSession) => nativeSession.agentName)
           .toSorted();
-      const expectedAgentNames = [reviewer.id, tester.id].toSorted();
       const allExpectedAgentsAreActive = () => {
         const active = activeAgentNames();
         return (
@@ -1453,20 +1476,22 @@ for (const kind of TRANSPORTS) {
           active.every((name, index) => name === expectedAgentNames[index])
         );
       };
-      for (let i = 0; i < 20; i++) {
-        const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
-        expect(listed.status).toBe(200);
-        const body = (await listed.json()) as {
-          sessions: Array<{
-            id: string;
-            agentName: string;
-            lifecycle: { state: string };
-          }>;
-        };
-        sessions = body.sessions;
-        if (allExpectedAgentsAreActive()) break;
-        await Bun.sleep(25);
-      }
+      await waitFor(
+        async () => {
+          const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
+          if (listed.status !== 200) return false;
+          const body = (await listed.json()) as {
+            sessions: Array<{
+              id: string;
+              agentName: string;
+              lifecycle: { state: string };
+            }>;
+          };
+          sessions = body.sessions;
+          return allExpectedAgentsAreActive();
+        },
+        { message: 'fanout member runtimes did not settle' }
+      );
       expect(activeAgentNames()).toEqual(expectedAgentNames);
       expect(
         (await listMessages(t, sessionId)).filter(({ text }) => text).map(({ role, text }) => ({ role, text }))
