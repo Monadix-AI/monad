@@ -46,6 +46,8 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(generate).toContain('bun scripts/enhance-dist-installers.ts');
   expect(upload?.with?.path).toContain('target/distrib/install.sh');
   expect(upload?.with?.path).toContain('target/distrib/install.ps1');
+  expect(upload?.with?.path).toContain('target/distrib/monad-installer.sh');
+  expect(upload?.with?.path).toContain('target/distrib/monad-installer.ps1');
   expect(shellTest).toContain('script -qefc "sh artifacts/install.sh"');
   expect(shellTest).toContain('MONAD_FORCE_INTERACTIVE=1');
   expect(shellTest).toContain('no checksums to verify');

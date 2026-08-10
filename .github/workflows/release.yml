@@ -176,6 +176,8 @@ jobs:
           path: |
             target/distrib/install.sh
             target/distrib/install.ps1
+            target/distrib/monad-installer.sh
+            target/distrib/monad-installer.ps1
             target/distrib/sha256.sum
             target/distrib/source.tar.gz
             target/distrib/source.tar.gz.sha256
