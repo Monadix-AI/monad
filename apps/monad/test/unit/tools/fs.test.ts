@@ -339,7 +339,7 @@ test('file_patch updates when full-file hash changed but hunk context matches', 
     'hunk context matched'
   );
   expect(out.displayContent).toMatchObject({ type: 'multi_diff', summary: { warnings: 1 } });
-  expect(out.modelContent).toContain('1 warning');
+  expect(out.modelContent).toContain('warnings=1');
   expect(await readFile(p, 'utf8')).toBe('updated\nexternal\n');
 });
 

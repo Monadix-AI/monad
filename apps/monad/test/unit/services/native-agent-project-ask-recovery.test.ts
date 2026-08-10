@@ -71,29 +71,41 @@ test('recovers a required ask outcome and all claimed room and direct ingress in
 
     expect(inputs).toHaveLength(1);
     expect(inputs[0]?.meshSessionId).toBe('mesh_builder00001');
-    expect(promptBatch(inputs[0]?.prompt ?? '')).toEqual({
+    const batch = promptBatch(inputs[0]?.prompt ?? '');
+    const ask = batch.ask as { resolvedAt: string } & Record<string, unknown>;
+    const messages = batch.messages as Array<{ deliveryId: string } & Record<string, unknown>>;
+    expect({
+      resolvedAtIsTimestamp: !Number.isNaN(Date.parse(ask.resolvedAt)),
+      deliveryIdsAreValid: messages.every((message) => /^deliv_/.test(message.deliveryId))
+    }).toEqual({ resolvedAtIsTimestamp: true, deliveryIdsAreValid: true });
+    const normalizedBatch: Record<string, unknown> = {
+      ...batch,
+      ask: { ...ask, resolvedAt: '<timestamp>' },
+      messages: messages.map((message) => ({ ...message, deliveryId: '<delivery-id>' }))
+    };
+    expect(normalizedBatch).toEqual({
       batchId: 'recovery:ask_recovery0001:1',
       ask: {
         requestId: 'ask_recovery0001',
         outcome: 'answered',
-        resolvedAt: expect.any(String)
+        resolvedAt: '<timestamp>'
       },
       questions: [{ id: 'q1', question: 'Ship?', answer: 'Yes' }],
       messages: [
         {
           ingressSeq: 1,
           source: 'project',
-          deliveryId: expect.stringMatching(/^deliv_/),
+          deliveryId: '<delivery-id>',
           text: 'room update',
           createdAt: '2026-07-21T00:00:01.000Z',
           messageSeq: 1,
           messageId: 'msg_recovery0001',
-          sender: { kind: 'human', name: 'Human' }
+          sender: { kind: 'human', name: 'User', id: 'human' }
         },
         {
           ingressSeq: 2,
           source: 'direct',
-          deliveryId: expect.stringMatching(/^deliv_/),
+          deliveryId: '<delivery-id>',
           text: 'private update',
           createdAt: '2026-07-21T00:00:02.000Z',
           directMessageId: 'msg_recoverydm01',

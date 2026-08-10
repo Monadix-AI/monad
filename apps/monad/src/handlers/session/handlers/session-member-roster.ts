@@ -115,7 +115,7 @@ function templateMemberProjection(template: ProjectMemberTemplate): TemplateMemb
 // template invited into two Sessions is two distinct ProjectMembers), the templateId kept as the
 // Profile reference, profileId = template.id. Legacy row + ProjectMember + binding commit together. No
 // idempotency check and no runtime launch here — the caller owns both.
-export function mintTemplateSessionMember(
+function mintTemplateSessionMember(
   store: MemberStore,
   session: Session,
   template: ProjectMemberTemplate,

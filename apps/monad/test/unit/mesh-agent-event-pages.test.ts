@@ -2,6 +2,7 @@ import type { LiveMeshSession } from '#/services/mesh-agent/host/host-types.ts';
 import type { MeshAgentProviderAdapter } from '#/services/mesh-agent/types.ts';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { MeshAgentEventPages } from '#/services/mesh-agent/host/event-pages.ts';
@@ -196,7 +197,7 @@ test('stopped managed session event pages receive their deterministic runtime wo
   try {
     const pages = new MeshAgentEventPages({
       live: new Map(),
-      monadHome: '/tmp/monad-home',
+      monadHome: join(tmpdir(), 'monad-home'),
       store: {
         getMeshSession: () => ({
           id: 'mesh_managed',
@@ -219,7 +220,8 @@ test('stopped managed session event pages receive their deterministic runtime wo
         providerSessionRef: 'provider-session',
         workingPath: '/project',
         managedRuntimeWorkspace: join(
-          '/tmp/monad-home',
+          tmpdir(),
+          'monad-home',
           'workplace',
           'prj_managed',
           'runtime',

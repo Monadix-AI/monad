@@ -16,10 +16,6 @@ type LiveRawFrame = {
 
 export type LiveRawRow = LiveRawFrame & { seq: number };
 
-export function liveRawRowsOutput(rows: LiveRawRow[]): string {
-  return rows.map((row) => row.payload).join('');
-}
-
 type LiveRawPageRequest = {
   after?: number;
   before?: number;
