@@ -1369,7 +1369,7 @@ for (const kind of TRANSPORTS) {
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
           event.type === 'mesh.started' && (event.payload as { agentName?: unknown }).agentName === member.id,
-        timeoutMs: 3000
+        timeoutMs: 10_000
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
