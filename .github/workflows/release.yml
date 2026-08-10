@@ -51,6 +51,7 @@ jobs:
     uses: ./.github/workflows/ci.yml
     with:
       full: true
+      force: true
       sha: ${{ inputs.sha || inputs.tag }}
     secrets: inherit
 
