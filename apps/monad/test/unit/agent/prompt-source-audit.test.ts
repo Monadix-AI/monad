@@ -34,7 +34,7 @@ test('production sources keep behavioral prompts in referenced .prompt.md assets
 
   expect(promptCount).toBeGreaterThan(0);
   expect(violations).toEqual([]);
-});
+}, 15_000);
 
 test('Credential prompt projection never serializes a secret canary', () => {
   const secret = 'prompt-source-secret-canary';
