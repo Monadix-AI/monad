@@ -53,6 +53,7 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
       paddingTop: preStyle.paddingTop
     };
   });
+  // behavior-ok: opening the file card exposes its deliberate code and line-number alignment contract
   expect(codeLayout).toEqual({
     lineNumberMargin: '12px',
     lineNumberTextAlign: 'right',

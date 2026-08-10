@@ -12,6 +12,11 @@ on:
         required: false
         type: boolean
         default: false
+      force:
+        description: Execute every Turbo task instead of restoring task results from cache.
+        required: false
+        type: boolean
+        default: false
       sha:
         description: Commit to validate. Defaults to the triggering commit.
         required: false
@@ -34,6 +39,9 @@ env:
   # local cache, so CI is fully functional without them.
   TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
   TURBO_TEAM: ${{ vars.TURBO_TEAM }}
+  # PR and merge-queue validation reuse deterministic task results. The final release gate opts out
+  # explicitly, while dependency/tool caches remain available to avoid repeated downloads.
+  TURBO_FORCE: ${{ inputs.force && 'true' || 'false' }}
 
 jobs:
   # OS-independent checks — typecheck, lint, knip in one job to share bun install.
@@ -93,7 +101,7 @@ jobs:
       - name: Test workspace unit
         env:
           MONAD_TEST_COVERAGE: ${{ runner.os == 'Linux' && '1' || '0' }}
-        run: bun scripts/quiet-run.ts bunx --bun turbo run test --force --output-logs=errors-only
+        run: bun scripts/quiet-run.ts bunx --bun turbo run test --output-logs=errors-only
 
       - name: Test script unit
         if: ${{ !cancelled() }}
@@ -175,7 +183,7 @@ jobs:
           echo "✓ AppContainer launcher compiled"
 
       - name: Test hermetic daemon E2E
-        run: bunx --bun turbo run test:e2e --force --filter=@monad/monad --output-logs=errors-only
+        run: bunx --bun turbo run test:e2e --filter=@monad/monad --output-logs=errors-only
 
   # Browser E2E for the web UI. The specs stub daemon responses with Playwright request routing and
   # Playwright starts its own Vite server, so this job needs no daemon and no provider credentials.
@@ -222,7 +230,7 @@ jobs:
       - name: Test web E2E
         env:
           PLAYWRIGHT_SHARD: ${{ matrix.shard }}/4
-        run: bunx --bun turbo run test:e2e --force --filter=@monad/web --output-logs=errors-only
+        run: bunx --bun turbo run test:e2e --filter=@monad/web --output-logs=errors-only
 
       - name: Upload Playwright report
         if: failure()
