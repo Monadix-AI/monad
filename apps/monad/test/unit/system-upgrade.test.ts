@@ -55,7 +55,8 @@ test('system upgrade resolves the exact release and verifies monad-update exists
     },
     binaryPath: '/opt/monad/bin/monad',
     cacheDir: '/unused-trigger',
-    fetch: releaseFetch()
+    fetch: releaseFetch(),
+    platform: 'linux'
   });
 
   upgrade.getStatus();
