@@ -53,6 +53,7 @@ async function runChild(
     }
     const next = await Promise.race([
       pendingRead.then((result) => ({ kind: 'read' as const, result })),
+      // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
       Bun.sleep(250).then(() => ({ kind: 'tick' as const }))
     ]);
     if (next.kind === 'tick') continue;

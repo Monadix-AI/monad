@@ -703,6 +703,7 @@ for (const kind of TRANSPORTS) {
       expect(turnInput).not.toContain(
         'When member availability is relevant or uncertain, call the `session_members` tool before delegating, mentioning, or sending a private message.'
       );
+      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
       await Bun.sleep(100);
       expect(await readLogIfExists(claude.argsLog)).toBe('');
       expect(await readLogIfExists(claude.stdinLog)).toBe('');
@@ -1200,6 +1201,7 @@ for (const kind of TRANSPORTS) {
         );
       const responseOrTimeout = await Promise.race([
         postResult,
+        // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
         Bun.sleep(5_000).then(() => ({ kind: 'timeout' as const }))
       ]);
       if (responseOrTimeout.kind === 'timeout') abort.abort();
@@ -1227,6 +1229,7 @@ for (const kind of TRANSPORTS) {
         sender: { id: codexMember.id, kind: 'mesh-agent', name: 'codex' },
         text: mentionedText
       });
+      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
       await Bun.sleep(100);
       // presence-ok: a strict managed-agent mention targets Claude, so the unrelated reviewer receives no input.
       expect(await readLogIfExists(reviewerStdinLog)).toBe(reviewerInputBeforePost);
@@ -1250,6 +1253,7 @@ for (const kind of TRANSPORTS) {
           createdAt: expect.any(String)
         }
       });
+      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
       await Bun.sleep(100);
       expect(await readLogIfExists(reviewerStdinLog)).toBe(reviewerInputBeforePost);
       expect(await readLogIfExists(claudeStdinLog)).toBe(claudeInput);
@@ -1379,7 +1383,7 @@ for (const kind of TRANSPORTS) {
       await waitFor(
         async () =>
           (await listMessages(t, sessionId)).every((message) => message.role !== 'assistant' || message.text !== ''),
-        { timeoutMs: 10_000, message: 'authenticated member placeholder did not settle' }
+        { timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.conditionMs, message: 'authenticated member placeholder did not settle' }
       );
       expect((await listMessages(t, sessionId)).map((message) => [message.role, message.text])).toEqual([
         ['user', 'initial project task']

@@ -13,6 +13,7 @@ import { parseEventPayload } from '@monad/protocol';
 import { createHookRunner } from '#/hooks/runner.ts';
 import { MOCK_REPLY } from '#/infra/mock-model.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import { buildHandlers, mockModel, serveTransport, stubModelDeps, TRANSPORTS } from '../helpers.ts';
 
 const log = createLogger('e2e-hooks');
@@ -39,7 +40,7 @@ async function runTurn(tr: ReturnType<typeof serveTransport>, text: string): Pro
   });
   const events = await tr.sse(`/v1/sessions/${sid}/events`, {
     until: (e) => e.type === 'session.message.completed',
-    timeoutMs: 4000
+    timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
   });
   const completed = events.find((e) => e.type === 'session.message.completed');
   return completed ? parseEventPayload('session.message.completed', completed.payload).message.text : undefined;

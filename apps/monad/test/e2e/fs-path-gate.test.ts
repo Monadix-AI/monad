@@ -15,6 +15,7 @@ import { PolicyEngine } from '#/agent/approvals/engine.ts';
 import { ApprovalStore } from '#/agent/approvals/store.ts';
 import { OversightService } from '#/services/oversight.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import { buildHandlers, mockModel, serveTransport, TRANSPORTS, type TransportKind } from '../helpers.ts';
 
 const dirs: string[] = [];
@@ -32,7 +33,7 @@ async function setup(kind: TransportKind) {
     publish: (e) => events.push(e),
     engine,
     originOf: (sid) => (sid === SESSION_ID ? AGENT_ID : null),
-    timeoutMs: 5_000
+    timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.serviceTimeoutMs
   });
   const app = createHttpTransport(buildHandlers(mockModel(), undefined, { oversight }));
   const t = serveTransport(kind, app);

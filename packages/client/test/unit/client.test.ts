@@ -13,6 +13,7 @@ import { afterEach, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { waitFor } from '../../../../scripts/test-wait.ts';
 import { MonadClient, type StreamError } from '../../src/index.ts';
 
 const realFetch = globalThis.fetch;
@@ -189,6 +190,7 @@ test('streamEvents delivers live SSE events by draining the raw fetch Response b
       received.push((e.payload as { delta: string }).delta);
       if (received.length === 2) resolve();
     });
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000); // safety net so a regression fails fast instead of hanging
   });
 
@@ -209,6 +211,7 @@ test('streamEvents surfaces a fatal error (and stops) instead of swallowing it',
         resolve();
       }
     });
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000); // safety net
   });
 
@@ -256,6 +259,7 @@ test('streamUiEvents delivers projected UI SSE events', async () => {
       received.push(e.kind);
       if (received.length === 2) resolve();
     });
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000);
   });
 
@@ -293,6 +297,7 @@ test('streamUiEvents dispose stops consuming without surfacing a transient error
       },
       { onError: (err) => errors.push(err) }
     );
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000);
   });
 
@@ -385,6 +390,7 @@ test('streamMessageGeneration validates frames and stops delivery at the termina
       received.push(frame);
       if (frame.kind === 'event' && frame.event.type === 'session.message.completed') setTimeout(resolve, 0);
     });
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000);
   });
 
@@ -414,6 +420,7 @@ test('streamMessageGeneration treats an authoritative settled snapshot as termin
       received.push(frame);
       setTimeout(resolve, 0);
     });
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000);
   });
 
@@ -458,6 +465,7 @@ test('streamMessageGeneration rejects a malformed frame without delivering later
         resolve();
       }
     });
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000);
   });
 
@@ -560,6 +568,7 @@ test('streamInteractionEvents subscribes over the control websocket', async () =
     socket?.emit('message', {
       data: JSON.stringify({ jsonrpc: '2.0', method: 'interactions.event', params: { event: interaction } })
     });
+    // biome-ignore lint/plugin: race arm that resolves rather than rejects, so an unmet condition still fails on the assertion below instead of hanging.
     setTimeout(resolve, 2000);
   });
 
@@ -616,7 +625,7 @@ test('subscribeControl reports every successful websocket connection', async () 
 
   sockets[0]?.emit('open');
   sockets[0]?.emit('close');
-  await new Promise((resolve) => setTimeout(resolve, 300));
+  await waitFor(() => sockets.length === 2, { message: 'the closed control socket never reconnected' });
   sockets[1]?.emit('open');
 
   expect(openCount).toBe(2);
