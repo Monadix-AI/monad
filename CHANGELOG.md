@@ -1,5 +1,29 @@
 # Changelog
 
+## [0.1.4](https://github.com/Monadix-AI/monad/compare/v0.1.3...v0.1.4) (2026-08-10)
+
+
+### Features
+
+* **chat:** refine session headers and member roster ([a5674e5](https://github.com/Monadix-AI/monad/commit/a5674e5c5229c32e912439d0fc2c4d7950243f1f))
+* **observation:** normalize provider event metadata ([1fd52a9](https://github.com/Monadix-AI/monad/commit/1fd52a9983b45fc75a14f34321ce00739d1800a3))
+* **observation:** refine tool and message cards ([60bbaf2](https://github.com/Monadix-AI/monad/commit/60bbaf20598a64564f134d91766068ce498c39dd))
+* **release:** migrate updates to dist ([4c87dae](https://github.com/Monadix-AI/monad/commit/4c87daeed1433e6e14d2b77e6c0463647e38f35a))
+* **ui:** add reusable file and shell cards ([c57cf88](https://github.com/Monadix-AI/monad/commit/c57cf88d55f093afeaa779f66c5fbeee595bdb24))
+
+
+### Bug Fixes
+
+* **ci:** satisfy release quality gates ([faba96b](https://github.com/Monadix-AI/monad/commit/faba96b8963375329057b85b86cdad6319db39d9))
+* **release:** grant attestation permissions ([8bb9b27](https://github.com/Monadix-AI/monad/commit/8bb9b27d1e363ac0dae990c9ed691c7b8704cad7))
+* **web:** add sidebar scroll affordances ([6e73a37](https://github.com/Monadix-AI/monad/commit/6e73a37d8ff3e6e734521edd7396f0ef1e809503))
+* **web:** hide mesh chats from sidebar ([169eec7](https://github.com/Monadix-AI/monad/commit/169eec797e578131dd0be51eec5d73fba8299df3))
+
+
+### Performance
+
+* **licenses:** accelerate license generation ([92101ea](https://github.com/Monadix-AI/monad/commit/92101ea2ca0fb5d95972a4b3db07d7f8515d8277))
+
 ## [0.1.3](https://github.com/Monadix-AI/monad/compare/v0.1.2...v0.1.3) (2026-08-10)
 
 
