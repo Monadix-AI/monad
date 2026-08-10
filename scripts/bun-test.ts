@@ -82,7 +82,9 @@ const coverage =
   process.env.MONAD_TEST_COVERAGE === '1' ? ['--coverage', '--coverage-reporter=text', '--coverage-reporter=lcov'] : [];
 const rerunLimit = 10;
 const autoShardCap = 8;
-const windowsShardConcurrency = 2;
+// Windows CI runners cannot reliably host two daemon-heavy E2E shards concurrently: competing
+// subprocess trees intermittently reset their local HTTP servers. Keep the shards isolated.
+const windowsShardConcurrency = 1;
 const inputArgs = process.argv.slice(2);
 const shardArg = inputArgs.find((arg) => arg.startsWith('--monad-shards='));
 const shardValue = shardArg?.slice('--monad-shards='.length);
