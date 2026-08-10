@@ -73,6 +73,7 @@ test('every Bun dependency install restores the package cache first', async () =
     { cacheConfigured: true, job: 'npm-publish.yml:publish' },
     { cacheConfigured: true, job: 'release.yml:atom-pack' },
     { cacheConfigured: true, job: 'release.yml:build' },
+    { cacheConfigured: true, job: 'release.yml:upgrade-test' },
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:linux-kvm' },
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:macos-vfkit' },
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:windows-hyperv' }
