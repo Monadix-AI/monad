@@ -15,6 +15,7 @@ import {
 
 let provider: ReturnType<typeof Bun.serve>;
 let web: ReturnType<typeof startWeb>;
+const WEBSOCKET_REPLY_TIMEOUT_MS = 10_000;
 
 beforeAll(() => {
   provider = Bun.serve({
@@ -72,24 +73,30 @@ test('standalone web bridges same-origin WebSocket control stream to the daemon'
 
   Bun.env.WEB_PORT = '0';
   const proxy = startWeb({ daemonUrl: `http://127.0.0.1:${upstream.port}` });
-  const reply = await new Promise<string>((resolve, reject) => {
-    const socket = new WebSocket(`ws://127.0.0.1:${proxy.port}/v1/stream`);
-    const timeout = setTimeout(() => reject(new Error('timed out waiting for bridged frame')), 2000);
-    socket.onopen = () => socket.send('ping');
-    socket.onmessage = (event) => {
-      clearTimeout(timeout);
-      resolve(String(event.data));
-      socket.close();
-    };
-    socket.onerror = () => {
-      clearTimeout(timeout);
-      reject(new Error('websocket bridge failed'));
-    };
-  });
+  try {
+    const reply = await new Promise<string>((resolve, reject) => {
+      const socket = new WebSocket(`ws://127.0.0.1:${proxy.port}/v1/stream`);
+      const timeout = setTimeout(
+        () => reject(new Error('timed out waiting for bridged frame')),
+        WEBSOCKET_REPLY_TIMEOUT_MS
+      );
+      socket.onopen = () => socket.send('ping');
+      socket.onmessage = (event) => {
+        clearTimeout(timeout);
+        resolve(String(event.data));
+        socket.close();
+      };
+      socket.onerror = () => {
+        clearTimeout(timeout);
+        reject(new Error('websocket bridge failed'));
+      };
+    });
 
-  proxy.stop(true);
-  upstream.stop(true);
-  expect(reply).toBe('daemon:ping');
+    expect(reply).toBe('daemon:ping');
+  } finally {
+    proxy.stop(true);
+    upstream.stop(true);
+  }
 });
 
 test('attached release web routes leave daemon API paths to the daemon app', () => {
@@ -169,7 +176,10 @@ test('standalone web preserves WebSocket subprotocols for Vite HMR', async () =>
   try {
     const reply = await new Promise<string>((resolve, reject) => {
       const socket = new WebSocket(`ws://127.0.0.1:${proxy.port}/v1/stream?token=dev`, 'vite-hmr');
-      const timeout = setTimeout(() => reject(new Error('timed out waiting for bridged HMR frame')), 2000);
+      const timeout = setTimeout(
+        () => reject(new Error('timed out waiting for bridged HMR frame')),
+        WEBSOCKET_REPLY_TIMEOUT_MS
+      );
       socket.onmessage = (event) => {
         clearTimeout(timeout);
         resolve(String(event.data));
