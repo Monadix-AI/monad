@@ -46,7 +46,9 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(upload?.with?.path).toContain('target/distrib/install.sh');
   expect(upload?.with?.path).toContain('target/distrib/install.ps1');
   expect(shellTest).toContain('script -qefc "sh artifacts/install.sh"');
+  expect(shellTest).toContain('MONAD_FORCE_INTERACTIVE=1');
   expect(shellTest).toContain('no checksums to verify');
+  expect(shellTest).toContain('skipping sha256 checksum verification');
   expect(powerShellTest).toContain('MONAD_FORCE_INTERACTIVE');
   expect(powerShellTest).toContain('no checksums to verify');
   expect(localDeploy).toContain("join(artifactsDir, 'install.sh')");
@@ -55,6 +57,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(namedStep('upgrade-test', 'Upgrade an active daemon through CLI and Web')?.run).toContain(
     'scripts/test/upgrade-dist-e2e.ts'
   );
+  expect(namedStep('upgrade-test', 'Install dependencies')?.run).toBe('bun install --frozen-lockfile');
   expect(attest?.uses).toMatch(/^actions\/attest@[0-9a-f]{40}$/);
   expect(attest?.with?.['subject-path']).toBe('artifacts/*');
   expect(jobs.publish?.permissions).toMatchObject({ attestations: 'write', 'id-token': 'write' });
