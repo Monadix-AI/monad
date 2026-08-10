@@ -104,7 +104,7 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
     status = { ...status, stage: 'installing', progress: STAGES.installing, error: null, lastAttempt: attempt };
     try {
       const proc = spawn(
-        workerCommand(
+        workerLauncherCommand(
           platform,
           parentPid,
           updaterPath,
@@ -114,14 +114,14 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
           attemptPaths?.log
         ),
         {
-          detached: true,
           env: { ...process.env, ...options.env, MONAD_NO_OPEN: '1' },
           stderr: 'ignore',
           stdin: 'ignore',
           stdout: 'ignore'
         }
       );
-      proc.unref?.();
+      const launcherExitCode = await proc.exited;
+      if (launcherExitCode !== 0) throw new Error(`upgrade worker launcher exited with code ${launcherExitCode}`);
       status = { ...status, stage: 'restarting', progress: STAGES.restarting, error: null };
       scheduleExit();
     } catch (error) {
@@ -225,6 +225,31 @@ export function workerCommand(
     'printf "%s\\n%s\\n" "$update_code" "$completed" >"$5.tmp"; mv "$5.tmp" "$5"; ' +
     '"$4" restart >>"$6" 2>&1; exit "$update_code"';
   return ['sh', '-c', script, 'monad-upgrade', String(parentPid), updaterPath, tag, binaryPath, result, log];
+}
+
+export function workerLauncherCommand(
+  platform: NodeJS.Platform,
+  parentPid: number,
+  updaterPath: string,
+  tag: string,
+  binaryPath: string,
+  resultPath?: string,
+  logPath?: string
+): string[] {
+  const worker = workerCommand(platform, parentPid, updaterPath, tag, binaryPath, resultPath, logPath);
+  if (platform === 'win32') {
+    const invocation = `& ${worker.map(powerShellLiteral).join(' ')}`;
+    const encoded = Buffer.from(invocation, 'utf16le').toString('base64');
+    const script =
+      "$proc = Start-Process -FilePath 'powershell' " +
+      `-ArgumentList @('-NoProfile', '-EncodedCommand', '${encoded}') -WindowStyle Hidden -PassThru; $proc.Id`;
+    return ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script];
+  }
+  return ['sh', '-c', 'nohup "$@" >/dev/null 2>&1 < /dev/null &', 'monad-upgrade-launch', ...worker];
+}
+
+function powerShellLiteral(value: string): string {
+  return `'${value.replaceAll("'", "''")}'`;
 }
 
 function buildIdleStatus(
