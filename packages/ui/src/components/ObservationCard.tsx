@@ -60,7 +60,7 @@ export interface ObservationMetaProps {
   quiet?: boolean;
   showSource?: boolean;
   source: string;
-  title?: string;
+  title?: ReactNode;
   type?: string;
 }
 
@@ -106,7 +106,7 @@ export function ObservationMeta({
         <span
           className={cn(
             'font-semibold text-foreground normal-case',
-            quiet && 'min-w-0 shrink-0 font-normal text-muted-foreground'
+            quiet && 'min-w-0 shrink font-normal text-muted-foreground'
           )}
           data-slot="observation-meta-title"
         >

@@ -51,6 +51,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./lib/shiki": "./src/lib/shiki.ts",
     "./lib/utils": "./src/lib/utils.ts",
     "./styles.css": "./src/styles.css",
     "./components/*": "./src/components/*.tsx"

@@ -2,7 +2,7 @@ import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { fileNameFromHref } from '../../src/components/FaviconLink.tsx';
-import { FileIcon, fileIconName } from '../../src/components/FileIcon.tsx';
+import { FileIcon, fileBaseName, fileIconName } from '../../src/components/FileIcon.tsx';
 
 test('file icon inputs preserve specific names and use MIME fallbacks only when needed', () => {
   expect([
@@ -19,6 +19,13 @@ test('file link targets resolve a filename for icon matching', () => {
     fileNameFromHref('/workspace/docs/My%20File.md'),
     fileNameFromHref(undefined)
   ]).toEqual(['App.tsx', 'My File.md', 'file']);
+});
+
+test('file paths resolve their final segment across platforms', () => {
+  expect([fileBaseName('/workspace/src/App.tsx'), fileBaseName('C:\\workspace\\src\\App.tsx')]).toEqual([
+    'App.tsx',
+    'App.tsx'
+  ]);
 });
 
 test('specific source file types render distinct symbols', () => {
