@@ -34,6 +34,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   const powerShellTest = namedStep('install-test', 'Test PowerShell installer and updater receipt')?.run;
   const attest = namedStep('publish', 'Attest release assets');
   const localDeploy = await Bun.file(join(root, 'scripts/deploy-local-dist.ts')).text();
+  const upgradeE2e = await Bun.file(join(root, 'scripts/test/upgrade-dist-e2e.ts')).text();
 
   expect(build).toContain('--artifacts=local');
   expect(build).toContain('dist-manifest.json');
@@ -58,6 +59,8 @@ test('release workflow builds, exercises, attests, and publishes dist installers
     'scripts/test/upgrade-dist-e2e.ts'
   );
   expect(namedStep('upgrade-test', 'Install dependencies')?.run).toBe('bun install --frozen-lockfile');
+  expect(upgradeE2e).toContain('readdirSync(newDir');
+  expect(upgradeE2e).toContain('browser_download_url: assetUrl');
   expect(attest?.uses).toMatch(/^actions\/attest@[0-9a-f]{40}$/);
   expect(attest?.with?.['subject-path']).toBe('artifacts/*');
   expect(jobs.publish?.permissions).toMatchObject({ attestations: 'write', 'id-token': 'write' });
