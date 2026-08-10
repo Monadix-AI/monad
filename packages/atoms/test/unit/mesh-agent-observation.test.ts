@@ -1627,12 +1627,19 @@ test('Codex app-server observation folds a command lifecycle into one ordered to
     events: [
       {
         kind: 'tool-call',
-        tool: { callId: 'item_1', input: 'bun test', name: 'command_execution', status: 'in_progress' }
+        tool: {
+          callId: 'item_1',
+          category: 'shell',
+          input: 'bun test',
+          name: 'command_execution',
+          status: 'in_progress'
+        }
       },
       {
         kind: 'tool-result',
         tool: {
           callId: 'item_1',
+          category: 'shell',
           exitCode: 0,
           input: 'bun test',
           name: 'command_execution',
@@ -1644,9 +1651,16 @@ test('Codex app-server observation folds a command lifecycle into one ordered to
     cards: [
       {
         kind: 'tool',
-        call: { callId: 'item_1', input: 'bun test', name: 'command_execution', status: 'in_progress' },
+        call: {
+          callId: 'item_1',
+          category: 'shell',
+          input: 'bun test',
+          name: 'command_execution',
+          status: 'in_progress'
+        },
         result: {
           callId: 'item_1',
+          category: 'shell',
           exitCode: 0,
           input: 'bun test',
           name: 'command_execution',

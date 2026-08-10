@@ -11,6 +11,7 @@ import { jsonRpcRequest } from '../jsonrpc.ts';
 import { recordValue } from './app-server/events.ts';
 import { CODEX_APP_BIN } from './launch.ts';
 import { codexObservationProjection } from './observation/index.ts';
+import { codexProviderSessionUnavailable } from './provider-session-error.ts';
 
 type CodexHistoryEnvironment = Record<string, string | undefined>;
 
@@ -105,6 +106,10 @@ function jsonRpcErrorMessage(error: Record<string, unknown>): string {
   const message = typeof error.message === 'string' ? error.message : 'unknown error';
   const code = typeof error.code === 'string' || typeof error.code === 'number' ? ` (${error.code})` : '';
   return `${message}${code}`;
+}
+
+function codexEventPageUnavailableReason(error: unknown): 'not-found' | 'temporary' {
+  return codexProviderSessionUnavailable(error) ? 'not-found' : 'temporary';
 }
 
 async function requestCodexTurnsPage(
@@ -220,8 +225,8 @@ export function createCodexEventSource(options: CodexEventPageOptions = {}): Mes
           },
           options
         );
-      } catch {
-        return { state: 'unavailable', reason: 'temporary' };
+      } catch (error) {
+        return { state: 'unavailable', reason: codexEventPageUnavailableReason(error) };
       }
       if (request.view === 'raw') {
         return {

@@ -224,7 +224,7 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
  */
 export function toAgentObservationEvent(
   event: MeshAgentObservationEvent,
-  projector?: Pick<MeshAgentObservationProjector, 'classifyActivity' | 'isStreamingFragment'>
+  projector?: Pick<MeshAgentObservationProjector, 'classifyActivity' | 'isStreamingFragment' | 'toolCategory'>
 ): AgentObservationEvent | null {
   if (event.projection === 'unknown') {
     return {
@@ -261,7 +261,9 @@ export function toAgentObservationEvent(
   if (event.createdAt !== undefined) event_.at = event.createdAt;
 
   if (kind === 'tool-call' || kind === 'tool-result') {
-    event_.tool = neutralTool(event, kind);
+    const tool = neutralTool(event, kind);
+    const category = projector?.toolCategory?.(event, tool);
+    event_.tool = category ? { ...tool, category } : tool;
     if (event.text) event_.text = event.text;
     return event_;
   }

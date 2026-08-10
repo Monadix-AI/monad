@@ -11,7 +11,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 import { parseStructuredAuthState } from '../adapter-shared.ts';
-import { createProjectedEventSource } from '../event-source.ts';
+import { createProjectedEventSource, providerRecordIdentity } from '../event-source.ts';
 import { makeGatewayAdapter } from '../gateway/adapter.ts';
 import { GatewayDriver } from '../gateway/driver.ts';
 import { agentAdapterIcons } from '../icons.ts';
@@ -213,10 +213,14 @@ export const hermesMeshAgentAdapter: MeshAgentProviderAdapter = {
         return {
           state: 'available',
           view: 'raw',
-          records: [...page.items].reverse().map((data, index) => ({
-            data,
-            cursor: `${request.before ?? ''}:${index}`
-          })),
+          records: page.items.map((data, index) => {
+            const providerIdentity = providerRecordIdentity(data);
+            return {
+              data,
+              cursor: providerIdentity ?? `${request.before ?? 'latest'}:${index}`,
+              ...(providerIdentity ? { providerIdentity } : {})
+            };
+          }),
           coverage: 'exact',
           ...(page.nextCursor ? { nextCursor: page.nextCursor } : {})
         };

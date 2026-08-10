@@ -4,6 +4,7 @@ import type { MeshAgentProviderSessionUsageContext } from '@monad/sdk-atom';
 import { meshAgentSessionUsageSchema } from '@monad/protocol';
 
 import { jsonRpcRequest } from '../jsonrpc.ts';
+import { codexProviderSessionUnavailable } from './provider-session-error.ts';
 
 interface CodexUsageProcess {
   stdin: { write(chunk: string): unknown };
@@ -65,7 +66,7 @@ export function codexSessionUsageFromNotification(value: unknown): MeshAgentSess
 export async function readCodexSessionUsage(
   context: MeshAgentProviderSessionUsageContext,
   options: CodexSessionUsageOptions = {}
-): Promise<MeshAgentSessionUsage> {
+): Promise<MeshAgentSessionUsage | null> {
   const spawn = options.spawn ?? ((argv, spawnOptions) => Bun.spawn(argv, spawnOptions));
   const proc = spawn([context.executable, 'app-server', '--stdio'], {
     cwd: context.workingPath,
@@ -121,9 +122,9 @@ export async function readCodexSessionUsage(
         const response = object(message);
         if (response?.id === 2 && object(response.error)) {
           const error = object(response.error);
-          throw new Error(
-            `Codex thread/resume failed: ${typeof error?.message === 'string' ? error.message : 'unknown error'}`
-          );
+          const errorMessage = typeof error?.message === 'string' ? error.message : 'unknown error';
+          if (codexProviderSessionUnavailable(errorMessage)) return null;
+          throw new Error(`Codex thread/resume failed: ${errorMessage}`);
         }
       }
     }

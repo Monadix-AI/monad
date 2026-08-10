@@ -4,6 +4,7 @@ import type { MeshAgentProviderAdapter } from '#/services/mesh-agent/types.ts';
 import { afterAll, beforeAll, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { MESH_NATIVE_SESSION_UNAVAILABLE_REASON } from '@monad/protocol';
 
 import { MeshAgentEventPages } from '#/services/mesh-agent/host/event-pages.ts';
 import { registerAgentAdapterImpl, unregisterAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
@@ -179,6 +180,32 @@ test('provider event pages receive the resolved agent environment', async () => 
   ]);
 });
 
+test('a transient live raw reader failure remains retryable instead of becoming an exhausted page', async () => {
+  const eventAdapter = {
+    ...adapter,
+    events: {
+      ...adapter.events,
+      readPage: async () => {
+        throw new Error('provider storage read failed');
+      }
+    }
+  } as MeshAgentProviderAdapter;
+  const live = {
+    id: 'mesh_raw_failure',
+    agentName: 'raw-agent',
+    provider: 'event-pages-fixture',
+    adapter: eventAdapter,
+    providerSessionRef: 'raw-provider-session',
+    workingPath: '/tmp/project'
+  } as unknown as LiveMeshSession;
+  const pages = new MeshAgentEventPages({
+    live: new Map([[live.id, live]]),
+    store: { getMeshSession: () => undefined }
+  } as never);
+
+  await expect(pages.rawEventsPage(live.id, { limit: 20 })).rejects.toThrow('provider storage read failed');
+});
+
 test('stopped managed session event pages receive their deterministic runtime workspace', async () => {
   const contexts: unknown[] = [];
   const provider = 'managed-event-pages-fixture';
@@ -230,6 +257,76 @@ test('stopped managed session event pages receive their deterministic runtime wo
         )
       }
     ]);
+  } finally {
+    unregisterAgentAdapterImpl(provider as never);
+  }
+});
+
+test('a missing provider-native session becomes an unavailable frame instead of a UI-facing read error', async () => {
+  const provider = 'missing-event-pages-fixture';
+  const missingAdapter = {
+    ...adapter,
+    provider,
+    events: {
+      ...adapter.events,
+      readPage: async () => ({ state: 'unavailable' as const, reason: 'not-found' as const })
+    }
+  } as MeshAgentProviderAdapter;
+  registerAgentAdapterImpl(missingAdapter);
+  try {
+    const pages = new MeshAgentEventPages({
+      live: new Map(),
+      store: {
+        getMeshSession: () => ({
+          agentName: 'missing-agent',
+          provider,
+          providerSessionRef: 'deleted-native-session',
+          transcriptTargetId: 'ses_missing',
+          workingPath: '/project'
+        }),
+        getSession: () => null
+      }
+    } as never);
+
+    expect(await pages.convenienceEventsPage('mesh_missing', { limit: 20 })).toEqual({
+      frames: [{ kind: 'unavailable', reason: MESH_NATIVE_SESSION_UNAVAILABLE_REASON }]
+    });
+  } finally {
+    unregisterAgentAdapterImpl(provider as never);
+  }
+});
+
+test('a thrown provider reader error is contained as a generic unavailable frame', async () => {
+  const provider = 'failed-event-pages-fixture';
+  const failedAdapter = {
+    ...adapter,
+    provider,
+    events: {
+      ...adapter.events,
+      readPage: async () => {
+        throw new Error('provider storage read failed');
+      }
+    }
+  } as MeshAgentProviderAdapter;
+  registerAgentAdapterImpl(failedAdapter);
+  try {
+    const pages = new MeshAgentEventPages({
+      live: new Map(),
+      store: {
+        getMeshSession: () => ({
+          agentName: 'failed-agent',
+          provider,
+          providerSessionRef: 'failed-native-session',
+          transcriptTargetId: 'ses_failed',
+          workingPath: '/project'
+        }),
+        getSession: () => null
+      }
+    } as never);
+
+    expect(await pages.convenienceEventsPage('mesh_failed', { limit: 20 })).toEqual({
+      frames: [{ kind: 'unavailable', reason: 'provider events unavailable' }]
+    });
   } finally {
     unregisterAgentAdapterImpl(provider as never);
   }

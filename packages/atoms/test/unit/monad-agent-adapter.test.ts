@@ -489,6 +489,26 @@ test('Monad provider history pages use the same projection as live records', asy
   ]);
 });
 
+test('Monad raw history exposes the nested provider event id as the card identity', async () => {
+  const output = eventRecord({
+    id: 'evt_raw_identity',
+    type: 'session.run.completed',
+    at: '2026-08-09T13:21:35.000Z',
+    payload: { transcriptTargetId: 'ses_MsSXceRDb7hX' }
+  });
+  const source = createMonadEventSource(async () => output);
+  const page = await source.readPage?.(
+    { providerSessionRef: 'ses_MsSXceRDb7hX', workingPath: '/workspace' },
+    { view: 'raw', limit: 20 }
+  );
+
+  expect(
+    page?.state === 'available' && page.view === 'raw'
+      ? page.records.map(({ cursor, providerIdentity }) => ({ cursor, providerIdentity }))
+      : page
+  ).toEqual([{ cursor: 'evt_raw_identity', providerIdentity: 'evt_raw_identity' }]);
+});
+
 test('Monad projects a compact directive as one context compaction event with its summary', () => {
   const output = [
     eventRecord({
@@ -767,7 +787,7 @@ test('Monad provider history restores tool events before later assistant message
       text: 'The project post completed.',
       at: '2026-08-09T13:21:39.987Z',
       providerEventType: 'session.message.completed',
-      dedupeKey: 'monad:f34ba295:agent:session.message.completed'
+      dedupeKey: 'monad:evt_100000000003:agent:session.message.completed'
     }
   ]);
 });

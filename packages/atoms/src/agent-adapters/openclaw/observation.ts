@@ -8,17 +8,38 @@ import type {
 import {
   classifyObservationActivity,
   isStreamingObservationFragment,
+  numberValue,
   observation,
+  providerEpochMsTimestamp,
+  providerIsoTimestamp,
   recordValue,
-  textValue
+  textValue,
+  toolCategoryByName
 } from '../observation-projection.ts';
 
 type OpenClawMessageGroup = {
   key: string;
   deltas: string[];
   finalText?: string;
+  createdAt?: string;
   raw: Record<string, unknown>[];
 };
+
+function openClawCreatedAt(
+  record: Record<string, unknown>,
+  providerMessage?: Record<string, unknown>
+): string | undefined {
+  const payload = recordValue(record.payload);
+  const data = recordValue(payload?.data);
+  return (
+    providerIsoTimestamp(
+      textValue(record.timestamp, providerMessage?.timestamp, payload?.timestamp, data?.timestamp)
+    ) ??
+    providerEpochMsTimestamp(
+      numberValue(providerMessage?.timestamp, record.timestamp, payload?.timestamp, data?.timestamp)
+    )
+  );
+}
 
 function textFromContent(content: unknown): string | undefined {
   if (typeof content === 'string') return content;
@@ -56,6 +77,7 @@ export function openClawRecordEvents(
 ): MeshAgentObservationEvent[] {
   const payload = recordValue(record.payload);
   const data = recordValue(payload?.data);
+  const createdAt = openClawCreatedAt(record);
   if (record.type === 'event' && record.event === 'agent') {
     const stream = textValue(payload?.stream);
     const phase = textValue(data?.phase);
@@ -66,6 +88,7 @@ export function openClawRecordEvents(
         text: 'Message started',
         source: 'unknown',
         providerEventType: 'turn-start',
+        createdAt,
         raw: record
       });
     }
@@ -76,6 +99,7 @@ export function openClawRecordEvents(
         text: 'complete',
         source: 'unknown',
         providerEventType: 'turn-end',
+        createdAt,
         raw: record
       });
     }
@@ -86,6 +110,7 @@ export function openClawRecordEvents(
         text: typeof data?.delta === 'string' ? data.delta : textValue(data?.text),
         source: 'unknown',
         providerEventType: `${stream}.delta`,
+        createdAt,
         raw: record,
         preserveWhitespace: true
       });
@@ -94,6 +119,7 @@ export function openClawRecordEvents(
   }
   const providerMessage = recordValue(record.message) ?? record;
   if (typeof providerMessage.role !== 'string') return [];
+  const messageCreatedAt = openClawCreatedAt(record, providerMessage);
   const content = recordContent(providerMessage.content);
   const providerRole = providerMessage.role.toLowerCase();
   if (providerRole === 'toolresult' || providerRole === 'tool_result') {
@@ -103,6 +129,7 @@ export function openClawRecordEvents(
       text: textFromContent(providerMessage.content) ?? textValue(providerMessage.text),
       source: 'unknown',
       providerEventType: 'tool_result',
+      createdAt: messageCreatedAt,
       raw: providerMessage
     });
   }
@@ -121,6 +148,7 @@ export function openClawRecordEvents(
       text: `Tool call ${name}${input === undefined ? '' : ` ${JSON.stringify(input)}`}`,
       source: 'unknown',
       providerEventType: 'tool_call',
+      createdAt: messageCreatedAt,
       raw: item
     });
   });
@@ -130,6 +158,7 @@ export function openClawRecordEvents(
     text: reasoningText,
     source: 'unknown',
     providerEventType: 'reasoning',
+    createdAt: messageCreatedAt,
     raw: record
   });
   const message = observation({
@@ -138,6 +167,7 @@ export function openClawRecordEvents(
     text: textFromContent(providerMessage.content) ?? textValue(providerMessage.text),
     source: 'unknown',
     providerEventType: 'message',
+    createdAt: messageCreatedAt,
     raw: record
   });
   return [...reasoning, ...toolCalls, ...message];
@@ -155,6 +185,7 @@ function openClawMessageGroup(
 
 export const openClawObservationProjection = {
   classifyActivity: classifyObservationActivity,
+  toolCategory: toolCategoryByName('shell', ['exec', 'shell']),
   eventEntries: (entries: MeshAgentObservationJsonRecordEntry[], context?: { providerSessionRef?: string }) =>
     entries.filter(({ record }) => {
       if (typeof record.role === 'string' || typeof recordValue(record.message)?.role === 'string') return true;
@@ -187,6 +218,7 @@ export const openClawObservationProjection = {
       const state = group as OpenClawMessageGroup;
       const payload = recordValue(entry.record.payload);
       state.raw.push(entry.record);
+      state.createdAt = openClawCreatedAt(entry.record, recordValue(payload?.message)) ?? state.createdAt;
       if (payload?.state === 'delta' && typeof payload.deltaText === 'string') state.deltas.push(payload.deltaText);
       if (payload?.state === 'final') {
         const message = recordValue(payload.message);
@@ -204,6 +236,7 @@ export const openClawObservationProjection = {
         text: state.finalText ?? state.deltas.join(''),
         source: 'unknown',
         providerEventType: state.finalText === undefined ? 'message.delta' : 'message',
+        createdAt: state.createdAt,
         rawEvents: state.raw,
         preserveWhitespace: true
       });

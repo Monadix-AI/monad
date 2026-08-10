@@ -1,4 +1,9 @@
-import type { AgentObservationDiagnostic, MeshAgentObservationEvent } from '@monad/protocol';
+import type {
+  AgentObservationDiagnostic,
+  AgentObservationTool,
+  AgentObservationToolCategory,
+  MeshAgentObservationEvent
+} from '@monad/protocol';
 import type {
   MeshAgentObservationActivity,
   MeshAgentObservationJsonRecordEntry,
@@ -61,6 +66,18 @@ export function classifyObservationActivity(
 export function isStreamingObservationFragment(event: MeshAgentObservationEvent): boolean {
   const type = event.providerEventType?.toLowerCase() ?? '';
   return type.endsWith('/delta') || type.endsWith('_delta') || type.endsWith('delta') || type.includes('chunk');
+}
+
+export function toolCategoryByName(
+  category: AgentObservationToolCategory,
+  names: readonly string[]
+): (event: MeshAgentObservationEvent, tool: AgentObservationTool) => AgentObservationToolCategory | undefined {
+  const accepted = new Set(names.map(normalizedToolName));
+  return (_event, tool) => (accepted.has(normalizedToolName(tool.name)) ? category : undefined);
+}
+
+function normalizedToolName(value: string): string {
+  return value.toLowerCase().replace(/[^a-z0-9]/g, '');
 }
 
 function isoFromMs(value: number): string | undefined {

@@ -18,7 +18,8 @@ import {
   recordValue,
   resultMarkerText,
   textValue,
-  thinkingObservation
+  thinkingObservation,
+  toolCategoryByName
 } from '../observation-projection.ts';
 
 export type QwenObservationMessage = Record<string, unknown> & { type: string };
@@ -251,6 +252,7 @@ export const qwenObservationProjection = {
   identity: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
   eventEntries: qwenHistoryEntries,
   classifyActivity: classifyObservationActivity,
+  toolCategory: toolCategoryByName('shell', ['Bash', 'run_shell_command', 'shell']),
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
     {
