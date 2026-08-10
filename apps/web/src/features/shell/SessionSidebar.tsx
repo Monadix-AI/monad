@@ -26,16 +26,17 @@ import { SessionSidebarResizeHandle } from './SessionSidebarResizeHandle';
 import { useSessionSidebarActions } from './session-sidebar-actions';
 import { type ProjectItem, SidebarHeader } from './sidebar';
 import { useConsumeActiveSessionAttention } from './sidebar/use-consume-active-session-attention';
+import { visibleSidebarSessions } from './sidebar-chat-sessions';
 import { DEFAULT_SIDEBAR_WIDTH, MAX_SIDEBAR_WIDTH, MIN_SIDEBAR_WIDTH } from './sidebar-layout';
 import { useSidebarPagerGesture } from './use-sidebar-pager';
 import { useSidebarResize } from './use-sidebar-resize';
 
 interface SidebarWorkspaceConfig {
-  archivedSessions: Pick<Session, 'id' | 'projectId' | 'title' | 'updatedAt'>[];
+  archivedSessions: Pick<Session, 'id' | 'origin' | 'projectId' | 'title' | 'updatedAt'>[];
   archivedSessionsLoading?: boolean;
   projectOrderRevision: number;
   projects: ProjectItem[];
-  chatSessions: (Pick<Session, 'id' | 'projectId' | 'title'> & {
+  chatSessions: (Pick<Session, 'id' | 'origin' | 'projectId' | 'title'> & {
     attentionState: SessionAttentionState | null;
     generationState: SessionGenerationState | null;
     unreadItemKeys: string[];
@@ -166,6 +167,8 @@ export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Prop
       ),
     [t, workplaceExperiences?.experiences]
   );
+  const sidebarChatSessions = useMemo(() => visibleSidebarSessions(chatSessions), [chatSessions]);
+  const sidebarArchivedSessions = useMemo(() => visibleSidebarSessions(archivedSessions), [archivedSessions]);
   const activeAttention = useMemo(() => {
     if (activeChatSessionId) return chatSessions.find((session) => session.id === activeChatSessionId);
     if (!activeProjectSessionId) return undefined;
@@ -205,7 +208,7 @@ export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Prop
     visibleProjects
   } = useSessionSidebarActions({
     activeProjectId,
-    chatSessions,
+    chatSessions: sidebarChatSessions,
     onCreateChatSession,
     onCreateProjectSession,
     onOpenProject,
@@ -384,7 +387,7 @@ export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Prop
     const projectNames = new Map(visibleProjects.map((project) => [project.id, project.name]));
     const chatSessionItems: ArchivedSessionListItem[] = [];
     const projectSessionItems: ArchivedSessionListItem[] = [];
-    for (const session of archivedSessions) {
+    for (const session of sidebarArchivedSessions) {
       if (pendingUnarchivedSessionIds.has(session.id)) continue;
       const item: ArchivedSessionListItem = {
         id: session.id,
@@ -396,7 +399,7 @@ export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Prop
       (session.projectId ? projectSessionItems : chatSessionItems).push(item);
     }
     return { chatSessions: chatSessionItems, projectSessions: projectSessionItems };
-  }, [archivedSessions, pendingUnarchivedSessionIds, visibleProjects]);
+  }, [pendingUnarchivedSessionIds, sidebarArchivedSessions, visibleProjects]);
 
   return (
     <>
