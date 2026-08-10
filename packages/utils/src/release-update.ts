@@ -1,4 +1,4 @@
-import { dirname, join } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 import { compareReleaseVersions, normalizeReleaseVersion, type ReleaseChannel } from './release-version.ts';
 
@@ -30,7 +30,8 @@ interface GithubRelease {
 const DEFAULT_REPOSITORY = 'Monadix-AI/monad';
 
 export function monadUpdaterPath(binaryPath: string, platform: NodeJS.Platform = process.platform): string {
-  return join(dirname(binaryPath), platform === 'win32' ? 'monad-update.exe' : 'monad-update');
+  const targetPath = platform === 'win32' ? win32 : posix;
+  return targetPath.join(targetPath.dirname(binaryPath), platform === 'win32' ? 'monad-update.exe' : 'monad-update');
 }
 
 export async function resolveRelease(
