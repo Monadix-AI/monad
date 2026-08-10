@@ -1,5 +1,26 @@
 # Changelog
 
+## [0.1.3](https://github.com/Monadix-AI/monad/compare/v0.1.2...v0.1.3) (2026-08-10)
+
+
+### Bug Fixes
+
+* **composer:** keep attachment titles clear of remove action ([a330e39](https://github.com/Monadix-AI/monad/commit/a330e3959f0c92083adf08731a95b87037927017))
+* **i18n:** standardize plural and relative-time copy ([2113329](https://github.com/Monadix-AI/monad/commit/2113329f8c45cbbe3f05fbd15640365456602508))
+* **mesh:** create placeholders after runtime admission ([8002810](https://github.com/Monadix-AI/monad/commit/80028102a3563c64342c915f214f908b4a5788d8))
+* **mesh:** harden managed project runtimes ([acc0005](https://github.com/Monadix-AI/monad/commit/acc000573aacc23c72abf75354a7956c019b506e))
+* **mesh:** rank session and agent usage details ([8ac0cc6](https://github.com/Monadix-AI/monad/commit/8ac0cc6af25853110c2ca3e9f0819ddbef8ef10f))
+* **web:** apply project new-session target on first click ([8761ded](https://github.com/Monadix-AI/monad/commit/8761ded0b391fff77fdd9451bce1375d9721a9ea))
+* **web:** restore functional sidebar row height ([d86ee2a](https://github.com/Monadix-AI/monad/commit/d86ee2ae526abd06fb38f5b500b04f7095dd8b17))
+* **workplace:** reflect agent activity without refresh ([5095b1b](https://github.com/Monadix-AI/monad/commit/5095b1bce820b8a623e48091ed4ff0a8c1421ec7))
+* **workplace:** render lifecycle actors from typed events ([1e3169b](https://github.com/Monadix-AI/monad/commit/1e3169bd0fa77a352c99b1f07f04b3718ab1f0df))
+* **workplace:** stabilize project and observation experience ([59968f8](https://github.com/Monadix-AI/monad/commit/59968f8284249c14f12583f0c40904dd17beb875))
+
+
+### Refactors
+
+* **sessions:** require manual project member joins ([52030d9](https://github.com/Monadix-AI/monad/commit/52030d9d51f82dbc40dd3579a40a6a842ba0ec55))
+
 ## [0.1.2](https://github.com/Monadix-AI/monad/compare/v0.1.1...v0.1.2) (2026-08-08)
 
 
