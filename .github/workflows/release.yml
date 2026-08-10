@@ -316,6 +316,7 @@ jobs:
           target_commitish: ${{ inputs.sha || inputs.tag }}
           draft: true
           prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
+          generate_release_notes: true
           files: artifacts/*
           fail_on_unmatched_files: true
       - name: Publish release
