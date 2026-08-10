@@ -11,6 +11,7 @@ import { memo, useMemo } from 'react';
 
 import { ChatSessionList } from './chat-session-list';
 import { SidebarActionVisibilityRules, SidebarIconActionButton, SidebarNavItem } from './nav-item';
+import { SidebarScrollArea } from './scroll-area';
 import { SidebarAttentionBadge } from './sidebar-attention-badge';
 import { SidebarShortcutAllocatorProvider } from './sidebar-shortcut-context';
 import { SidebarItemSkeletonList } from './sidebar-skeleton';
@@ -112,7 +113,7 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
           />
         </div>
       </div>
-      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+      <SidebarScrollArea>
         <SidebarShortcutAllocatorProvider>
           <div className="flex flex-col gap-px px-2 pb-4">
             {pinnedSessions.length > 0 ? (
@@ -177,7 +178,7 @@ const WorkspaceSectionList = memo(function WorkspaceSectionList() {
             </WorkspaceSection>
           </div>
         </SidebarShortcutAllocatorProvider>
-      </div>
+      </SidebarScrollArea>
     </div>
   );
 });

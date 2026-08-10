@@ -13,6 +13,7 @@ import {
 
 import { settingsPath } from '#/features/shell/routing/paths';
 import { SidebarNavItem, SidebarNavSection, SidebarNavSectionLabel } from './nav-item';
+import { SidebarScrollArea } from './scroll-area';
 
 const SETTINGS_SECTION_ITEMS: {
   id: SettingsSectionId;
@@ -51,7 +52,7 @@ export function SettingsSidebarItems({
           onClick={onBack}
         />
       </SidebarNavSection>
-      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+      <SidebarScrollArea>
         <SidebarNavSection>
           <SidebarNavSectionLabel>{t('web.settings.title')}</SidebarNavSectionLabel>
           {SETTINGS_SECTION_ITEMS.map(({ id, icon, i18nKey }) => (
@@ -65,7 +66,7 @@ export function SettingsSidebarItems({
             />
           ))}
         </SidebarNavSection>
-      </div>
+      </SidebarScrollArea>
     </>
   );
 }

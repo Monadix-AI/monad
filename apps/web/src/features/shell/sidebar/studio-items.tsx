@@ -11,6 +11,7 @@ import {
   type StudioSectionItem
 } from '#/features/studio/sections';
 import { SidebarNavItem, SidebarNavSection, SidebarNavSectionLabel } from './nav-item';
+import { SidebarScrollArea } from './scroll-area';
 
 export function StudioSidebarItems({
   activeSection,
@@ -49,7 +50,7 @@ export function StudioSidebarItems({
 
   return (
     <>
-      <div className="sidebar-scroll-area min-h-0 flex-1 overflow-y-auto">
+      <SidebarScrollArea>
         <SidebarNavSection>
           <SidebarNavSectionLabel>{t('web.studio.agentMesh')}</SidebarNavSectionLabel>
           {STUDIO_MESH_SECTIONS.map(renderItem)}
@@ -58,7 +59,7 @@ export function StudioSidebarItems({
           <SidebarNavSectionLabel>{t('web.studio.agentRuntime')}</SidebarNavSectionLabel>
           {STUDIO_RUNTIME_SECTIONS.map(renderItem)}
         </SidebarNavSection>
-      </div>
+      </SidebarScrollArea>
       <SidebarNavSection>
         <SidebarNavSectionLabel>{t('web.studio.system')}</SidebarNavSectionLabel>
         {STUDIO_SYSTEM_SECTIONS.map(renderItem)}
