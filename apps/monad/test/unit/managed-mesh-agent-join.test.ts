@@ -29,9 +29,14 @@ test('session-only member starts in the project shared workspace when the sessio
       },
       paths: { home: monadHome },
       meshAgentHost,
-      hookCwd: '/tmp/default-workspace'
+      hookCwd: tmpdir()
     },
     emitLifecycle: () => {},
+    requireSession: () => ({
+      id: 'ses_join00000000',
+      projectId: 'prj_join00000000',
+      cwd: undefined
+    }),
     makeEmit: () => () => {},
     persistAndRetire: () => {},
     messageIngress: {

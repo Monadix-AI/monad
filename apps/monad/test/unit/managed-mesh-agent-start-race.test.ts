@@ -3,6 +3,8 @@ import type { Event, MeshSessionView, Session } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
 
 import { expect, test } from 'bun:test';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { eventDefinition } from '@monad/protocol';
 
 import { createManagedMeshAgentDelivery } from '#/handlers/session/handlers/managed-mesh-agent-delivery.ts';
@@ -33,7 +35,7 @@ function buildHarness() {
     }
   };
   const ctx = {
-    deps: { store: {}, log: undefined, meshAgentHost, paths: { home: '/tmp/default-monad-home' } },
+    deps: { store: {}, log: undefined, meshAgentHost, paths: { home: join(tmpdir(), 'default-monad-home') } },
     requireSession: (sessionId: string) => {
       if (sessionId === session.id) return session;
       if (sessionId === 'ses_no_cwd000000') return { ...session, id: sessionId, cwd: undefined };
@@ -59,7 +61,7 @@ function buildHarness() {
   };
 }
 
-const session = { id: 'ses_race00000000', projectId: 'prj_race00000000', cwd: '/tmp/prj' } as unknown as Session;
+const session = { id: 'ses_race00000000', projectId: 'prj_race00000000', cwd: tmpdir() } as unknown as Session;
 const spec = { name: 'codex', provider: 'codex' } as unknown as MeshAgentConfig;
 
 function startArgs(input: string, runtimeAgentName = 'codex') {
@@ -102,14 +104,15 @@ test('different members start independently and a settled start does not dedupe 
 
 test('member working directory override is optional and falls back to the session working directory', async () => {
   const { delivery, workingPaths } = buildHarness();
+  const memberWorkingDirectory = join(tmpdir(), 'member');
 
   await delivery.startManagedMeshAgentRuntimeWithRecovery({
     ...startArgs('override', 'codex-override'),
-    workingDirectoryOverride: ' /tmp/member '
+    workingDirectoryOverride: ` ${memberWorkingDirectory} `
   });
   await delivery.startManagedMeshAgentRuntimeWithRecovery(startArgs('fallback', 'codex-fallback'));
 
-  expect(workingPaths).toEqual(['/tmp/member', '/tmp/prj']);
+  expect(workingPaths).toEqual([memberWorkingDirectory, tmpdir()]);
 });
 
 test('member working directory override rejects a relative path before starting the runtime', async () => {
@@ -138,7 +141,7 @@ test('managed member without a session working directory falls back to the daemo
     session: sessionWithoutCwd
   });
 
-  expect(workingPaths).toEqual(['/tmp/default-monad-home/workplace/prj_race00000000/shared']);
+  expect(workingPaths).toEqual([join(tmpdir(), 'default-monad-home', 'workplace', 'prj_race00000000', 'shared')]);
 });
 
 test('resume failure without a provider error code cold-starts with a valid lifecycle event', async () => {

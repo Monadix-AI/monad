@@ -27,7 +27,7 @@ async function rejectUnexpectedDeliveryError(command: { text: string }): Promise
 // thread every field identically, including `allowAutopilot`. A prior version of the direct-message
 // path silently dropped it, so a member with `allowAutopilot: false` (delegated approvals) would
 // start in full autopilot when a direct message (not a project message) cold-started its session.
-function buildHarness() {
+function buildHarness(options: { sessionCwd?: string } = { sessionCwd: tmpdir() }) {
   const monadHome = mkdtempSync(join(tmpdir(), 'monad-managed-delivery-'));
   const startCalls: Array<{ agentName: string; allowAutopilot?: boolean }> = [];
   const workingPaths: string[] = [];
@@ -91,7 +91,7 @@ function buildHarness() {
         : null
   };
   const ctx = {
-    deps: { store, hookCwd: '/tmp/default-workspace', log: undefined, meshAgentHost, paths: { home: monadHome } },
+    deps: { store, hookCwd: tmpdir(), log: undefined, meshAgentHost, paths: { home: monadHome } },
     managedAgentSessions: {
       queue: ({ deliveryId }: { deliveryId: string }) => lifecycleCalls.push({ kind: 'queue', deliveryId }),
       startTurn: ({ deliveryId }: { deliveryId: string }) => lifecycleCalls.push({ kind: 'start', deliveryId }),
@@ -101,6 +101,11 @@ function buildHarness() {
       begin: () => Promise.resolve({ id: 'msg_delegated00' }),
       deliver: rejectUnexpectedDeliveryError
     },
+    requireSession: () => ({
+      id: 'ses_delegated000',
+      projectId: 'prj_delegated00',
+      cwd: options.sessionCwd
+    }),
     makeEmit: () => () => {},
     persistAndRetire: () => {}
   } as unknown as SessionContext;
@@ -120,7 +125,7 @@ function sessionWithDelegatedCodexMember(): Session {
   return {
     id: 'ses_delegated000',
     projectId: 'prj_delegated00',
-    cwd: '/tmp/prj',
+    cwd: tmpdir(),
     origin: { client: 'workplace' }
   } as unknown as Session;
 }
@@ -137,7 +142,7 @@ test('project-message delivery threads a delegated member allowAutopilot to host
 });
 
 test('project-message delivery starts a managed member from the project shared workspace when session cwd is unset', async () => {
-  const { delivery, monadHome, startCalls, workingPaths } = buildHarness();
+  const { delivery, monadHome, startCalls, workingPaths } = buildHarness({ sessionCwd: undefined });
   await delivery.deliverProjectMessageToManagedMeshAgentMembers({
     session: { ...sessionWithDelegatedCodexMember(), cwd: undefined } as unknown as Session,
     meshAgents,
@@ -195,7 +200,7 @@ test('project-message runtime failures stay on the MeshSession contract instead 
   await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
     session: {
       id: 'ses_runtimefail00',
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       origin: { client: 'workplace' }
     } as unknown as Session,
     meshAgents,
@@ -231,7 +236,7 @@ test('direct-message delivery threads a delegated member allowAutopilot to host.
 });
 
 test('direct-message delivery starts a managed member from the project shared workspace when session cwd is unset', async () => {
-  const { delivery, lifecycleCalls, monadHome, startCalls, workingPaths } = buildHarness();
+  const { delivery, lifecycleCalls, monadHome, startCalls, workingPaths } = buildHarness({ sessionCwd: undefined });
   const session = { ...sessionWithDelegatedCodexMember(), cwd: undefined } as unknown as Session;
   await delivery.deliverDirectMessageToManagedMeshAgentMember({
     session,
@@ -286,7 +291,7 @@ test('direct delivery to a provider-available canonical member cold-starts a run
       agentIds: [],
       archived: false,
       restoreCount: 0,
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       activityAt: at,
       createdAt: at,
       updatedAt: at
@@ -345,7 +350,7 @@ test('direct delivery to a provider-available canonical member cold-starts a run
           transcriptTargetId: sessionId,
           agentName: args.agentName,
           provider: 'codex',
-          workingPath: '/tmp/prj',
+          workingPath: tmpdir(),
           runtimeRole: 'managed-project-agent',
           agentRuntimeId: newRuntimeId,
           agentRuntimeTokenHash: null,
@@ -380,6 +385,7 @@ test('direct delivery to a provider-available canonical member cold-starts a run
         begin: () => Promise.resolve({ id: 'msg_thinking0001' }),
         deliver: async () => {}
       },
+      requireSession: (id: SessionId) => store.getSession(id) as Session,
       makeEmit: (round: Event[]) => (event: Event) => {
         round.push(event);
         emitted.push(event);
@@ -500,7 +506,7 @@ test('project-message fan-out keeps every member inbox pinned to the original me
   await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
     session: {
       id: 'ses_fanout000000',
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       origin: { client: 'workplace' }
     } as unknown as Session,
     meshAgents: fanoutAgents,
@@ -631,7 +637,7 @@ test('active project-message fan-out returns after queueing without waiting for 
     .deliverProjectMessageToManagedMeshAgentMembers({
       session: {
         id: 'ses_nonblocking00',
-        cwd: '/tmp/prj',
+        cwd: tmpdir(),
         origin: { client: 'workplace' }
       } as unknown as Session,
       meshAgents: [
@@ -791,6 +797,11 @@ test('project-message fan-out resumes a pending unauthenticated member after log
       begin: () => Promise.resolve({ id: 'msg_thinking0001' }),
       deliver: rejectUnexpectedDeliveryError
     },
+    requireSession: () => ({
+      id: 'ses_loginretry00',
+      projectId: 'prj_loginretry00',
+      cwd: tmpdir()
+    }),
     makeEmit: (round: Event[]) => (event: Event) => {
       round.push(event);
       bus.publish(event);
@@ -801,7 +812,7 @@ test('project-message fan-out resumes a pending unauthenticated member after log
   await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
     session: {
       id: 'ses_loginretry00',
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       projectId: 'prj_loginretry00',
       origin: { client: 'workplace' }
     } as unknown as Session,
@@ -912,6 +923,11 @@ test('project-message fan-out treats provider auth start failures as login-requi
       begin: () => Promise.resolve({ id: 'msg_throwthink00' }),
       deliver: rejectUnexpectedDeliveryError
     },
+    requireSession: () => ({
+      id: 'ses_loginthrow00',
+      projectId: 'prj_loginthrow00',
+      cwd: tmpdir()
+    }),
     makeEmit: (round: Event[]) => (event: Event) => {
       round.push(event);
       bus.publish(event);
@@ -922,7 +938,7 @@ test('project-message fan-out treats provider auth start failures as login-requi
   await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
     session: {
       id: 'ses_loginthrow00',
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       projectId: 'prj_loginthrow00',
       origin: { client: 'workplace' }
     } as unknown as Session,
@@ -1002,7 +1018,7 @@ test('project-message fan-out emits connection_required when a project member ad
   await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
     session: {
       id: 'ses_disabled0000',
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       origin: { client: 'workplace' }
     } as unknown as Session,
     meshAgents: [
@@ -1069,7 +1085,7 @@ test('direct managed MeshAgent delivery emits connection_required when the proje
   await createManagedMeshAgentDelivery(ctx).deliverDirectMessageToManagedMeshAgentMember({
     session: {
       id: 'ses_missing00000',
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       origin: { client: 'workplace' }
     } as unknown as Session,
     meshAgents: [],
@@ -1163,7 +1179,7 @@ test('a stale unreadable delivery does not suppress the wake for a new readable 
   await createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
     session: {
       id: 'ses_fanout000000',
-      cwd: '/tmp/prj',
+      cwd: tmpdir(),
       origin: { client: 'workplace' }
     } as unknown as Session,
     meshAgents: [
@@ -1183,7 +1199,7 @@ test('a stale unreadable delivery does not suppress the wake for a new readable 
     {
       id: 'mesh_sonnet000000',
       input:
-        'New Workplace Project message is available.\nReview this room broadcast now.\nA broadcast wake does not require a public reply. Reply only if you can add concrete task value; otherwise take no public action.\n\nMessage metadata:\nSender kind: mesh-agent\nSender name: gpt\nSender id: gpt\nSender mention token: @[name="gpt" id="mesh-agent:gpt"]\n\nProject message body:\nGPT reply\n'
+        'New managed project message is available.\nReview this room broadcast now.\nA broadcast wake does not require a public reply. Reply only if you can add concrete task value; otherwise take no public action.\n\nMessage metadata:\nSender kind: mesh-agent\nSender name: gpt\nSender id: gpt\nSender mention token: @[name="gpt" id="mesh-agent:gpt"]\n\nProject message body:\nGPT reply\n'
     }
   ]);
 });

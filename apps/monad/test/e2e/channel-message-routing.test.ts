@@ -493,7 +493,7 @@ for (const kind of TRANSPORTS) {
       modelReplies = [];
       dir = join(tmpdir(), `monad-channel-routing-${Date.now()}-${process.hrtime.bigint()}`);
       const paths = makePaths(dir);
-      await initMonadHome(paths);
+      await initMonadHome(paths, { displayName: 'test-user' });
       const cfg = await loadConfig(paths);
       if (!cfg) throw new Error('config missing after init');
       const modelService = new ModelService(paths.auth, cfg, await loadAuth(paths.auth), seededProviderRegistry());
@@ -731,7 +731,7 @@ for (const kind of TRANSPORTS) {
           batch.messages.map(({ sender, source, text }) => ({ sender, source, text }))
         )
       ).toContainEqual({
-        sender: { kind: 'human', name: 'zeke', id: 'human' },
+        sender: { kind: 'human', name: 'test-user', id: 'human' },
         source: 'project',
         text: 'inherited cwd task'
       });
@@ -882,7 +882,7 @@ for (const kind of TRANSPORTS) {
       const input = await waitForFile(stdinLog, 'please review this');
       const messagesForAgent = managedIngressBatches(input).flatMap((batch) => batch.messages);
       expect(messagesForAgent.map(({ sender, source, text }) => ({ sender, source, text }))).toContainEqual({
-        sender: { kind: 'human', name: 'zeke', id: 'human' },
+        sender: { kind: 'human', name: 'test-user', id: 'human' },
         source: 'project',
         text: 'please review this'
       });
@@ -1445,6 +1445,14 @@ for (const kind of TRANSPORTS) {
           .filter((nativeSession) => nativeSession.lifecycle.state === 'active')
           .map((nativeSession) => nativeSession.agentName)
           .toSorted();
+      const expectedAgentNames = [reviewer.id, tester.id].toSorted();
+      const allExpectedAgentsAreActive = () => {
+        const active = activeAgentNames();
+        return (
+          active.length === expectedAgentNames.length &&
+          active.every((name, index) => name === expectedAgentNames[index])
+        );
+      };
       for (let i = 0; i < 20; i++) {
         const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
         expect(listed.status).toBe(200);
@@ -1456,10 +1464,10 @@ for (const kind of TRANSPORTS) {
           }>;
         };
         sessions = body.sessions;
-        if (activeAgentNames().length === 2) break;
+        if (allExpectedAgentsAreActive()) break;
         await Bun.sleep(25);
       }
-      expect(activeAgentNames()).toEqual([reviewer.id, tester.id].toSorted());
+      expect(activeAgentNames()).toEqual(expectedAgentNames);
       expect(
         (await listMessages(t, sessionId)).filter(({ text }) => text).map(({ role, text }) => ({ role, text }))
       ).toEqual([
