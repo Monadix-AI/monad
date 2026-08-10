@@ -284,6 +284,7 @@ export class SessionEventRuntimeExecutor {
           kind: 'failed',
           at,
           exitCode: result.exitCode,
+          ...(result.signal ? { signal: result.signal } : {}),
           error: result.failure ?? runtimeFailure(`resident process exited with code ${result.exitCode}`, false)
         }
       };
@@ -345,19 +346,33 @@ export class SessionEventRuntimeExecutor {
 
   private async closeOnce(): Promise<void> {
     this.clearIdleTimer();
-    if (this.lifecycle.state !== 'terminal') {
-      this.lifecycle = { state: 'terminal', termination: { kind: 'stopped', at: new Date().toISOString() } };
+    const activation = this.activation;
+    this.activation = undefined;
+    let exit: Awaited<SessionEventRuntimeActivation['process']['result']> | undefined;
+    if (activation) {
+      this.intentionallyClosedActivations.add(activation);
+      await activation.process.kill('SIGTERM');
+      // This is the lifecycle join barrier. Closing streams alone is not enough: the old child and its
+      // onExit/stdio callbacks must be completely settled before an owning binding can be released to a
+      // replacement runtime.
+      exit = await activation.process.result;
+      await activation.close();
+    }
+    await this.disposeDriver();
+    if (this.lifecycle.state !== 'terminal' || this.lifecycle.termination.kind === 'stopped') {
+      this.lifecycle = {
+        state: 'terminal',
+        termination: {
+          kind: 'stopped',
+          at: new Date().toISOString(),
+          ...(exit ? { exitCode: exit.exitCode } : {}),
+          ...(exit?.signal ? { signal: exit.signal } : {})
+        }
+      };
     }
     this.activity = { state: 'idle', pid: null, queuedTurnCount: 0 };
     this.connection = { state: 'inactive' };
     this.publishSnapshot();
-    const activation = this.activation;
-    this.activation = undefined;
-    if (activation) {
-      await activation.process.kill('SIGTERM');
-      await activation.close();
-    }
-    await this.disposeDriver();
   }
 
   private residentDriver(): Extract<SessionEventRuntimeDefinition, { plan: { processModel: 'resident' } }>['driver'] {

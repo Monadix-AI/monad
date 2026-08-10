@@ -321,6 +321,10 @@ function activation(args?: {
   pending?: boolean;
 }): SessionEventRuntimeActivation {
   const order = args?.order ?? [];
+  let settlePending: (() => void) | undefined;
+  const pendingResult = new Promise<{ exitCode: null; signal: 'SIGTERM' }>((resolve) => {
+    settlePending = () => resolve({ exitCode: null, signal: 'SIGTERM' });
+  });
   return {
     process: {
       pid: args?.pid ?? 42,
@@ -332,8 +336,9 @@ function activation(args?: {
       },
       async kill() {
         order.push('process:killed');
+        settlePending?.();
       },
-      result: args?.pending ? new Promise(() => {}) : Promise.resolve({ exitCode: args?.exitCode ?? 0 })
+      result: args?.pending ? pendingResult : Promise.resolve({ exitCode: args?.exitCode ?? 0 })
     },
     channel: { async send() {}, async close() {} },
     async *packets() {
@@ -527,7 +532,62 @@ describe('generic session-event runtime executor', () => {
       'driver:disposed'
     ]);
     expect(executor.snapshot()).toMatchObject({
-      lifecycle: { state: 'terminal', termination: { kind: 'stopped' } }
+      lifecycle: { state: 'terminal', termination: { kind: 'stopped', exitCode: null, signal: 'SIGTERM' } }
+    });
+  });
+
+  test('close is a process-exit join barrier before publishing the stopped generation', async () => {
+    let releaseExit: ((value: { exitCode: null; signal: 'SIGTERM' }) => void) | undefined;
+    const processResult = new Promise<{ exitCode: null; signal: 'SIGTERM' }>((resolve) => {
+      releaseExit = resolve;
+    });
+    const order: string[] = [];
+    const executor = new SessionEventRuntimeExecutor({
+      definition: {
+        plan: {
+          processModel: 'resident',
+          launch: { args: ['serve'], cwd: '/workspace' },
+          channel: { kind: 'child-stdio' },
+          startup: { timeoutMs: 1_000 }
+        },
+        driver: driver('resident')
+      },
+      executable: '/bin/provider',
+      allowedWorkingRoot: '/workspace',
+      workingPath: '/workspace',
+      resourceFactory: {
+        async start() {
+          const running = activation({ order });
+          running.process.result = processResult;
+          return running;
+        }
+      },
+      createObservationEpoch: () => 'epoch-join',
+      captureRaw: async () => {},
+      consumeEvent: async () => {}
+    });
+    await executor.open();
+
+    let stopped = false;
+    const closing = executor.close().then(() => {
+      stopped = true;
+    });
+    await Bun.sleep(0);
+    expect({ order, stopped, lifecycle: executor.snapshot().lifecycle.state }).toEqual({
+      order: ['process:killed'],
+      stopped: false,
+      lifecycle: 'active'
+    });
+
+    releaseExit?.({ exitCode: null, signal: 'SIGTERM' });
+    await closing;
+    expect({ order, stopped, lifecycle: executor.snapshot().lifecycle }).toEqual({
+      order: ['process:killed', 'activation:closed'],
+      stopped: true,
+      lifecycle: {
+        state: 'terminal',
+        termination: { kind: 'stopped', at: expect.any(String), exitCode: null, signal: 'SIGTERM' }
+      }
     });
   });
 

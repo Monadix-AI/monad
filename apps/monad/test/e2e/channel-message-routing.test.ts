@@ -26,6 +26,7 @@ import { parseEventPayload, sessionMemberResponseSchema } from '@monad/protocol'
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import {
   buildHandlers,
   makeTestPaths,
@@ -34,9 +35,18 @@ import {
   TRANSPORTS,
   type TransportHandle
 } from '../helpers.ts';
-import { connectionGate, waitFor } from '../wait.ts';
+import { connectionGate, waitFor as waitForCondition } from '../wait.ts';
 
-setDefaultTimeout(process.platform === 'win32' ? 15_000 : 5_000);
+setDefaultTimeout(DAEMON_E2E_TIMEOUT_BUDGET.testCaseMs);
+
+const waitFor = (
+  predicate: Parameters<typeof waitForCondition>[0],
+  options: Parameters<typeof waitForCondition>[1] = {}
+) =>
+  waitForCondition(predicate, {
+    timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.conditionMs,
+    ...options
+  });
 
 let windowsMockMeshAgentCommand: Promise<string> | undefined;
 
@@ -287,14 +297,16 @@ async function configureMockMeshAgent(
     provider?: 'claude-code' | 'codex';
     authState?: 'authenticated' | 'unauthenticated' | 'unknown';
     turnDelayMs?: number;
+    exitDelayMs?: number;
   } = {}
-): Promise<{ argsLog: string; envLog: string; stdinLog: string }> {
+): Promise<{ argsLog: string; envLog: string; lifecycleLog: string; stdinLog: string }> {
   const agentName = opts.agentName ?? 'codex';
   const provider = opts.provider ?? (agentName === 'claude' || agentName === 'claude-code' ? 'claude-code' : 'codex');
   const script = join(root, `mock-mesh-agent-${agentName}.js`);
   const argsLog = join(root, `mock-mesh-agent-${agentName}-args.log`);
   const envLog = join(root, `mock-mesh-agent-${agentName}-env.jsonl`);
   const stdinLog = join(root, `mock-mesh-agent-${agentName}-stdin.log`);
+  const lifecycleLog = join(root, `mock-mesh-agent-${agentName}-lifecycle.log`);
   const bunCommand =
     process.platform === 'win32'
       ? [
@@ -314,14 +326,24 @@ async function configureMockMeshAgent(
       'const argsLog = process.env.MONAD_TEST_ARGS_LOG;',
       'const envLog = process.env.MONAD_TEST_ENV_LOG;',
       'const stdinLog = process.env.MONAD_TEST_STDIN_LOG;',
+      'const lifecycleLog = process.env.MONAD_TEST_LIFECYCLE_LOG;',
       'const authState = process.env.MONAD_TEST_AUTH_STATE;',
       'const provider = process.env.MONAD_TEST_PROVIDER;',
       'const turnDelayMs = Number(process.env.MONAD_TEST_TURN_DELAY_MS ?? 0);',
+      'const exitDelayMs = Number(process.env.MONAD_TEST_EXIT_DELAY_MS ?? 0);',
       'const args = process.argv.slice(2).join(" ");',
       'if (args === "login status" || args === "auth status" || args === "auth status --json") {',
       '  process.stdout.write(JSON.stringify({ state: authState }) + "\\n");',
       '  process.exit(0);',
       '}',
+      'appendFileSync(lifecycleLog, "start:" + process.pid + "\\n");',
+      'let stopping = false;',
+      'process.on("SIGTERM", () => {',
+      '  if (stopping) return;',
+      '  stopping = true;',
+      '  appendFileSync(lifecycleLog, "stop:" + process.pid + "\\n");',
+      '  setTimeout(() => { appendFileSync(lifecycleLog, "exit:" + process.pid + "\\n"); process.exit(0); }, exitDelayMs);',
+      '});',
       'appendFileSync(argsLog, args + "\\n");',
       'appendFileSync(envLog, JSON.stringify({ MONAD_SERVER_URL: process.env.MONAD_SERVER_URL, CODEX_NON_INTERACTIVE: process.env.CODEX_NON_INTERACTIVE }) + "\\n");',
       'process.stdin.on("data", (d) => appendFileSync(stdinLog, d.toString()));',
@@ -385,9 +407,11 @@ async function configureMockMeshAgent(
           MONAD_TEST_ARGS_LOG: argsLog,
           MONAD_TEST_ENV_LOG: envLog,
           MONAD_TEST_STDIN_LOG: stdinLog,
+          MONAD_TEST_LIFECYCLE_LOG: lifecycleLog,
           MONAD_TEST_AUTH_STATE: opts.authState ?? 'authenticated',
           MONAD_TEST_PROVIDER: provider,
-          MONAD_TEST_TURN_DELAY_MS: String(opts.turnDelayMs ?? 0)
+          MONAD_TEST_TURN_DELAY_MS: String(opts.turnDelayMs ?? 0),
+          MONAD_TEST_EXIT_DELAY_MS: String(opts.exitDelayMs ?? 0)
         },
         enabled: true,
         allowAutopilot: false,
@@ -396,7 +420,7 @@ async function configureMockMeshAgent(
     })
   );
   expect(res.status).toBe(200);
-  return { argsLog, envLog, stdinLog };
+  return { argsLog, envLog, lifecycleLog, stdinLog };
 }
 
 async function readLogIfExists(path: string): Promise<string> {
@@ -441,23 +465,28 @@ function managedIngressBatches(input: string): ManagedIngressBatch[] {
 }
 
 async function waitForFile(path: string, expected: string, attempts = 120): Promise<string> {
-  for (let i = 0; i < attempts; i++) {
-    const text = await readFile(path, 'utf8').catch(() => '');
-    if (text.includes(expected)) return text;
-    await Bun.sleep(25);
-  }
-  // Returning the file instead of throwing lets an expectation that can never be satisfied pass on
-  // unrelated earlier content, at the cost of a silent 3s stall on every such call.
-  throw new Error(`timed out waiting for ${JSON.stringify(expected)} in ${path}`);
+  void attempts;
+  let text = '';
+  await waitFor(
+    async () => {
+      text = await readFile(path, 'utf8').catch(() => '');
+      return text.includes(expected);
+    },
+    { intervalMs: 25, message: `did not observe ${JSON.stringify(expected)} in ${path}` }
+  );
+  return text;
 }
 
 async function waitForValue<T>(read: () => T | undefined, label: string): Promise<T> {
-  for (let i = 0; i < 120; i++) {
-    const value = read();
-    if (value !== undefined) return value;
-    await Bun.sleep(25);
-  }
-  throw new Error(`timed out waiting for ${label}`);
+  let value: T | undefined;
+  await waitFor(
+    () => {
+      value = read();
+      return value !== undefined;
+    },
+    { intervalMs: 25, message: `did not observe ${label}` }
+  );
+  return value as T;
 }
 
 function _uiMessageText(item: UIMessageItem): string {
@@ -508,7 +537,7 @@ for (const kind of TRANSPORTS) {
     });
 
     afterEach(async () => {
-      handlers._stopMeshAgents();
+      await handlers._stopMeshAgents();
       await t.stop();
       await removeTestDirectory(dir);
     });
@@ -550,7 +579,7 @@ for (const kind of TRANSPORTS) {
       const gate = connectionGate();
       const requested = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'clarify.requested',
-        timeoutMs: 3000,
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
         onConnected: gate.onConnected
       });
       await gate.ready;
@@ -1074,7 +1103,7 @@ for (const kind of TRANSPORTS) {
 
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'mesh.connection_required',
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
       const member = await inviteMember(t, sessionId, 'codex');
       const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'please review this' }));
@@ -1317,7 +1346,7 @@ for (const kind of TRANSPORTS) {
           }
           return loginAgents.has(opus.id) && loginAgents.has(sonnet.id);
         },
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
 
       const send = await t.fetch(`/v1/channels/${sessionId}/messages`, json('POST', { text: 'initial project task' }));
@@ -1338,7 +1367,7 @@ for (const kind of TRANSPORTS) {
       // A fresh subscribe folds the same pending login requirements into its authoritative snapshot.
       const freshFrames = (await t.sse(`/v1/sessions/${sessionId}/mesh-state/stream`, {
         until: (frame) => (frame as unknown as MeshAgentStateFrame).kind === 'snapshot',
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       })) as unknown as MeshAgentStateFrame[];
       const freshSnapshot = freshFrames.find((frame) => frame.kind === 'snapshot');
       const snapshotLoginAgents =
@@ -1369,7 +1398,7 @@ for (const kind of TRANSPORTS) {
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
           event.type === 'mesh.started' && (event.payload as { agentName?: unknown }).agentName === member.id,
-        timeoutMs: 10_000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
@@ -1401,7 +1430,7 @@ for (const kind of TRANSPORTS) {
     test('project member id mention fans out to every managed MeshAgent member', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
-      const { stdinLog } = await configureMockMeshAgent(t, dir);
+      const { lifecycleLog, stdinLog } = await configureMockMeshAgent(t, dir, { exitDelayMs: 75 });
       const projectId = await createWorkplaceProject(t, projectDir);
       const sessionId = await createProjectSession(t, projectId, projectDir);
       await setMemberTemplates(t, projectId, [
@@ -1426,6 +1455,15 @@ for (const kind of TRANSPORTS) {
         },
         { message: 'invited member runtimes did not start' }
       );
+      let lifecycle: string[] = [];
+      await waitFor(
+        async () => {
+          lifecycle = (await readLogIfExists(lifecycleLog)).trim().split('\n').filter(Boolean);
+          return lifecycle.filter((entry) => entry.startsWith('start:')).length === expectedAgentNames.length;
+        },
+        { message: 'initial managed runtime PIDs were not recorded' }
+      );
+      const oldPids = lifecycle.filter((entry) => entry.startsWith('start:')).map((entry) => entry.slice(6));
       for (const nativeSession of initialSessions) {
         const stopped = await t.fetch(
           `/v1/mesh/sessions/${nativeSession.id}/stop?transcriptTargetId=${sessionId}`,
@@ -1433,6 +1471,8 @@ for (const kind of TRANSPORTS) {
         );
         expect(stopped.status).toBe(200);
       }
+      lifecycle = (await readLogIfExists(lifecycleLog)).trim().split('\n').filter(Boolean);
+      expect(oldPids.map((pid) => lifecycle.includes(`exit:${pid}`))).toEqual(oldPids.map(() => true));
       await waitFor(
         async () => {
           const listed = await t.fetch(`/v1/mesh/sessions?transcriptTargetId=${sessionId}`);
@@ -1446,7 +1486,7 @@ for (const kind of TRANSPORTS) {
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) =>
           event.type === 'mesh.started' && (event.payload as { agentName?: unknown }).agentName === tester.id,
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,
@@ -1493,6 +1533,16 @@ for (const kind of TRANSPORTS) {
         { message: 'fanout member runtimes did not settle' }
       );
       expect(activeAgentNames()).toEqual(expectedAgentNames);
+      lifecycle = (await readLogIfExists(lifecycleLog)).trim().split('\n').filter(Boolean);
+      const starts = lifecycle.filter((entry) => entry.startsWith('start:'));
+      expect(starts.length).toBe(expectedAgentNames.length * 2);
+      for (const oldPid of oldPids) {
+        const exitIndex = lifecycle.indexOf(`exit:${oldPid}`);
+        expect(exitIndex).toBeGreaterThanOrEqual(0);
+        for (const newStart of starts.slice(expectedAgentNames.length)) {
+          expect(exitIndex).toBeLessThan(lifecycle.indexOf(newStart));
+        }
+      }
       expect(
         (await listMessages(t, sessionId)).filter(({ text }) => text).map(({ role, text }) => ({ role, text }))
       ).toEqual([
@@ -1519,7 +1569,7 @@ for (const kind of TRANSPORTS) {
 
       const eventsP = t.sse(`/v1/sessions/${sessionId}/events`, {
         until: (event) => event.type === 'mesh.connection_required',
-        timeoutMs: 3000
+        timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs
       });
       const send = await t.fetch(
         `/v1/channels/${sessionId}/messages`,

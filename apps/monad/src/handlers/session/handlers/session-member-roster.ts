@@ -177,11 +177,9 @@ export function leaveSessionMember(ctx: SessionContext, sessionId: SessionId, me
   // throws when a live entry has no session runtime, but the binding still has to reach 'left'.
   const runtimeId = binding?.currentNativeRuntimeSessionId ?? legacyMember?.meshSessionId ?? null;
   if (runtimeId) {
-    try {
-      meshAgentHost?.stop(runtimeId);
-    } catch (error) {
+    void meshAgentHost?.stop(runtimeId).catch((error) => {
       log?.warn({ sessionId, memberId, meshSessionId: runtimeId, err: error }, 'mesh runtime stop failed on leave');
-    }
+    });
   }
 
   if (binding) store.leaveSessionBinding(sessionId, memberId, new Date().toISOString());

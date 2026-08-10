@@ -89,6 +89,7 @@ export class MeshAgentHost {
   private readonly log = createLogger('mesh-agent');
 
   private readonly live = new Map<string, LiveMeshSession>();
+  private readonly stopping = new Map<string, Promise<void>>();
   private readonly sessionUsageHub = new MeshAgentSessionUsageHub();
   private readonly observation = new MeshAgentObservationHub({
     getLive: (id) => this.live.get(id)
@@ -154,7 +155,7 @@ export class MeshAgentHost {
       live: this.live,
       store: deps.store,
       events: this.events,
-      stop: (id) => this.stop(id),
+      stop: (id) => void this.stop(id),
       getManagedProjectOutputHandler: () => this.managedProjectOutputHandler,
       getManagedProjectLoopEventHandler: () => this.managedProjectLoopEventHandler,
       log: this.log
@@ -489,42 +490,75 @@ export class MeshAgentHost {
     });
   }
 
-  stop(id: string): void {
+  stop(id: string): Promise<void> {
+    const pending = this.stopping.get(id);
+    if (pending) return pending;
     const live = this.live.get(id);
-    if (!live) return;
-    this.log.debug({ sessionId: live.transcriptTargetId, event: 'mesh.stop', meshSessionId: id }, 'native cli stop');
-    if (!live.sessionEventRuntime) throw new Error(`MeshAgent session runtime is unavailable: ${id}`);
-    void live.sessionEventRuntime.close();
-    disposeLiveCapture(live);
-    this.live.delete(id);
+    if (!live) return Promise.resolve();
+    if (!live.sessionEventRuntime) return Promise.reject(new Error(`MeshAgent session runtime is unavailable: ${id}`));
+    const runtime = live.sessionEventRuntime;
     const row = this.deps.store.getMeshSession(id);
-    if (row?.runtimeRole === 'managed-project-agent')
-      cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
-    const exitedAt = new Date().toISOString();
-    this.emitConnectionClosed(live, 'stopped');
-    this.deps.store.closeMeshSession(id, exitedAt, null, 'stopped');
-    // Settle the owning binding on this explicit stop via the current-id CAS (a superseded runtime's stop
-    // is a no-op that cannot clear a replacement's current).
-    if (row?.runtimeRole === 'managed-project-agent' && row.projectMemberId) {
-      this.deps.store.settleTerminalSessionBindingRuntime({
-        sessionId: row.transcriptTargetId,
-        projectMemberId: row.projectMemberId,
-        terminatingRuntimeId: id,
-        terminalState: 'stopped',
-        at: exitedAt
+    const pid = runtime.snapshot().activity.state === 'running' ? runtime.snapshot().activity.pid : row?.pid;
+    this.log.debug(
+      {
+        event: 'mesh.runtime.stop_requested',
+        sessionId: live.transcriptTargetId,
+        memberId: row?.projectMemberId ?? null,
+        meshSessionId: id,
+        runtimeGeneration: id,
+        pid: pid ?? null
+      },
+      'native cli stop requested'
+    );
+    const stopping = (async () => {
+      await runtime.close();
+      const terminal = runtime.snapshot().lifecycle;
+      const termination = terminal.state === 'terminal' ? terminal.termination : undefined;
+      disposeLiveCapture(live);
+      this.live.delete(id);
+      if (row?.runtimeRole === 'managed-project-agent')
+        cleanupManagedProjectRuntimeToken(this.managedRuntimeWorkspace(row));
+      const exitedAt = termination?.at ?? new Date().toISOString();
+      this.emitConnectionClosed(live, 'stopped');
+      this.deps.store.closeMeshSession(id, exitedAt, null, 'stopped');
+      // Settle only after the old child, stdio readers, and driver have joined. The current-id CAS is the
+      // generation guard: a late callback from this runtime can never clear a replacement's ownership.
+      if (row?.runtimeRole === 'managed-project-agent' && row.projectMemberId) {
+        this.deps.store.settleTerminalSessionBindingRuntime({
+          sessionId: row.transcriptTargetId,
+          projectMemberId: row.projectMemberId,
+          terminatingRuntimeId: id,
+          terminalState: 'stopped',
+          at: exitedAt
+        });
+      }
+      this.events.emit(live.transcriptTargetId, 'mesh.exited', {
+        meshSessionId: id,
+        exitCode: null,
+        state: 'stopped'
       });
-    }
-    this.events.emit(live.transcriptTargetId, 'mesh.exited', {
-      meshSessionId: id,
-      exitCode: null,
-      state: 'stopped'
-    });
+      this.log.debug(
+        {
+          event: 'mesh.runtime.stop_joined',
+          sessionId: live.transcriptTargetId,
+          memberId: row?.projectMemberId ?? null,
+          meshSessionId: id,
+          runtimeGeneration: id,
+          pid: pid ?? null,
+          exitCode: termination?.exitCode ?? null,
+          signal: termination?.signal ?? null
+        },
+        'native cli stop joined'
+      );
+    })().finally(() => this.stopping.delete(id));
+    this.stopping.set(id, stopping);
+    return stopping;
   }
 
-  stopSession(sessionId: MeshAgentTargetId): void {
-    for (const live of [...this.live.values()]) {
-      if (live.transcriptTargetId === sessionId) this.stop(live.id);
-    }
+  async stopSession(sessionId: MeshAgentTargetId): Promise<void> {
+    await Promise.all(
+      [...this.live.values()].filter((live) => live.transcriptTargetId === sessionId).map((live) => this.stop(live.id))
+    );
   }
 
   archiveSession(sessionId: MeshAgentTargetId): Promise<void> {
@@ -539,32 +573,31 @@ export class MeshAgentHost {
     return this.applyProviderSessionLifecycle(sessionId, 'delete');
   }
 
-  stopAll(): void {
+  async stopAll(): Promise<void> {
     this.disposeLoginNudge();
-    for (const id of [...this.live.keys()]) {
-      try {
-        this.stop(id);
-      } catch (error) {
-        this.log.error(
-          {
-            event: 'mesh.stop_all_failed',
-            meshSessionId: id,
-            err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
-          },
-          'native cli stop-all failed'
-        );
-      }
-    }
+    await Promise.all(
+      [...this.live.keys()].map(async (id) => {
+        try {
+          await this.stop(id);
+        } catch (error) {
+          this.log.error(
+            {
+              event: 'mesh.stop_all_failed',
+              meshSessionId: id,
+              err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
+            },
+            'native cli stop-all failed'
+          );
+        }
+      })
+    );
   }
 
-  stopAgentProvider(provider: MeshAgentView['provider']): void {
+  async stopAgentProvider(provider: MeshAgentView['provider']): Promise<void> {
     let stopped = 0;
-    for (const live of [...this.live.values()]) {
-      if (live.provider === provider) {
-        stopped++;
-        this.stop(live.id);
-      }
-    }
+    const matching = [...this.live.values()].filter((live) => live.provider === provider);
+    stopped = matching.length;
+    await Promise.all(matching.map((live) => this.stop(live.id)));
     if (stopped > 0)
       this.log.debug(
         { event: 'mesh.stop_agent_provider', provider, stopped },

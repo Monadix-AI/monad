@@ -338,9 +338,9 @@ export function createMeshAgentModule({ host, store, config }: MeshAgentDeps) {
       return { ok: true };
     },
 
-    stop({ id, transcriptTargetId }: { id: string; transcriptTargetId: MeshAgentTargetId }): OkResponse {
+    async stop({ id, transcriptTargetId }: { id: string; transcriptTargetId: MeshAgentTargetId }): Promise<OkResponse> {
       requireMeshSessionScope(id, transcriptTargetId);
-      host.stop(id);
+      await host.stop(id);
       return { ok: true };
     },
 

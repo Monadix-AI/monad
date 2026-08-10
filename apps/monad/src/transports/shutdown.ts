@@ -2,7 +2,7 @@ export interface DaemonShutdownDependencies {
   schedule: { dispose(): void };
   watchers: { closeAll(): void };
   channels: { stop(): Promise<void> };
-  meshAgents: { stopAll(): void };
+  meshAgents: { stopAll(): Promise<void> };
   runtime: { stop(): Promise<void> };
 }
 
@@ -16,7 +16,7 @@ export function createDaemonShutdown(dependencies: DaemonShutdownDependencies): 
       await dependencies.channels.stop();
       // Persists each live mesh session's exit state, so it must run before the store lifecycle
       // module (owned by `runtime.stop()` below) closes its DB connection.
-      dependencies.meshAgents.stopAll();
+      await dependencies.meshAgents.stopAll();
       await dependencies.runtime.stop();
     })();
     return stopping;

@@ -286,7 +286,7 @@ test('session-event launcher derives provider approval behavior from runtime rol
       }
     ]);
   } finally {
-    host.stopAll();
+    await host.stopAll();
     store.close();
     unregisterAgentAdapterImpl(provider);
     await removeRuntimeRoot(root);

@@ -73,7 +73,7 @@ test('MeshAgent auth status probes use the bounded host timeout', async () => {
   try {
     await expect(host.authStatus(provider)).rejects.toMatchObject({ code: 'provider_timeout' });
   } finally {
-    host.stopAll();
+    await host.stopAll();
     unregisterAgentAdapterImpl(provider);
   }
 });
@@ -148,7 +148,7 @@ test('MeshAgent session usage is rebuilt by the adapter for every request', asyn
       { total: 2, input: 2, output: 0 }
     ]);
   } finally {
-    host.stopAll();
+    await host.stopAll();
     unregisterAgentAdapterImpl(provider);
   }
 });
@@ -220,7 +220,7 @@ test('MeshAgent session usage returns no data before the provider session refere
     const usage = await host.sessionUsage('mesh_usageabsent01');
     expect({ reads, usage }).toEqual({ reads: 0, usage: null });
   } finally {
-    host.stopAll();
+    await host.stopAll();
     unregisterAgentAdapterImpl(provider);
   }
 });
@@ -256,7 +256,7 @@ test('developer fixture capture requires and uses only the explicit canonical di
       legacyExists: false
     });
   } finally {
-    host.stopAll();
+    await host.stopAll();
     rmSync(monadHome, { recursive: true, force: true });
   }
 });
@@ -442,11 +442,11 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
       turns: [0, 0],
       turnEvents: [{ type: 'mesh.turn_started', payload: { meshSessionId: view.id } }]
     });
-    host.stop(view.id);
+    await host.stop(view.id);
     expect(store.getMeshSession(view.id)?.state).toBe('stopped');
   } finally {
     dispose();
-    host.stopAll();
+    await host.stopAll();
     unregisterAgentAdapterImpl(provider);
     rmSync(workdir, { recursive: true, force: true });
   }
@@ -491,7 +491,7 @@ test('MeshAgent host rejects providers without a resumable structured session-ev
       message: 'MeshAgent provider "No Session Events" does not expose a resumable structured session-event runtime'
     });
   } finally {
-    host.stopAll();
+    await host.stopAll();
     unregisterAgentAdapterImpl(provider);
   }
 });

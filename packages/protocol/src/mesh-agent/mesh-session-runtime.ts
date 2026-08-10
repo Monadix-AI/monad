@@ -18,6 +18,7 @@ export const meshSessionLifecycleSchema = z.discriminatedUnion('state', [
       kind: z.enum(['exited', 'stopped', 'failed']),
       at: z.string(),
       exitCode: z.number().int().nullable().optional(),
+      signal: z.string().min(1).optional(),
       error: meshAgentRuntimeFailureSchema.optional()
     })
   })

@@ -29,7 +29,7 @@ test('transport runtime owns mutable listener bindings and starts config watchin
     schedule: { dispose: () => events.push('schedule:dispose') },
     watchers: { closeAll: () => events.push('watchers:close') },
     channels: { stop: async () => void events.push('channels:stop') },
-    meshAgents: { stopAll: () => events.push('meshAgents:stop') },
+    meshAgents: { stopAll: async () => void events.push('meshAgents:stop') },
     serve: async (options) => {
       expect([options.tlsCert, options.tlsFingerprint]).toEqual([
         { certPath: '/tls/cert', keyPath: '/tls/key' },

@@ -181,7 +181,8 @@ export class BunSessionEventRuntimeResourceFactory implements SessionEventRuntim
     };
     const result = proc.exited.then((exitCode) => {
       this.options.onExit?.(proc.pid);
-      return { exitCode };
+      const signal = (proc as typeof proc & { signalCode?: NodeJS.Signals | null }).signalCode;
+      return { exitCode, ...(signal ? { signal } : {}) };
     });
     const abort = (): void => killMeshAgentProcess(proc.pid, 'SIGTERM');
     request.signal.addEventListener('abort', abort, { once: true });
