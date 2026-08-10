@@ -12,6 +12,8 @@
  *   bun run scripts/build-release.ts                                   # host platform only (glibc)
  *   bun run scripts/build-release.ts --musl                            # host arch, musl libc (Alpine/embedded)
  *   bun run scripts/build-release.ts --all                             # darwin/linux × arm64/x64, + linux musl, + windows-x64
+ *   bun run scripts/build-release.ts --target=aarch64-apple-darwin      # one dist/Rust target triple
+ *   bun run scripts/build-release.ts --version=0.2.0-beta.1             # embed an exact release version
  *   bun run scripts/build-release.ts --build=abc1234                   # append build metadata to version (+abc1234)
  *   bun run scripts/build-release.ts --prerelease=nightly.20260617     # pre-release channel identifier (-nightly.20260617)
  *   bun run scripts/build-release.ts --all --prerelease=nightly.20260617 --build=abc1234
@@ -34,6 +36,7 @@ import { buildMacOSNotificationApp } from './lib/macos-notification-app.ts';
 import { createPlatformModulePlugin } from './lib/platform-modules.ts';
 import { optionalPeerExternals } from './lib/release-optional-peers.ts';
 import { releasePlatformModuleRules } from './lib/release-platform-modules.ts';
+import { type ReleaseTarget, releaseTargetFromDistTarget } from './lib/release-target.ts';
 
 const ROOT = resolve(import.meta.dir, '..');
 const DIST = join(ROOT, 'dist');
@@ -43,8 +46,11 @@ const { values: cli } = parseArgs({
     all: { type: 'boolean' },
     build: { type: 'string' },
     musl: { type: 'boolean' },
+    'no-archive': { type: 'boolean' },
     os: { type: 'string' },
-    prerelease: { type: 'string' }
+    prerelease: { type: 'string' },
+    target: { type: 'string' },
+    version: { type: 'string' }
   },
   strict: true
 });
@@ -54,13 +60,18 @@ const buildArg = cli.build;
 // Beta:    0.0.1-beta.1   (set by release-please, not this script)
 // Nightly: 0.0.1-nightly.20260617+abc1234
 const prereleaseArg = cli.prerelease;
-const VERSION = [rootPkg.version, prereleaseArg ? `-${prereleaseArg}` : '', buildArg ? `+${buildArg}` : ''].join('');
+if (cli.version && (prereleaseArg || buildArg)) {
+  throw new Error('--version cannot be combined with --prerelease or --build');
+}
+const VERSION =
+  cli.version ?? [rootPkg.version, prereleaseArg ? `-${prereleaseArg}` : '', buildArg ? `+${buildArg}` : ''].join('');
 const BUILD_ALL = cli.all ?? false;
+if (BUILD_ALL && cli.target) throw new Error('--all and --target are mutually exclusive');
 
 // `libc` only applies to linux: glibc (default, broad desktop/server distros) vs musl (Alpine and
 // most embedded/Buildroot rootfs). Bun ships distinct compile targets per libc; a glibc binary
 // will not run on a musl-only system and vice versa, so embedded Linux needs its own musl artifact.
-type Target = { os: 'darwin' | 'linux' | 'windows'; arch: 'arm64' | 'x64'; libc?: 'musl' };
+type Target = ReleaseTarget;
 
 /** `linux-arm64-musl` etc. — the suffix shared by Bun's compile target and our artifact name. */
 function triple(t: Target): string {
@@ -84,18 +95,20 @@ const osArg = cli.os;
 const osFilter = osArg ? new Set(osArg.split(',')) : null;
 
 const TARGETS: Target[] = (
-  BUILD_ALL
-    ? ([
-        { os: 'darwin', arch: 'arm64' },
-        { os: 'darwin', arch: 'x64' },
-        { os: 'linux', arch: 'arm64' },
-        { os: 'linux', arch: 'x64' },
-        { os: 'linux', arch: 'arm64', libc: 'musl' }, // embedded Linux / Alpine (ARM SBCs)
-        { os: 'linux', arch: 'x64', libc: 'musl' }, // embedded Linux / Alpine (x64)
-        { os: 'windows', arch: 'x64' },
-        { os: 'windows', arch: 'arm64' }
-      ] satisfies Target[])
-    : [HOST]
+  cli.target
+    ? [releaseTargetFromDistTarget(cli.target)]
+    : BUILD_ALL
+      ? ([
+          { os: 'darwin', arch: 'arm64' },
+          { os: 'darwin', arch: 'x64' },
+          { os: 'linux', arch: 'arm64' },
+          { os: 'linux', arch: 'x64' },
+          { os: 'linux', arch: 'arm64', libc: 'musl' }, // embedded Linux / Alpine (ARM SBCs)
+          { os: 'linux', arch: 'x64', libc: 'musl' }, // embedded Linux / Alpine (x64)
+          { os: 'windows', arch: 'x64' },
+          { os: 'windows', arch: 'arm64' }
+        ] satisfies Target[])
+      : [HOST]
 ).filter((t) => !osFilter || osFilter.has(t.os));
 
 // Ink statically imports react-devtools-core (an optional, uninstalled dev-only dep). Stub it so
@@ -198,7 +211,7 @@ try {
       const cc =
         t.libc === 'musl'
           ? t.arch === 'arm64'
-            ? 'aarch64-linux-musl-gcc'
+            ? (Bun.which('aarch64-linux-musl-gcc') ?? 'aarch64-linux-gnu-gcc')
             : 'musl-gcc'
           : t.arch === 'arm64'
             ? 'aarch64-linux-gnu-gcc'
@@ -306,14 +319,16 @@ try {
     }
 
     // ── 3. tar + sha256 ────────────────────────────────────────────────────────
-    const tarball = `${artifact}.tar.gz`;
-    await $`tar -czf ${join(DIST, tarball)} -C ${DIST} ${artifact}`;
-    const sha =
-      HOST.os === 'darwin'
-        ? (await $`shasum -a 256 ${join(DIST, tarball)}`.quiet()).stdout.toString()
-        : (await $`sha256sum ${join(DIST, tarball)}`.quiet()).stdout.toString();
-    writeFileSync(join(DIST, `${tarball}.sha256`), sha);
-    log(`  ✓ dist/${tarball}`);
+    if (!cli['no-archive']) {
+      const tarball = `${artifact}.tar.gz`;
+      await $`tar -czf ${join(DIST, tarball)} -C ${DIST} ${artifact}`;
+      const sha =
+        HOST.os === 'darwin'
+          ? (await $`shasum -a 256 ${join(DIST, tarball)}`.quiet()).stdout.toString()
+          : (await $`sha256sum ${join(DIST, tarball)}`.quiet()).stdout.toString();
+      writeFileSync(join(DIST, `${tarball}.sha256`), sha);
+      log(`  ✓ dist/${tarball}`);
+    }
   }
 } finally {
   if (existsSync(webOutGzipDir)) rmSync(webOutGzipDir, { recursive: true });
@@ -321,13 +336,11 @@ try {
 
 const hostArtifact = `monad-${VERSION}-${HOST.os}-${HOST.arch}`;
 process.stdout.write(`
-Done. Self-contained install test (nothing outside dist/ is touched):
-
-  bun run install:test
-
-Or verify the host binary directly:
+Done. Verify the host binary directly:
   ./dist/${hostArtifact}/bin/monad --help
   ./dist/${hostArtifact}/bin/monad up        # daemon + web together
+
+Production archives, installers, updater binaries, and receipts are generated and tested by dist.
 `);
 
 function log(msg: string) {

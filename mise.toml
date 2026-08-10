@@ -7,6 +7,9 @@ idiomatic_version_file_enable_tools = ["bun"]
 [settings.status]
 show_tools = true
 
+[tools]
+cargo-dist = "0.32.0"
+
 [env]
 _.file = ".env.local"
 _.path = [".dev/bin"]
@@ -130,33 +133,14 @@ raw = true
 run = "bunx --bun rimraf --glob \"**/node_modules\" \"**/.turbo\" \"**/.next\" \"**/dist\" \"**/out\""
 
 [tasks."release:build"]
-description = "Build a release archive for the host platform"
+description = "Build dist archives, updater, and installers for the host platform"
 raw = true
-run = "bun run scripts/build-release.ts"
+run = "bun run scripts/deploy-local-dist.ts --build-only"
 
 [tasks."release:deploy-local"]
-description = "Build and install the current checkout on this machine"
-depends = ["release:build"]
-shell = "bash -c"
-run = '''
-set -euo pipefail
-root="${MISE_PROJECT_ROOT:?}"
-tarball="$(ls -t "$root"/dist/monad-*.tar.gz 2>/dev/null | grep -v test-install | head -1 || true)"
-test -n "$tarball" || { echo "[deploy-local] No tarball found in dist/ after release:build" >&2; exit 1; }
-echo "[deploy-local] Installing $(basename "$tarball") to this machine…"
-cd /tmp
-env -u MONAD_HOME -u MONAD_PORT -u WEB_PORT MONAD_TARBALL="$tarball" bash "$root/scripts/install.sh"
-'''
-
-[tasks."release:test:install"]
-description = "Exercise the native install and upgrade flow"
+description = "Build with dist, install locally, and restart Monad"
 raw = true
-run = "bun run scripts/test/install-test.ts"
-
-[tasks."release:test:install:fake"]
-description = "Exercise the installer against a fake release endpoint"
-raw = true
-run = "bun run scripts/test/install-fake-e2e.ts"
+run = "bun run scripts/deploy-local-dist.ts"
 
 [tasks."test:e2e:binary"]
 description = "Run the packaged binary end-to-end suite"

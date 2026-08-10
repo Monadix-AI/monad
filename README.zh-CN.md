@@ -61,40 +61,40 @@ Monad 默认把自身状态保存在你的设备上，并且只监听本机接�
 在 macOS 或 Linux 上安装 Monad：
 
 ```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash
+curl -fsSL https://release.monadix.ai/monad/install.sh | sh
 ```
 
 如果没有 `curl`，可改用 `wget`：
 
 ```bash
-wget -qO- https://release.monadix.ai/monad/install.sh | bash
+wget -qO- https://release.monadix.ai/monad/install.sh | sh
 ```
 
 在 Windows PowerShell 5.1 或更高版本中安装 Monad：
 
 ```powershell
-irm https://release.monadix.ai/monad/install.ps1 | iex
+irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-macOS 和 Linux 安装器会校验发行包、把 `monad` 加入 `PATH`、启动守护进程并打开 Web UI。
-Windows 安装器只初始化 Monad；随后运行 `monad up` 启动守护进程并打开 Web UI。
+dist 安装器会安装 `monad`、`monad-update` 并把安装目录加入 `PATH`。随后运行
+`monad up` 启动守护进程并打开 Web UI。
 
 ### 手动安装
 
-从 [GitHub Releases](https://github.com/Monadix-AI/monad/releases) 下载适合当前平台的发行包及对应 `.sha256` 文件。校验 checksum、解压发行包，再运行 `bin/monad`。
+从 [GitHub Releases](https://github.com/Monadix-AI/monad/releases) 下载适合当前平台的发行包及对应 `.sha256` 文件。校验 checksum、解压发行包，再运行 `monad`。
 
 Apple Silicon macOS 示例，请把 `release_version_here` 替换为发行版本号：
 
 ```bash
-release_version=release_version_here
-asset="monad-${release_version}-darwin-arm64"
-release_url="https://github.com/Monadix-AI/monad/releases/download/v${release_version}"
+release_tag=v0.1.3
+asset="monad-aarch64-apple-darwin"
+release_url="https://github.com/Monadix-AI/monad/releases/download/${release_tag}"
 
 curl -fSLO "${release_url}/${asset}.tar.gz"
 curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
-"./${asset}/bin/monad" --help
+"./${asset}/monad" --help
 ```
 
 没有 `curl` 时，可用以下命令下载同样的两个文件：

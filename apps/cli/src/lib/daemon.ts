@@ -437,10 +437,14 @@ export async function stopDaemon(options: Pick<DaemonLifecycleOptions, 'silent'>
     out(green(t('cli.daemon.stopped')) + dim(t('cli.daemon.pid', { pid })));
   }
 
-  // Wait for the process to actually exit before returning so callers that open the DB or
-  // rewrite config files don't race against the daemon's in-flight shutdown writes.
-  const deadline = Date.now() + 3000;
+  // The recorded PID is the release supervisor. Its child can remain reachable briefly after the
+  // supervisor exits while the termination handler drains it. Wait for both signals so restart
+  // cannot mistake that shutting-down child for the daemon it just started.
+  const deadline = Date.now() + 6000;
   while (isAlive(pid) && Date.now() < deadline) {
+    await Bun.sleep(50);
+  }
+  while ((await isDaemonReachable()) && Date.now() < deadline) {
     await Bun.sleep(50);
   }
 }

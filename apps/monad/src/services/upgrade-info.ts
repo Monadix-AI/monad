@@ -2,6 +2,7 @@ import type { MonadPaths } from '@monad/environment';
 
 import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
+import { isUpgradeAvailable } from '@monad/utils/release-update';
 import { z } from 'zod';
 
 import { sendSystemNotification } from '#/services/system-notification.ts';
@@ -66,7 +67,7 @@ export async function createUpgradeInfoMonitor(
           };
           await persist();
           if (
-            isNewerVersion(upgradeInfo.latestVersion, MONAD_VERSION) &&
+            isUpgradeAvailable(MONAD_VERSION, upgradeInfo.latestVersion) &&
             lastNotifiedVersion !== upgradeInfo.latestVersion
           ) {
             const notified = await notifyUpdateAvailable(upgradeInfo.latestVersion, MONAD_VERSION);
@@ -98,22 +99,4 @@ export async function createUpgradeInfoMonitor(
   setInterval(() => void checkLatestVersion(), 6 * 60 * 60 * 1000);
 
   return { getUpgradeInfo: () => upgradeInfo };
-}
-
-function isNewerVersion(candidate: string, current: string): boolean {
-  const candidateParts = numericVersion(candidate);
-  const currentParts = numericVersion(current);
-  if (!candidateParts || !currentParts) return false;
-  for (let index = 0; index < candidateParts.length; index += 1) {
-    const candidatePart = candidateParts[index] ?? 0;
-    const currentPart = currentParts[index] ?? 0;
-    if (candidatePart !== currentPart) return candidatePart > currentPart;
-  }
-  return false;
-}
-
-function numericVersion(version: string): [number, number, number] | null {
-  const match = version.match(/^v?(\d+)\.(\d+)\.(\d+)/);
-  if (!match) return null;
-  return [Number(match[1]), Number(match[2]), Number(match[3])];
 }

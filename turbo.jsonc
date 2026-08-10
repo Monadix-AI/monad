@@ -4,6 +4,10 @@
   "globalDependencies": [".env*", "tsconfig*", "biome*"],
   "globalEnv": ["MONAD_TEST_COVERAGE", "NEXT_OUTPUT", "NODE_ENV"],
   "globalPassThroughEnv": [
+    // Set by dist for the platform-specific release adapter.
+    "CARGO_DIST_TARGET",
+    "MONAD_DIST_VERSION",
+
     // Monad runtime and local state roots.
     "AI_SDK_DEVTOOLS_PORT",
     "MONAD_AGENT_ID",
@@ -11,8 +15,11 @@
     "MONAD_HOME",
     "MONAD_HOST",
     "MONAD_HTTP_PORT",
+    "MONAD_INSTALL_DIR",
     "MONAD_KV_UI_PORT",
     "MONAD_QUALITY_LOUD",
+    "MONAD_RELEASE_API_BASE_URL",
+    "MONAD_RELEASE_DOWNLOAD_BASE_URL",
     "MONAD_MESH_SESSION_ID",
     "MONAD_NO_OPEN",
     "MONAD_PORT",

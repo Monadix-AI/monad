@@ -2,7 +2,7 @@
 # Disposable build-verify + e2e pipeline — nothing touches the host.
 #
 #   Stage 1 (builder): compile the single `monad` binary (+ embedded SPA) into a tarball
-#   Stage 2 (runner):  install the tarball into /opt/monad in a fresh Debian image, then boot
+#   Stage 2 (runner):  extract the test tarball into /opt/monad in a fresh Debian image, then boot
 #                      daemon + web (offline mock model) and run the full e2e (scripts/e2e.sh)
 #
 # Platform defaults to the host's native architecture (fast, no QEMU). Override for CI:
@@ -37,20 +37,19 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl jq \
   && rm -rf /var/lib/apt/lists/*
 
-COPY scripts/install.sh        /install.sh
 COPY scripts/test/e2e.sh       /e2e.sh
 COPY scripts/test/e2e-live.sh  /e2e-live.sh
-RUN chmod +x /install.sh /e2e.sh /e2e-live.sh
+RUN chmod +x /e2e.sh /e2e-live.sh
 COPY --from=builder /workspace/dist/monad-*-linux-*.tar.gz /dist/
 
-# Install the single binary (isolated home; no PATH edits)
+# Extract the test binary. Production installation is covered by the dist installer matrix in
+# .github/workflows/release.yml.
 RUN set -e; \
   tarball=$(ls /dist/monad-*-linux-*.tar.gz | head -1); \
-  echo "[docker-e2e] installing $(basename "$tarball")"; \
-  MONAD_TARBALL="$tarball" MONAD_SKIP_VERIFY=1 \
-  MONAD_INSTALL_DIR=/opt/monad MONAD_BIN_DIR=/opt/monad/local-bin \
-  MONAD_HOME=/opt/monad/home MONAD_NO_PATH_MODIFY=1 \
-  bash /install.sh
+  mkdir -p /opt/monad/local-bin /opt/monad/home /tmp/monad-release; \
+  tar -xzf "$tarball" -C /tmp/monad-release; \
+  cp /tmp/monad-release/*/bin/monad /opt/monad/local-bin/monad; \
+  chmod +x /opt/monad/local-bin/monad
 
 # Default command boots services + runs the full e2e against the installed binary.
 ENV MONAD_BIN=/opt/monad/local-bin/monad MONAD_HOME=/opt/monad/e2e-home DPORT=52749 WPORT=3000

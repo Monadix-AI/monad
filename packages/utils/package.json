@@ -5,7 +5,9 @@
     "@monad/tsconfig": "workspace:*"
   },
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./release-update": "./src/release-update.ts",
+    "./release-version": "./src/release-version.ts"
   },
   "module": "src/index.ts",
   "private": true,

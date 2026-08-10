@@ -115,6 +115,7 @@ export function watchUpgradeRestartAndReload(args: {
 
   const targetVersion = args.targetVersion ?? undefined;
   const currentVersion = args.currentVersion;
+  let sawUnavailable = false;
   const deadline = Date.now() + 120_000;
   upgradeReloadWatcher = window.setInterval(async () => {
     if (Date.now() > deadline) {
@@ -124,17 +125,23 @@ export function watchUpgradeRestartAndReload(args: {
     }
     try {
       const res = await fetch(`${args.baseUrl}/health`, { cache: 'no-store' });
-      if (!res.ok) return;
+      if (!res.ok) {
+        sawUnavailable = true;
+        return;
+      }
       const health = healthVersionSchema.parse(await res.json());
+      const restart = nextDaemonRestartObservation(sawUnavailable, true);
+      sawUnavailable = restart.sawUnavailable;
       const upgraded = targetVersion
         ? health.version === targetVersion
         : health.version && health.version !== currentVersion;
-      if (!upgraded) return;
+      if (!upgraded && !restart.reload) return;
       if (upgradeReloadWatcher !== null) window.clearInterval(upgradeReloadWatcher);
       upgradeReloadWatcher = null;
       localStorage.removeItem(UPGRADE_RESTART_SUPPRESS_UNTIL_KEY);
       window.location.reload();
     } catch {
+      sawUnavailable = true;
       return;
     }
   }, 1000);

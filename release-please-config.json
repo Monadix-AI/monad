@@ -33,6 +33,11 @@
       "type": "json",
       "path": "packages/sdk-experience/package.json",
       "jsonpath": "$.version"
+    },
+    {
+      "type": "toml",
+      "path": "distribution/dist.toml",
+      "jsonpath": "$.package.version"
     }
   ],
   "packages": {

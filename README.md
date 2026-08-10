@@ -62,41 +62,41 @@ Monad stores its state on your machine and binds to local interfaces by default.
 Install Monad on macOS or Linux:
 
 ```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash
+curl -fsSL https://release.monadix.ai/monad/install.sh | sh
 ```
 
 If `curl` is unavailable, use `wget` instead:
 
 ```bash
-wget -qO- https://release.monadix.ai/monad/install.sh | bash
+wget -qO- https://release.monadix.ai/monad/install.sh | sh
 ```
 
 Install Monad from PowerShell 5.1 or later on Windows:
 
 ```powershell
-irm https://release.monadix.ai/monad/install.ps1 | iex
+irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-The macOS and Linux installer verifies the release, adds `monad` to your `PATH`, starts the
-daemon, and opens the Web UI. The Windows installer initializes Monad; then run `monad up` to
-start the daemon and open the Web UI.
+The dist installer installs `monad` and `monad-update` under
+`~/.monad/bin`, and adds that directory to `PATH`. Then run `monad up` to start the daemon and
+open the Web UI.
 
 ### Manual installation
 
-Download the archive for your platform and its matching `.sha256` file from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). Verify the checksum, extract the archive, and run `bin/monad`.
+Download the archive for your platform and its matching `.sha256` file from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). Verify the checksum, extract the archive, and run `monad`.
 
 For Apple Silicon macOS, replace `release_version_here` with the release tag:
 
 ```bash
-release_version=release_version_here
-asset="monad-${release_version}-darwin-arm64"
-release_url="https://github.com/Monadix-AI/monad/releases/download/v${release_version}"
+release_tag=v0.1.3
+asset="monad-aarch64-apple-darwin"
+release_url="https://github.com/Monadix-AI/monad/releases/download/${release_tag}"
 
 curl -fSLO "${release_url}/${asset}.tar.gz"
 curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
-"./${asset}/bin/monad" --help
+"./${asset}/monad" --help
 ```
 
 Without `curl`, download the same two files with:

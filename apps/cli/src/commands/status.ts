@@ -1,5 +1,7 @@
 import type { CommandDef } from './types.ts';
 
+import { isUpgradeAvailable } from '@monad/utils/release-update';
+
 import { t } from '../lib/i18n.ts';
 import { bold, dim, green, json, out, yellow } from '../lib/output.ts';
 import { CliError, EXIT } from './types.ts';
@@ -32,7 +34,7 @@ export const command: CommandDef = {
     const color = status === 'ok' ? green : yellow;
     out(color(`● ${status}`) + dim(`  v${h.version ?? '?'}`));
 
-    if (h.latestVersion && h.latestVersion !== h.version) {
+    if (h.latestVersion && h.version && isUpgradeAvailable(h.version, h.latestVersion)) {
       out(
         yellow(`⬆  ${t('cli.upgrade.available', { current: bold(h.version ?? '?'), latest: bold(h.latestVersion) })}`)
       );

@@ -255,9 +255,9 @@ history, opens a release PR with the version bump and generated `CHANGELOG.md`,
 and tags once that PR is merged — that PR is the human gate. **nightly** is fully
 automatic: a daily job builds `main`'s tip (skipping if there are no new commits
 since the last nightly) and publishes a rolling prerelease — no release PR, no
-changelog churn. You never need a branch
-just to release; the release build re-verifies the artifact with `release:test:install`
-before publishing, so a momentarily-red `main` is recoverable.
+changelog churn. You never need a branch just to release; the release workflow uses dist to build
+every target and smoke-tests the generated shell and PowerShell installers before publishing, so a
+momentarily-red `main` is recoverable.
 
 These channel branches are **not** version-maintenance branches. We do not keep
 long-lived `release/*` branches for patching shipped versions; add one only if we
