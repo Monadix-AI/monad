@@ -9,6 +9,7 @@ export const CHAT_EXPERIENCE_STORY_CASES = [
   'observation-tool',
   'observation-system',
   'command',
+  'shell',
   'file-read',
   'generic-tool-pair',
   'readonly-approval',

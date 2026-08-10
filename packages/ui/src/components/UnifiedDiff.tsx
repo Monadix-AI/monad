@@ -4,6 +4,7 @@ import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } f
 import { useEffect, useMemo, useState } from 'react';
 import { createHighlighter } from 'shiki';
 
+import { SHIKI_THEME_NAMES, SHIKI_THEMES } from '../lib/shiki';
 import { cn } from '../lib/utils';
 import { FileIcon } from './FileIcon';
 import {
@@ -21,6 +22,9 @@ export interface UnifiedDiffProps {
   path: string;
   removed?: number;
   showHeader?: boolean;
+  /** Off for a diff synthesized from a tool call that never reported where in the file it applied:
+   *  the hunk positions would be invented, so the gutter stays blank instead of claiming line 1. */
+  showLineNumbers?: boolean;
   warning?: string;
 }
 
@@ -40,9 +44,13 @@ export function UnifiedDiff({
   path,
   removed,
   showHeader = true,
+  showLineNumbers = true,
   warning
 }: UnifiedDiffProps): React.ReactElement {
-  const rows = useMemo(() => parseUnifiedDiff(diff), [diff]);
+  const rows = useMemo(() => {
+    const parsed = parseUnifiedDiff(diff);
+    return showLineNumbers ? parsed : parsed.filter((row) => row.kind !== 'hunk');
+  }, [diff, showLineNumbers]);
   const language = inferCodeLanguage(path);
   const syntaxCode = useMemo(() => rows.map((row) => row.code).join('\n'), [rows]);
   const highlighted = useHighlightedCode(syntaxCode, language);
@@ -77,6 +85,7 @@ export function UnifiedDiff({
               highlightedLine={highlighted.lines[index]}
               key={row.key}
               row={row}
+              showLineNumbers={showLineNumbers}
             />
           ))}
         </code>
@@ -85,7 +94,15 @@ export function UnifiedDiff({
   );
 }
 
-function DiffLine({ row, highlightedLine }: { row: UnifiedDiffRow; highlightedLine: ThemedToken[] | undefined }) {
+function DiffLine({
+  row,
+  highlightedLine,
+  showLineNumbers
+}: {
+  row: UnifiedDiffRow;
+  highlightedLine: ThemedToken[] | undefined;
+  showLineNumbers: boolean;
+}) {
   const showSyntax = row.kind === 'addition' || row.kind === 'context' || row.kind === 'deletion';
   return (
     <span
@@ -108,7 +125,7 @@ function DiffLine({ row, highlightedLine }: { row: UnifiedDiffRow; highlightedLi
           row.kind === 'deletion' && 'text-red-700/75 dark:text-red-300/75'
         )}
       >
-        {row.newLine ?? row.oldLine ?? ' '}
+        {showLineNumbers ? (row.newLine ?? row.oldLine ?? ' ') : ' '}
       </span>
       <span
         aria-hidden="true"
@@ -272,13 +289,13 @@ async function highlight(code: string, language: BundledLanguage): Promise<Highl
   if (cached) return cached;
   let highlighterPromise = highlighterCache.get(language);
   if (!highlighterPromise) {
-    highlighterPromise = createHighlighter({ langs: [language], themes: ['github-light', 'github-dark'] });
+    highlighterPromise = createHighlighter({ langs: [language], themes: SHIKI_THEME_NAMES });
     highlighterCache.set(language, highlighterPromise);
   }
   const highlighter = await highlighterPromise;
   const result = highlighter.codeToTokens(code, {
     lang: language,
-    themes: { dark: 'github-dark', light: 'github-light' }
+    themes: SHIKI_THEMES
   });
   const highlighted = {
     background: result.bg ?? 'transparent',

@@ -6,8 +6,10 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { createContext, memo, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { createHighlighter } from 'shiki';
 
+import { SHIKI_THEME_NAMES, SHIKI_THEMES } from '../lib/shiki.ts';
 import { cn } from '../lib/utils.ts';
 import { Button } from './Button.tsx';
+import { ScrollShadow } from './ScrollShadow.tsx';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from './Select.tsx';
 
 // Shiki uses bitflags for font styles: 1=italic, 2=bold, 4=underline
@@ -41,7 +43,7 @@ const addKeysToTokens = (lines: ThemedToken[][]): KeyedLine[] =>
 // Token rendering component
 const TokenSpan = ({ token }: { token: ThemedToken }) => (
   <span
-    className="dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)]"
+    className="dark:bg-(--shiki-dark-bg)! dark:text-(--shiki-dark)!"
     style={
       {
         backgroundColor: token.bgColor,
@@ -63,17 +65,37 @@ const LINE_NUMBER_CLASSES = cn(
   'before:content-[counter(line)]',
   'before:inline-block',
   'before:[counter-increment:line]',
-  'before:w-8',
-  'before:mr-4',
+  'before:w-[3ch]',
+  'before:mr-3',
   'before:text-right',
   'before:text-muted-foreground/50',
   'before:font-mono',
+  'before:tabular-nums',
   'before:select-none'
 );
+const EXPLICIT_LINE_NUMBER_CLASSES =
+  'mr-3 inline-block w-[3ch] select-none text-right font-mono tabular-nums text-muted-foreground/50';
 
 // Line rendering component
-const LineSpan = ({ keyedLine, showLineNumbers }: { keyedLine: KeyedLine; showLineNumbers: boolean }) => (
+const LineSpan = ({
+  keyedLine,
+  lineNumber,
+  showLineNumbers
+}: {
+  keyedLine: KeyedLine;
+  lineNumber?: number;
+  showLineNumbers: boolean;
+}) => (
   <span className={showLineNumbers ? LINE_NUMBER_CLASSES : 'block'}>
+    {lineNumber === undefined ? null : (
+      <span
+        aria-hidden="true"
+        className={EXPLICIT_LINE_NUMBER_CLASSES}
+        data-slot="code-block-line-number"
+      >
+        {lineNumber}
+      </span>
+    )}
     {keyedLine.tokens.length === 0
       ? '\n'
       : keyedLine.tokens.map(({ token, key }) => (
@@ -88,7 +110,12 @@ const LineSpan = ({ keyedLine, showLineNumbers }: { keyedLine: KeyedLine; showLi
 // Types
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
   code: string;
+  copyLabel?: string;
+  copyOverlayClassName?: string;
   language: BundledLanguage;
+  lineNumbers?: readonly number[];
+  scrollShadow?: boolean;
+  scrollShadowSize?: number;
   showLineNumbers?: boolean;
 };
 
@@ -130,7 +157,7 @@ const getHighlighter = (language: BundledLanguage): Promise<HighlighterGeneric<B
 
   const highlighterPromise = createHighlighter({
     langs: [language],
-    themes: ['github-light', 'github-dark']
+    themes: SHIKI_THEME_NAMES
   });
 
   highlighterCache.set(language, highlighterPromise);
@@ -185,10 +212,7 @@ const highlightCode = (
 
       const result = highlighter.codeToTokens(code, {
         lang: langToUse,
-        themes: {
-          dark: 'github-dark',
-          light: 'github-light'
-        }
+        themes: SHIKI_THEMES
       });
 
       const tokenized: TokenizedCode = {
@@ -219,10 +243,12 @@ const highlightCode = (
 
 const CodeBlockBody = memo(
   ({
+    lineNumbers,
     tokenized,
     showLineNumbers,
     className
   }: {
+    lineNumbers?: readonly number[];
     tokenized: TokenizedCode;
     showLineNumbers: boolean;
     className?: string;
@@ -239,15 +265,16 @@ const CodeBlockBody = memo(
 
     return (
       <pre
-        className={cn('dark:!bg-[var(--shiki-dark-bg)] dark:!text-[var(--shiki-dark)] m-0 p-4 text-sm', className)}
+        className={cn('m-0 p-4 text-sm dark:bg-(--shiki-dark-bg)! dark:text-(--shiki-dark)!', className)}
         data-selectable="true"
         style={preStyle}
       >
         <code className={cn('font-mono text-sm', showLineNumbers && '[counter-increment:line_0] [counter-reset:line]')}>
-          {keyedLines.map((keyedLine) => (
+          {keyedLines.map((keyedLine, index) => (
             <LineSpan
               key={keyedLine.key}
               keyedLine={keyedLine}
+              lineNumber={lineNumbers?.[index]}
               showLineNumbers={showLineNumbers}
             />
           ))}
@@ -257,6 +284,7 @@ const CodeBlockBody = memo(
   },
   (prevProps, nextProps) =>
     prevProps.tokenized === nextProps.tokenized &&
+    prevProps.lineNumbers === nextProps.lineNumbers &&
     prevProps.showLineNumbers === nextProps.showLineNumbers &&
     prevProps.className === nextProps.className
 );
@@ -322,11 +350,21 @@ const _CodeBlockActions = ({ children, className, ...props }: HTMLAttributes<HTM
 
 const CodeBlockContent = ({
   code,
+  copyLabel,
+  copyOverlayClassName,
   language,
+  lineNumbers,
+  scrollShadow = false,
+  scrollShadowSize,
   showLineNumbers = false
 }: {
   code: string;
+  copyLabel?: string;
+  copyOverlayClassName?: string;
   language: BundledLanguage;
+  lineNumbers?: readonly number[];
+  scrollShadow?: boolean;
+  scrollShadowSize?: number;
   showLineNumbers?: boolean;
 }) => {
   // Memoized raw tokens for immediate display
@@ -361,12 +399,37 @@ const CodeBlockContent = ({
 
   const tokenized = asyncTokens ?? syncTokens;
 
-  return (
-    <div className="relative overflow-auto">
+  const content = (
+    <>
       <CodeBlockBody
+        lineNumbers={lineNumbers}
         showLineNumbers={showLineNumbers}
         tokenized={tokenized}
       />
+    </>
+  );
+  return (
+    <div
+      className="group/code-block-content relative"
+      data-slot="code-block-content"
+    >
+      {copyLabel ? (
+        <CodeBlockCopyButtonOverlay
+          aria-label={copyLabel}
+          className={copyOverlayClassName}
+          data-copy-target="content"
+        />
+      ) : null}
+      {scrollShadow ? (
+        <ScrollShadow
+          className="relative"
+          size={scrollShadowSize}
+        >
+          {content}
+        </ScrollShadow>
+      ) : (
+        <div className="relative overflow-auto">{content}</div>
+      )}
     </div>
   );
 };
@@ -429,7 +492,12 @@ export const CodeInline = ({
 
 export const CodeBlock = ({
   code,
+  copyLabel,
+  copyOverlayClassName,
   language,
+  lineNumbers,
+  scrollShadow = false,
+  scrollShadowSize,
   showLineNumbers = false,
   className,
   children,
@@ -441,13 +509,20 @@ export const CodeBlock = ({
     <CodeBlockContext.Provider value={contextValue}>
       <CodeBlockContainer
         className={className}
+        data-generated-line-numbers={showLineNumbers ? 'true' : 'false'}
+        data-provider-line-numbers={lineNumbers ? 'true' : 'false'}
         language={language}
         {...props}
       >
         {children}
         <CodeBlockContent
           code={code}
+          copyLabel={copyLabel}
+          copyOverlayClassName={copyOverlayClassName}
           language={language}
+          lineNumbers={lineNumbers}
+          scrollShadow={scrollShadow}
+          scrollShadowSize={scrollShadowSize}
           showLineNumbers={showLineNumbers}
         />
       </CodeBlockContainer>
@@ -459,12 +534,14 @@ type CodeBlockCopyButtonProps = ComponentProps<typeof Button> & {
   onCopy?: () => void;
   onError?: (error: Error) => void;
   timeout?: number;
+  value?: string;
 };
 
 const _CodeBlockCopyButton = ({
   onCopy,
   onError,
   timeout = 2000,
+  value,
   children,
   className,
   ...props
@@ -481,7 +558,7 @@ const _CodeBlockCopyButton = ({
 
     try {
       if (!isCopied) {
-        await navigator.clipboard.writeText(code);
+        await navigator.clipboard.writeText(value ?? code);
         setIsCopied(true);
         onCopy?.();
         timeoutRef.current = window.setTimeout(() => setIsCopied(false), timeout);
@@ -489,7 +566,7 @@ const _CodeBlockCopyButton = ({
     } catch (error) {
       onError?.(error as Error);
     }
-  }, [code, onCopy, onError, timeout, isCopied]);
+  }, [code, isCopied, onCopy, onError, timeout, value]);
 
   useEffect(
     () => () => {
@@ -503,6 +580,8 @@ const _CodeBlockCopyButton = ({
   return (
     <Button
       className={cn('shrink-0', className)}
+      data-copied={isCopied ? 'true' : 'false'}
+      data-slot="code-block-copy-button"
       onClick={copyToClipboard}
       size="icon"
       variant="ghost"
@@ -517,6 +596,34 @@ const _CodeBlockCopyButton = ({
     </Button>
   );
 };
+
+export const CodeBlockCopyButton = _CodeBlockCopyButton;
+
+type CodeBlockCopyButtonOverlayProps = CodeBlockCopyButtonProps & {
+  buttonClassName?: string;
+};
+
+export const CodeBlockCopyButtonOverlay = ({
+  buttonClassName,
+  className,
+  ...props
+}: CodeBlockCopyButtonOverlayProps) => (
+  <div
+    className={cn(
+      'pointer-events-none absolute top-0 right-0 z-10 flex items-start bg-[linear-gradient(to_left,var(--background)_55%,transparent)] pt-2 pr-2 pl-7',
+      className
+    )}
+    data-slot="code-block-copy-overlay"
+  >
+    <CodeBlockCopyButton
+      className={cn(
+        'pointer-events-auto size-6 border border-border/60 bg-background/90 text-muted-foreground hover:bg-background hover:text-foreground',
+        buttonClassName
+      )}
+      {...props}
+    />
+  </div>
+);
 
 type CodeBlockLanguageSelectorProps = ComponentProps<typeof Select>;
 

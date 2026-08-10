@@ -13,6 +13,7 @@ import {
   ObservationExample,
   RawJsonlExample,
   ReadonlyApprovalExample,
+  ShellExample,
   StoryCase,
   SystemEventExample
 } from './chat-card-story-fixtures';
@@ -134,6 +135,16 @@ export const Command: Story = {
   )
 };
 
+export const Shell: Story = {
+  render: () => (
+    <StoryCase>
+      <div data-story-case="shell">
+        <ShellExample />
+      </div>
+    </StoryCase>
+  )
+};
+
 export const FileRead: Story = {
   render: () => (
     <StoryCase>
@@ -214,6 +225,25 @@ export const CommandStates: Story = {
         <CommandExample status="running" />
         <CommandExample status="success" />
         <CommandExample status="error" />
+      </div>
+    </StoryCase>
+  )
+};
+
+export const ShellStates: Story = {
+  render: () => (
+    <StoryCase>
+      <div className="grid gap-5">
+        {(['running', 'completed', 'failed'] as const).map((status) => (
+          <section
+            className="grid gap-2"
+            data-shell-state={status}
+            key={status}
+          >
+            <div className="font-medium text-muted-foreground text-xs capitalize">{status}</div>
+            <ShellExample status={status} />
+          </section>
+        ))}
       </div>
     </StoryCase>
   )

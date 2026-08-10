@@ -75,6 +75,7 @@ import type {
   RawInspectableCardLabels,
   RawInspectableCardProps
 } from './components/RawInspectableCard';
+import type { ShellCardHeaderLabels, ShellCardView } from './components/ShellCard';
 import type { ShortcutChipProps } from './components/ShortcutChip';
 import type { SwitchProps } from './components/Switch';
 import type { TimelineDividerProps } from './components/TimelineDivider';
@@ -127,8 +128,9 @@ import { ButtonGroup, ButtonGroupText } from './components/ButtonGroup';
 import { Card, CardAction, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './components/Card';
 import { ChannelOriginBadge, channelOriginDetails, showsChannelOrigin } from './components/ChannelOriginBadge';
 import { ChatInputChrome } from './components/ChatInput';
-import { CodeBlock, CodeInline } from './components/CodeBlock';
+import { CodeBlock, CodeBlockCopyButton, CodeInline } from './components/CodeBlock';
 import { CommandCard, CommandCardHeader } from './components/CommandCard';
+import { CompactFilePath, type CompactFilePathProps } from './components/CompactFilePath';
 import {
   ComposerAccessSelect,
   ComposerContextUsageButton,
@@ -219,6 +221,7 @@ import { isProductIconId, ProductIcon } from './components/ProductIcon';
 import { Progress } from './components/Progress';
 import { RawInspectableCard, rawEventRecordsText } from './components/RawInspectableCard';
 import { ScrollArea, ScrollBar } from './components/ScrollArea';
+import { ScrollShadow, scrollShadowVisibility } from './components/ScrollShadow';
 import {
   Select,
   SelectContent,
@@ -229,6 +232,7 @@ import {
   SelectValue
 } from './components/Select';
 import { Separator } from './components/Separator';
+import { ShellCard, ShellCardHeader } from './components/ShellCard';
 import { ShortcutChip } from './components/ShortcutChip';
 import { Skeleton } from './components/Skeleton';
 import { Spinner } from './components/Spinner';
@@ -310,6 +314,8 @@ export type {
   ReasoningLabels,
   ReasoningProps,
   ReasoningTriggerProps,
+  ShellCardHeaderLabels,
+  ShellCardView,
   ShimmerProps,
   ShortcutChipProps,
   SwitchProps,
@@ -363,9 +369,12 @@ export {
   ChannelOriginBadge,
   ChatInputChrome,
   CodeBlock,
+  CodeBlockCopyButton,
   CodeInline,
   CommandCard,
   CommandCardHeader,
+  CompactFilePath,
+  type CompactFilePathProps,
   ComposerAccessSelect,
   ComposerApprovalSheet,
   ComposerAskSheet,
@@ -461,6 +470,7 @@ export {
   rawEventRecordsText,
   ScrollArea,
   ScrollBar,
+  ScrollShadow,
   Select,
   SelectContent,
   SelectItem,
@@ -469,11 +479,14 @@ export {
   SelectTrigger,
   SelectValue,
   Separator,
+  ShellCard,
+  ShellCardHeader,
   Shimmer,
   ShortcutChip,
   Skeleton,
   Spinner,
   Switch,
+  scrollShadowVisibility,
   shouldSubmitComposerKey,
   showsChannelOrigin,
   Tabs,

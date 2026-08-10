@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import type { CommandCardView, ObservationVisualRole } from '../src';
+import type { CommandCardView, ObservationVisualRole, ShellCardView } from '../src';
 
 import { useState } from 'react';
 
@@ -16,6 +16,8 @@ import {
   ObservationMeta,
   ObservationText,
   RawInspectableCard,
+  ShellCard,
+  ShellCardHeader,
   WorkspaceMessageCard,
   WorkspaceSystemEventCard
 } from '../src';
@@ -189,6 +191,56 @@ export function CommandExample({ status = 'success' }: { status?: 'error' | 'run
   );
 }
 
+export type ShellStoryStatus = 'completed' | 'failed' | 'running';
+
+function shellView(status: ShellStoryStatus): ShellCardView {
+  if (status === 'running') {
+    return {
+      command: 'bun run typecheck',
+      cwd: '/workspace/monad',
+      provider: 'codex',
+      status: 'running',
+      type: 'command_execution'
+    };
+  }
+  return {
+    command: 'bun scripts/bun-test.ts packages/atoms/test/unit/shell-tool-card.test.tsx --only-failures',
+    cwd: '/workspace/monad',
+    durationMs: status === 'completed' ? 1840 : 620,
+    exitCode: status === 'completed' ? 0 : 1,
+    output: status === 'completed' ? '2 pass\n0 fail' : '1 fail\nAssertionError: expected shell output',
+    provider: 'codex',
+    status,
+    type: 'command_execution'
+  };
+}
+
+export function ShellExample({ status = 'completed' }: { status?: ShellStoryStatus }) {
+  const view = shellView(status);
+  return (
+    <ObservationCard
+      header={
+        <ShellCardHeader
+          labels={{
+            completed: 'Completed',
+            exitCode: (code) => `Exit ${code}`,
+            running: 'In progress',
+            toolCall: 'Tool call'
+          }}
+          view={view}
+        />
+      }
+      visualRole={status === 'failed' ? 'error' : 'tool'}
+    >
+      <ShellCard
+        copyCommandLabel="Copy command"
+        copyOutputLabel="Copy output"
+        view={view}
+      />
+    </ObservationCard>
+  );
+}
+
 export function FileReadExample() {
   const view = {
     content: 'export function SharedCard() {\n  return <article />;\n}',
@@ -201,7 +253,11 @@ export function FileReadExample() {
       header={<FileReadCardHeader view={view} />}
       visualRole="tool"
     >
-      <FileReadCard view={view} />
+      <FileReadCard
+        copyCodeLabel="Copy code"
+        copyPathLabel="Copy path"
+        view={view}
+      />
     </ObservationCard>
   );
 }
@@ -287,6 +343,7 @@ export function CompleteExperienceExample() {
       <ObservationExample visualRole="agent" />
       <ObservationExample visualRole="system" />
       <CommandExample status="success" />
+      <ShellExample status="completed" />
       <FileReadExample />
       <GenericToolPairExample />
       <ReadonlyApprovalExample />

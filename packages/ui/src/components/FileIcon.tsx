@@ -178,7 +178,7 @@ const EXTENSION_SYMBOLS: Readonly<Record<string, FileSymbol>> = {
   zsh: Shell
 };
 
-function baseName(fileName: string): string {
+export function fileBaseName(fileName: string): string {
   return fileName.split(/[\\/]/).pop() || fileName;
 }
 
@@ -192,7 +192,7 @@ function hasFileExtension(fileName: string): boolean {
 }
 
 export function fileIconName({ contentType, fileName, preview }: Omit<FileIconProps, 'className'>): string {
-  const name = baseName(fileName);
+  const name = fileBaseName(fileName);
   if (hasFileExtension(name) || (name && !contentType)) return name;
 
   const type = contentType?.split(';', 1)[0]?.trim().toLowerCase();
@@ -205,7 +205,7 @@ export function fileIconName({ contentType, fileName, preview }: Omit<FileIconPr
 }
 
 function fileSymbol(fileName: string): FileSymbol {
-  const name = baseName(fileName).toLowerCase();
+  const name = fileBaseName(fileName).toLowerCase();
   return FILE_NAME_SYMBOLS[name] ?? EXTENSION_SYMBOLS[extension(name)] ?? Document;
 }
 
