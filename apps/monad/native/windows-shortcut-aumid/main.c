@@ -3,12 +3,19 @@
 
 #include <windows.h>
 #include <initguid.h>
-#include <propkey.h>
+#include <propkeydef.h>
 #include <shobjidl.h>
 #include <stdio.h>
 #include <wchar.h>
 
 static const wchar_t *MONAD_TOAST_ACTIVATOR_CLSID = L"{AE4B7C58-7765-4BF4-B0D9-EB5550EAC5AB}";
+
+// Ubuntu's mingw-w64 headers omit the Windows 10 toast activator property. Define both stable
+// AppUserModel keys locally so release cross-compilation does not depend on SDK header vintage.
+DEFINE_PROPERTYKEY(PKEY_Monad_AppUserModel_ID,
+                   0x9f4c2855, 0x9f79, 0x4b39, 0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3, 5);
+DEFINE_PROPERTYKEY(PKEY_Monad_AppUserModel_ToastActivatorCLSID,
+                   0x9f4c2855, 0x9f79, 0x4b39, 0xa8, 0xd0, 0xe1, 0xd4, 0x2d, 0xe1, 0xd5, 0xf3, 26);
 
 static void print_hresult(const wchar_t *operation, HRESULT result) {
   fwprintf(stderr, L"%ls failed (0x%08lx)\n", operation, (unsigned long)result);
@@ -65,7 +72,7 @@ int wmain(int argc, wchar_t **argv) {
     goto cleanup;
   }
   CopyMemory(value.pwszVal, argv[2], value_bytes);
-  result = IPropertyStore_SetValue(properties, &PKEY_AppUserModel_ID, &value);
+  result = IPropertyStore_SetValue(properties, &PKEY_Monad_AppUserModel_ID, &value);
   if (FAILED(result)) {
     print_hresult(L"IPropertyStore::SetValue", result);
     goto cleanup;
@@ -81,7 +88,7 @@ int wmain(int argc, wchar_t **argv) {
     print_hresult(L"CLSIDFromString", result);
     goto cleanup;
   }
-  result = IPropertyStore_SetValue(properties, &PKEY_AppUserModel_ToastActivatorCLSID, &toast_activator);
+  result = IPropertyStore_SetValue(properties, &PKEY_Monad_AppUserModel_ToastActivatorCLSID, &toast_activator);
   if (FAILED(result)) {
     print_hresult(L"IPropertyStore::SetValue(ToastActivatorCLSID)", result);
     goto cleanup;

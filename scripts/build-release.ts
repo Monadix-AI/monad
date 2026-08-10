@@ -204,24 +204,19 @@ try {
     // ── 2a. Compile native sandbox launchers ────────────────────────────────────
     // Ship alongside bin/monad as bin/monad-sandbox-launcher[.exe] (Low IL / Landlock)
     // and bin/monad-sandbox-appcontainer.exe (AppContainer, Windows-only, preferred).
-    // Skipped gracefully when the cross-compiler isn't found.
+    // These helpers are required release artifacts. Fail with the compiler diagnostic instead of
+    // producing an incomplete runtime that dist will reject later.
     if (t.os === 'linux') {
       const launcherSrc = join(ROOT, 'apps/monad/native/sandbox-launcher/main.c');
       const launcherOut = join(binDir, 'monad-sandbox-launcher');
-      const cc =
-        t.libc === 'musl'
-          ? t.arch === 'arm64'
-            ? (Bun.which('aarch64-linux-musl-gcc') ?? 'aarch64-linux-gnu-gcc')
-            : 'musl-gcc'
-          : t.arch === 'arm64'
-            ? 'aarch64-linux-gnu-gcc'
-            : 'gcc';
+      // The launcher is a standalone static ELF, so its libc does not need to match the embedded
+      // Bun binary. Ubuntu's musl-gcc sysroot omits Linux UAPI headers required by Landlock/seccomp.
+      const cc = t.arch === 'arm64' ? 'aarch64-linux-gnu-gcc' : 'gcc';
       const r = await $`${cc} -O2 -s -static -o ${launcherOut} ${launcherSrc}`.nothrow().quiet();
       if (r.exitCode !== 0) {
-        log(`  ⚠ ${cc} not found — ${artifact} sandbox launcher omitted (child runs unconfined on Linux)`);
-      } else {
-        log(`  ✓ sandbox launcher (${cc})`);
+        throw new Error(`${artifact} sandbox launcher failed to compile with ${cc}: ${shellDiagnostic(r)}`);
       }
+      log(`  ✓ sandbox launcher (${cc})`);
     }
     if (t.os === 'windows') {
       const cc =
@@ -256,21 +251,10 @@ try {
       // toasts require a shortcut carrying the same ID passed to CreateToastNotifier.
       const aumidSrc = join(ROOT, 'apps/monad/native/windows-shortcut-aumid/main.c');
       const aumidOut = join(binDir, 'monad-shortcut-aumid.exe');
-      const aumidFlags = [
-        '-O2',
-        '-s',
-        ...staticFlag,
-        '-municode',
-        '-o',
-        aumidOut,
-        aumidSrc,
-        '-lole32',
-        '-luuid',
-        '-lpropsys'
-      ];
+      const aumidFlags = ['-O2', '-s', ...staticFlag, '-municode', '-o', aumidOut, aumidSrc, '-lole32', '-luuid'];
       const rAumid = await $`${cc} ${aumidFlags}`.nothrow().quiet();
       if (rAumid.exitCode !== 0) {
-        throw new Error(`${artifact} AppUserModelID helper failed to compile with ${cc}`);
+        throw new Error(`${artifact} AppUserModelID helper failed to compile with ${cc}: ${shellDiagnostic(rAumid)}`);
       }
       log(`  ✓ Windows AppUserModelID helper (${cc})`);
     }
@@ -345,4 +329,10 @@ Production archives, installers, updater binaries, and receipts are generated an
 
 function log(msg: string) {
   process.stdout.write(`[build-release] ${msg}\n`);
+}
+
+function shellDiagnostic(result: { stderr: Uint8Array; stdout: Uint8Array }): string {
+  return (
+    new TextDecoder().decode(result.stderr).trim() || new TextDecoder().decode(result.stdout).trim() || 'no output'
+  );
 }

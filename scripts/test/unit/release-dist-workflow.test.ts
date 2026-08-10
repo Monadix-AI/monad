@@ -26,6 +26,7 @@ const namedStep = (job: string, name: string) => jobs[job]?.steps?.find((step) =
 
 test('release workflow builds, exercises, attests, and publishes dist installers', async () => {
   const build = namedStep('build', 'Build target archive and updater')?.run;
+  const crossCompilers = namedStep('build', 'Install Linux and Windows cross-compilers')?.run;
   const generate = namedStep('installers', 'Generate shell and PowerShell installers')?.run;
   const upload = jobs.installers?.steps?.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
   const shellTest = namedStep('install-test', 'Test shell installer and updater receipt')?.run;
@@ -35,6 +36,9 @@ test('release workflow builds, exercises, attests, and publishes dist installers
 
   expect(build).toContain('--artifacts=local');
   expect(build).toContain('dist-manifest.json');
+  expect(crossCompilers).toContain('binutils-aarch64-linux-gnu');
+  expect(crossCompilers).toContain('libc6-dev-arm64-cross');
+  expect(crossCompilers).not.toContain('musl-tools');
   expect(generate).toContain('--artifacts=global');
   expect(generate).toContain('bun scripts/enhance-dist-installers.ts');
   expect(upload?.with?.path).toContain('target/distrib/install.sh');
