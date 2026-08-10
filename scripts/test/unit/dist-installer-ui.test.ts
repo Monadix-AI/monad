@@ -20,6 +20,6 @@ test('dist installer enhancement preserves the product and download contracts', 
   expect(enhancer).toContain('MONAD_OUTPUT:-');
   expect(enhancer).toContain("$env:MONAD_OUTPUT -eq 'json'");
   expect(enhancer).toContain('Write-Progress -Activity "Downloading Monad $app_version"');
-  expect(enhancer).toContain('rename(generatedShell, shellInstaller)');
-  expect(enhancer).toContain('rename(generatedPowerShell, powerShellInstaller)');
+  expect(enhancer).toContain('copyFile(generatedShell, shellInstaller)');
+  expect(enhancer).toContain('copyFile(generatedPowerShell, powerShellInstaller)');
 });

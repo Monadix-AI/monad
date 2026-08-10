@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { readdir, readFile, rename, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
@@ -20,8 +20,10 @@ const powerShellInstaller = join(artifactsDir, 'install.ps1');
 await enhanceShell(generatedShell, artifactSizes);
 await enhancePowerShell(generatedPowerShell, artifactSizes);
 await Promise.all([rm(shellInstaller, { force: true }), rm(powerShellInstaller, { force: true })]);
-await Promise.all([rename(generatedShell, shellInstaller), rename(generatedPowerShell, powerShellInstaller)]);
-process.stdout.write(`[enhance-dist-installers] wrote install.sh and install.ps1 in ${artifactsDir}\n`);
+await Promise.all([copyFile(generatedShell, shellInstaller), copyFile(generatedPowerShell, powerShellInstaller)]);
+process.stdout.write(
+  `[enhance-dist-installers] wrote install.sh/install.ps1 and axoupdater protocol installers in ${artifactsDir}\n`
+);
 
 async function collectArtifactSizes(dir: string): Promise<Map<string, number>> {
   const sizes = new Map<string, number>();
