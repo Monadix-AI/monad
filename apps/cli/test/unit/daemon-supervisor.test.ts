@@ -4,16 +4,30 @@ import { DAEMON_RESTART_EXIT_CODE } from '@monad/protocol';
 import {
   daemonSupervisorChildStdout,
   nextDaemonSupervisorAction,
-  releaseDaemonSupervisorSpawnOptions
+  releaseDaemonSupervisorLauncherArgv
 } from '../../src/lib/daemon.ts';
 
-test('release daemon supervisor starts detached from the launcher process group', () => {
-  expect(releaseDaemonSupervisorSpawnOptions('/opt/monad/bin/monad', '/tmp/daemon.log')).toEqual({
-    argv: ['/opt/monad/bin/monad', 'daemon-supervisor', '/tmp/daemon.log'],
-    detached: true,
-    stdin: 'ignore',
-    stdout: 'pipe'
-  });
+test('release daemon supervisor launches outside the short-lived CLI process', () => {
+  expect(
+    releaseDaemonSupervisorLauncherArgv('linux', '/opt/monad/bin/monad', '/tmp/daemon.log', '/tmp/startup.log')
+  ).toEqual([
+    'sh',
+    '-c',
+    'nohup "$1" daemon-supervisor "$2" >"$3" 2>/dev/null < /dev/null & printf "%s" "$!"',
+    'monad-supervisor-launch',
+    '/opt/monad/bin/monad',
+    '/tmp/daemon.log',
+    '/tmp/startup.log'
+  ]);
+
+  const windows = releaseDaemonSupervisorLauncherArgv(
+    'win32',
+    'C:\\monad\\monad.exe',
+    'C:\\state\\daemon.log',
+    'C:\\state\\startup.log'
+  );
+  expect(windows.slice(0, 5)).toEqual(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']);
+  expect(windows.slice(-3)).toEqual(['C:\\monad\\monad.exe', 'C:\\state\\daemon.log', 'C:\\state\\startup.log']);
 });
 
 test('daemon supervisor relays only the first child startup output', () => {
