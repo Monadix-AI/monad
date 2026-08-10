@@ -4,7 +4,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
 
-import { createSystemUpgradeModule, workerCommand } from '#/handlers/system-upgrade.ts';
+import { createSystemUpgradeModule, workerCommand, workerLauncherCommand } from '#/handlers/system-upgrade.ts';
 
 type SpawnOptions = NonNullable<Parameters<typeof Bun.spawn>[1]>;
 
@@ -81,11 +81,10 @@ test('system upgrade reports a reinstall requirement when monad-update is missin
   expect(upgrade.getStatus().error).toContain('reinstall Monad');
 });
 
-test('system upgrade detaches a worker, returns restarting, then schedules daemon exit', async () => {
+test('system upgrade launches a durable worker, returns restarting, then schedules daemon exit', async () => {
   const cacheDir = await mkdtemp(join(tmpdir(), 'monad-system-upgrade-'));
   let argv: string[] | undefined;
   let spawnOptions: SpawnOptions | undefined;
-  let unrefCalled = false;
   let exitScheduled = false;
   const upgrade = createSystemUpgradeModule({
     access: async () => {},
@@ -101,10 +100,7 @@ test('system upgrade detaches a worker, returns restarting, then schedules daemo
       argv = args;
       spawnOptions = options;
       return {
-        exited: Promise.resolve(0),
-        unref: () => {
-          unrefCalled = true;
-        }
+        exited: Promise.resolve(0)
       };
     }) as typeof Bun.spawn
   });
@@ -113,11 +109,11 @@ test('system upgrade detaches a worker, returns restarting, then schedules daemo
   await waitForStage(upgrade, 'ready');
   await upgrade.start();
 
-  expect(argv?.slice(0, 2)).toEqual(['sh', '-c']);
-  expect(argv?.[2]).toContain('"$2" --tag "$3" >"$6" 2>&1');
-  expect(argv?.[2]).toContain('printf "%s\\n%s\\n" "$update_code" "$completed" >"$5.tmp"');
-  expect(argv?.[2]).toContain('"$4" restart >>"$6" 2>&1');
-  expect(argv?.slice(3)).toEqual([
+  expect(argv?.slice(0, 4)).toEqual(['sh', '-c', 'nohup "$@" >/dev/null 2>&1 < /dev/null &', 'monad-upgrade-launch']);
+  expect(argv?.[6]).toContain('"$2" --tag "$3" >"$6" 2>&1');
+  expect(argv?.[6]).toContain('printf "%s\\n%s\\n" "$update_code" "$completed" >"$5.tmp"');
+  expect(argv?.[6]).toContain('"$4" restart >>"$6" 2>&1');
+  expect(argv?.slice(7)).toEqual([
     'monad-upgrade',
     '1234',
     '/opt/monad/bin/monad-update',
@@ -126,8 +122,7 @@ test('system upgrade detaches a worker, returns restarting, then schedules daemo
     join(cacheDir, 'result.txt'),
     join(cacheDir, 'updater.log')
   ]);
-  expect(spawnOptions).toMatchObject({ detached: true, stderr: 'ignore', stdin: 'ignore', stdout: 'ignore' });
-  expect(unrefCalled).toBe(true);
+  expect(spawnOptions).toMatchObject({ stderr: 'ignore', stdin: 'ignore', stdout: 'ignore' });
   expect(exitScheduled).toBe(true);
   expect(upgrade.getStatus().stage).toBe('restarting');
   expect(upgrade.getStatus().lastAttempt).toMatchObject({ state: 'installing', targetVersion: '9.9.9' });
@@ -153,6 +148,26 @@ test('Windows worker waits for the daemon before updating and restarting', () =>
     'NUL',
     'NUL'
   ]);
+});
+
+test('Windows upgrade worker launcher starts an encoded detached PowerShell process', () => {
+  const command = workerLauncherCommand(
+    'win32',
+    42,
+    "C:\\Monad O'Brien\\monad-update.exe",
+    'v2.0.0',
+    'C:\\Monad\\monad.exe'
+  );
+
+  expect(command.slice(0, 6)).toEqual([
+    'powershell',
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    expect.stringContaining('Start-Process')
+  ]);
+  expect(command[5]).toContain('-EncodedCommand');
 });
 
 test('system upgrade restores a durable failed updater result after daemon restart', async () => {
