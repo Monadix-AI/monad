@@ -121,7 +121,7 @@ lost work; each has a sync command:
 |---|---|---|
 | `CLAUDE.md`, `AGENTS.md`, other agent files | `.rulesync/rules/` | `bun run agents:sync` |
 | i18n type definitions (`packages/i18n/src/catalog-types.ts`) | `packages/i18n/src/locales/<lng>/<namespace>.json` | `mise run i18n:types` (auto-run by test/typecheck) |
-| license inventory | production dependency graph via `license-checker-rseidelsohn` | `bun run generate` |
+| license inventory | app/workspace production manifests filtered by `Bun.build` metafiles | `bun run generate` |
 | codex app-server protocol types | upstream protocol spec | `bun run generate` |
 
 `mise run quality:check` delegates the dependency graph and parallel execution to mise.
