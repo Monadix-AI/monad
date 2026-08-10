@@ -125,5 +125,5 @@ test('upgrade availability never treats older or cross-channel releases as autom
 
 test('updater path is a sibling of the monad executable', () => {
   expect(monadUpdaterPath('/opt/monad/bin/monad', 'linux')).toBe('/opt/monad/bin/monad-update');
-  expect(monadUpdaterPath('C:\\Monad\\monad.exe', 'win32')).toEndWith('monad-update.exe');
+  expect(monadUpdaterPath('C:\\Monad\\monad.exe', 'win32')).toBe('C:\\Monad\\monad-update.exe');
 });
