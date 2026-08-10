@@ -63,6 +63,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(namedStep('upgrade-test', 'Install dependencies')?.run).toBe('bun install --frozen-lockfile');
   expect(upgradeE2e).toContain('readdirSync(newDir');
   expect(upgradeE2e).toContain('browser_download_url: assetUrl');
+  expect(upgradeE2e).toContain("await run([monad, 'up'], env)");
   expect(attest?.uses).toMatch(/^actions\/attest@[0-9a-f]{40}$/);
   expect(attest?.with?.['subject-path']).toBe('artifacts/*');
   expect(jobs.publish?.permissions).toMatchObject({ attestations: 'write', 'id-token': 'write' });

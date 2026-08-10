@@ -90,15 +90,9 @@ async function runScenario(kind: 'cli' | 'web'): Promise<void> {
   const oldVersion = await run([monad, '--version'], env);
   if (oldVersion.includes(targetVersion)) throw new Error(`${kind}: old install unexpectedly reports ${targetVersion}`);
 
-  const daemon = Bun.spawn([join(installDir, 'monad-daemon'), 'daemon'], {
-    env: { ...process.env, ...env },
-    stderr: 'ignore',
-    stdin: 'ignore',
-    stdout: 'ignore'
-  });
+  await run([monad, 'up'], env);
   try {
     await waitFor(async () => (await fetch(`http://127.0.0.1:${daemonPort}/health`)).ok, `${kind}: daemon not ready`);
-    await Bun.write(join(monadHome, 'runtime', 'monad.pid'), String(daemon.pid));
     if (kind === 'cli') {
       const channelArgs = channel === 'stable' ? [] : ['--channel', channel];
       await run([monad, 'upgrade', ...channelArgs], env);
@@ -135,8 +129,6 @@ async function runScenario(kind: 'cli' | 'web'): Promise<void> {
     }, `${kind}: daemon did not restart on ${targetVersion}`);
   } finally {
     await run([monad, 'stop'], env, true);
-    if (daemon.exitCode === null) daemon.kill();
-    await Promise.race([daemon.exited, Bun.sleep(3000)]);
   }
 }
 
