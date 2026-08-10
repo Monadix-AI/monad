@@ -1048,18 +1048,18 @@ for (const kind of TRANSPORTS) {
         );
       }
 
-      const approvalFlags = (value: string) =>
+      const approvalFlagsByInvocation = (value: string) =>
         value
           .trim()
-          .split(/\s+/)
-          .filter((arg) => arg === '--dangerously-skip-permissions');
-      expect({
-        autopilot: approvalFlags(autopilotArgs),
-        delegated: approvalFlags(delegatedArgs)
-      }).toEqual({
-        autopilot: ['--dangerously-skip-permissions'],
-        delegated: []
-      });
+          .split('\n')
+          .filter(Boolean)
+          .map((invocation) => invocation.split(/\s+/).filter((arg) => arg === '--dangerously-skip-permissions'));
+      const autopilotApprovalFlags = approvalFlagsByInvocation(autopilotArgs);
+      const delegatedApprovalFlags = approvalFlagsByInvocation(delegatedArgs);
+      expect(autopilotApprovalFlags.length).toBeGreaterThan(0);
+      expect(delegatedApprovalFlags.length).toBeGreaterThan(0);
+      expect(autopilotApprovalFlags.every((flags) => flags.length === 1)).toBe(true);
+      expect(delegatedApprovalFlags.every((flags) => flags.length === 0)).toBe(true);
     }, 20_000);
 
     test('managed MeshAgent project member requires Studio reconnect when provider auth is unauthenticated', async () => {
