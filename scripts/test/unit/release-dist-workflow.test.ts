@@ -18,6 +18,9 @@ const root = resolve(import.meta.dir, '../../..');
 const workflow = Bun.YAML.parse(await Bun.file(join(root, '.github/workflows/release.yml')).text()) as {
   jobs?: Record<string, Job>;
 };
+const releasePlease = Bun.YAML.parse(await Bun.file(join(root, '.github/workflows/release-please.yml')).text()) as {
+  jobs?: Record<string, Job>;
+};
 const jobs = workflow.jobs ?? {};
 const namedStep = (job: string, name: string) => jobs[job]?.steps?.find((step) => step.name === name);
 
@@ -49,4 +52,8 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(attest?.uses).toMatch(/^actions\/attest@[0-9a-f]{40}$/);
   expect(attest?.with?.['subject-path']).toBe('artifacts/*');
   expect(jobs.publish?.permissions).toMatchObject({ attestations: 'write', 'id-token': 'write' });
+  expect(releasePlease.jobs?.['release-assets']?.permissions).toMatchObject({
+    attestations: 'write',
+    'id-token': 'write'
+  });
 });
