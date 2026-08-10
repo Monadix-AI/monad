@@ -84,13 +84,38 @@ async function getPortPid(): Promise<number | null> {
   }
 }
 
-export function releaseDaemonSupervisorSpawnOptions(execPath: string, logPath: string) {
-  return {
-    argv: [roleExecPath(execPath, 'restart'), 'daemon-supervisor', logPath],
-    detached: true as const,
-    stdin: 'ignore' as const,
-    stdout: 'pipe' as const
-  };
+export function releaseDaemonSupervisorLauncherArgv(
+  platform: NodeJS.Platform,
+  execPath: string,
+  logPath: string,
+  startupOutputPath: string
+): string[] {
+  const supervisorPath = roleExecPath(execPath, 'restart', platform);
+  if (platform === 'win32') {
+    const script =
+      "$proc = Start-Process -FilePath $args[0] -ArgumentList @('daemon-supervisor', $args[1]) " +
+      '-RedirectStandardOutput $args[2] -WindowStyle Hidden -PassThru; $proc.Id';
+    return [
+      'powershell',
+      '-NoProfile',
+      '-ExecutionPolicy',
+      'Bypass',
+      '-Command',
+      script,
+      supervisorPath,
+      logPath,
+      startupOutputPath
+    ];
+  }
+  return [
+    'sh',
+    '-c',
+    'nohup "$1" daemon-supervisor "$2" >"$3" 2>/dev/null < /dev/null & printf "%s" "$!"',
+    'monad-supervisor-launch',
+    supervisorPath,
+    logPath,
+    startupOutputPath
+  ];
 }
 
 export function daemonSupervisorChildStdout(readyOnce: boolean): 'pipe' | 'ignore' {
@@ -148,11 +173,10 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
   // supervisor's first child only, then disconnects once /health is ready so the background
   // supervisor is not tied to this short-lived CLI process.
   const logPath = join(getPaths().logs, 'daemon.log');
+  const startupOutputPath = join(getPaths().logs, 'daemon-startup.log');
   await mkdir(getPaths().logs, { recursive: true });
-  // Size-cap daemon.log at this start boundary: the CLI's inherited stderr fd (below) pins the file
-  // open for the daemon's lifetime, so it can't be rotated mid-run — rotate before opening a fresh one.
+  // Size-cap daemon.log at this start boundary before the daemon opens a fresh append handle.
   rotateDaemonLog(logPath);
-  const logFd = openSync(logPath, 'a');
 
   // Dev: resolve the daemon source from daemon.ts's own location (apps/cli/src/lib/ → apps/monad/src/).
   // Release: the compiled binary handles all subcommands — spawn self with 'daemon'.
@@ -160,33 +184,56 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
   const isDevEntry = isSourceCliInvocation() && (await Bun.file(devEntry).exists());
   // --start-relay tells the daemon to emit its banner/ready-info to stdout for relay
   // to the user, and to route logs to stderr (daemon.log) so stdout stays clean.
-  // Pass --log-file so the daemon writes daemon.log itself (see configureDaemonLogging). The `stderr:
-  // logFd` redirect below still captures native/pre-logger crash output on Unix, but a detached child
-  // does not inherit that fd on Windows — so the daemon owning the file is what populates it there.
+  // Pass --log-file so the daemon writes daemon.log itself (see configureDaemonLogging). The dev
+  // spawn also redirects native/pre-logger stderr there; release supervisors persist independently
+  // and their daemon child owns the log file on every platform.
   const relayArgs = ['--start-relay', '--log-file', logPath];
-  const releaseSpawn = releaseDaemonSupervisorSpawnOptions(process.execPath, logPath);
-  const spawn = isDevEntry
-    ? {
-        argv: ['bun', devEntry, ...relayArgs],
-        detached: true as const,
-        stdin: 'ignore' as const,
-        stdout: 'pipe' as const
-      }
-    : releaseSpawn;
-  const proc = Bun.spawn(spawn.argv, {
-    stdin: spawn.stdin,
-    stdout: spawn.stdout,
-    stderr: logFd,
-    detached: spawn.detached
-  });
-  closeSync(logFd);
-  await Bun.write(getPidPath(), String(proc.pid));
-  proc.unref();
+  if (isDevEntry) {
+    const logFd = openSync(logPath, 'a');
+    const proc = Bun.spawn(['bun', devEntry, ...relayArgs], {
+      stdin: 'ignore',
+      stdout: 'pipe',
+      stderr: logFd,
+      detached: true
+    });
+    closeSync(logFd);
+    await Bun.write(getPidPath(), String(proc.pid));
+    proc.unref();
+    const ready = await relayUntilReady(proc.stdout, proc.pid, logPath, presentation);
+    if (!ready && options.requireReady) throw new Error(`${t('cli.daemon.notReady')} (${logPath})`);
+    return { alreadyRunning: false };
+  }
 
-  const ready =
-    proc.stdout instanceof ReadableStream
-      ? await relayUntilReady(proc.stdout, proc.pid, logPath, presentation)
-      : await waitUntilReady(proc.pid, logPath, presentation.reportLifecycle);
+  const launcherArgv = releaseDaemonSupervisorLauncherArgv(
+    process.platform,
+    process.execPath,
+    logPath,
+    startupOutputPath
+  );
+  const launcher = Bun.spawn(launcherArgv, {
+    env: process.env,
+    stderr: 'pipe',
+    stdout: 'pipe'
+  });
+  const [pidText, launcherError, launcherExitCode] = await Promise.all([
+    new Response(launcher.stdout).text(),
+    new Response(launcher.stderr).text(),
+    launcher.exited
+  ]);
+  const supervisorPid = Number.parseInt(pidText.trim(), 10);
+  if (launcherExitCode !== 0 || !Number.isInteger(supervisorPid) || supervisorPid <= 0) {
+    throw new Error(`failed to start daemon supervisor: ${launcherError.trim() || pidText.trim()}`);
+  }
+  await Bun.write(getPidPath(), String(supervisorPid));
+
+  const ready = await waitUntilReady(supervisorPid, logPath, presentation.reportLifecycle);
+  if (ready && presentation.relayStartup) {
+    await Bun.sleep(600);
+    const startupOutput = await Bun.file(startupOutputPath)
+      .text()
+      .catch(() => '');
+    if (startupOutput) process.stdout.write(startupOutput);
+  }
   if (!ready && options.requireReady) throw new Error(`${t('cli.daemon.notReady')} (${logPath})`);
   return { alreadyRunning: false };
 }
@@ -283,6 +330,7 @@ export async function runDaemonSupervisor(): Promise<void> {
     if (started && startupOutput) await Bun.sleep(600);
     await startupOutput?.stop();
     const exitCode = await child.exited.catch(() => 1);
+    supervisorLog(logPath, 'daemon supervisor child exited', { childPid: child.pid, exitCode, started }, 30);
     if (stopping) return;
     const action = nextDaemonSupervisorAction({ started, readyOnce, exitCode });
     if (action.type === 'exit') {
