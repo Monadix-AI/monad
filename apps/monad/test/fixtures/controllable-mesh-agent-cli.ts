@@ -35,33 +35,40 @@ export async function writeControllableMeshAgentCli(
   const authGate =
     'if (args === "auth status --json") { process.stdout.write(JSON.stringify({ state: "authenticated" }) + "\\n"); process.exit(0); }';
   const body =
-    options.hangAfterInit || options.exitAfterInit !== undefined
+    options.exitAfterInit !== undefined
       ? [
           '#!/usr/bin/env bun',
           'const args = process.argv.slice(2).join(" ");',
           authGate,
-          `process.stdout.write(${JSON.stringify(init)} + "\\n");`,
-          options.hangAfterInit
-            ? // Never resolve: the turn is left "in flight" until the test sends a signal to this pid.
-              'await new Promise(() => {});'
-            : `process.exit(${options.exitAfterInit});`
-        ].join('\n')
-      : [
-          '#!/usr/bin/env bun',
-          'const args = process.argv.slice(2).join(" ");',
-          authGate,
-          'let input = "";',
-          'process.stdin.on("data", (chunk) => {',
-          '  input += chunk.toString();',
-          '  const boundary = input.indexOf("\\n");',
-          '  if (boundary < 0) return;',
-          '  const line = input.slice(0, boundary);',
-          `  process.stdout.write(${JSON.stringify(init)} + "\\n");`,
-          `  process.stdout.write(JSON.stringify({ type: "assistant", session_id: ${JSON.stringify(options.sessionRef)}, message: { role: "assistant", content: [{ type: "text", text: "echo:" + line }] } }) + "\\n");`,
-          `  process.stdout.write(JSON.stringify({ type: "result", subtype: ${exitCode === 0 ? '"success"' : '"error"'}, result: "", permission_denials: [] }) + "\\n");`,
-          `  process.exit(${exitCode});`,
+          'process.stdin.once("data", () => {',
+          `  process.stdout.write(${JSON.stringify(init)} + "\\n", () => process.exit(${options.exitAfterInit}));`,
           '});'
-        ].join('\n');
+        ].join('\n')
+      : options.hangAfterInit
+        ? [
+            '#!/usr/bin/env bun',
+            'const args = process.argv.slice(2).join(" ");',
+            authGate,
+            `process.stdout.write(${JSON.stringify(init)} + "\\n");`,
+            // Never resolve: the turn is left "in flight" until the test sends a signal to this pid.
+            'await new Promise(() => {});'
+          ].join('\n')
+        : [
+            '#!/usr/bin/env bun',
+            'const args = process.argv.slice(2).join(" ");',
+            authGate,
+            'let input = "";',
+            'process.stdin.on("data", (chunk) => {',
+            '  input += chunk.toString();',
+            '  const boundary = input.indexOf("\\n");',
+            '  if (boundary < 0) return;',
+            '  const line = input.slice(0, boundary);',
+            `  process.stdout.write(${JSON.stringify(init)} + "\\n");`,
+            `  process.stdout.write(JSON.stringify({ type: "assistant", session_id: ${JSON.stringify(options.sessionRef)}, message: { role: "assistant", content: [{ type: "text", text: "echo:" + line }] } }) + "\\n");`,
+            `  process.stdout.write(JSON.stringify({ type: "result", subtype: ${exitCode === 0 ? '"success"' : '"error"'}, result: "", permission_denials: [] }) + "\\n");`,
+            `  process.exit(${exitCode});`,
+            '});'
+          ].join('\n');
   await writeFile(script, body);
   await chmod(script, 0o755);
   return script;

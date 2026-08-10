@@ -259,11 +259,13 @@ for (const kind of TRANSPORTS) {
         // choosing to die with an exit code, with no external signal and no result frame ever
         // sent — the orphan/crash path a daemon restart must reconcile, not a signalled kill.
         const closed = waitForConnectionClosed(handlers.bus, sessionId, meshSession.id);
-        const input = await call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
-          input: 'trigger a provider self-crash'
-        });
+        const [input] = await Promise.all([
+          call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
+            input: 'trigger a provider self-crash'
+          }),
+          closed
+        ]);
         expect(input.status).toBe(200);
-        await closed;
 
         const settled = handlers.store.getMeshSession(meshSession.id);
         expect({ state: settled?.state, providerSessionRef: settled?.providerSessionRef, pid: settled?.pid }).toEqual({
