@@ -13,8 +13,17 @@ function providerRecordIds(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.flatMap(providerRecordIds);
   if (raw === null || typeof raw !== 'object') return [];
   const record = raw as Record<string, unknown>;
-  const identity = typeof record.uuid === 'string' ? record.uuid : record.id;
-  return typeof identity === 'string' && identity.length > 0 ? [identity] : [];
+  const params = recordValue(record.params);
+  const nestedEvent = recordValue(params?.event);
+  const identity = typeof record.uuid === 'string' ? record.uuid : (record.id ?? nestedEvent?.id);
+  if (typeof identity === 'string' && identity.length > 0) return [identity];
+  if (typeof identity === 'number' && Number.isFinite(identity)) return [String(identity)];
+  if (typeof identity === 'bigint') return [String(identity)];
+  return [];
+}
+
+export function providerRecordIdentity(raw: unknown): string | undefined {
+  return providerRecordIds(raw)[0];
 }
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {
@@ -82,7 +91,7 @@ function outputRecordIdentities(entries: MeshAgentObservationJsonRecordEntry[]):
         turnIndex = 0;
       }
     }
-    if (!turnId) return providerRecordIds(record)[0];
+    if (!turnId) return providerRecordIdentity(record);
     const identity = `${turnId}:${turnIndex}`;
     turnIndex += 1;
     return identity;

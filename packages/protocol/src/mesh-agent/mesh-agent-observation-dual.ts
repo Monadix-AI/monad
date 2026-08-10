@@ -6,6 +6,8 @@ import { normalizeQueryStringValue } from '../pagination.ts';
 import { meshAgentProviderSchema } from './mesh-agent-config.ts';
 import { observationCursorSchema } from './observation-cursor.ts';
 
+export const MESH_NATIVE_SESSION_UNAVAILABLE_REASON = 'native-session-unavailable';
+
 // The raw observation plane. `data` is the exact accepted provider frame (a string for live text
 // transports) or the exact native record returned by the adapter's raw events reader. Monad adds
 // only routing/ordering metadata; it never normalizes `data`. Raw delivery happens before

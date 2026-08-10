@@ -396,10 +396,11 @@ test('Hermes history maps user, reasoning, and assistant content separately', ()
     id: 'stored-hermes',
     mode: 'events',
     output: [
-      JSON.stringify({ id: 1, role: 'user', content: 'hi' }),
+      JSON.stringify({ id: 1, role: 'user', content: 'hi', timestamp: 1_786_281_662.88606 }),
       JSON.stringify({
         id: 2,
         role: 'assistant',
+        timestamp: 1_786_281_672.404487,
         reasoning_content: 'Check the inbox.',
         content: 'Done.'
       })
@@ -408,12 +409,27 @@ test('Hermes history maps user, reasoning, and assistant content separately', ()
   expect(
     events.map((event) => {
       const neutral = toAgentObservationEvent(event, hermesMeshAgentAdapter.observation);
-      return neutral ? { kind: neutral.kind, text: neutral.text } : null;
+      return neutral ? { id: neutral.id, kind: neutral.kind, text: neutral.text, at: neutral.at } : null;
     })
   ).toEqual([
-    { kind: 'user-message', text: 'hi' },
-    { kind: 'reasoning', text: 'Check the inbox.' },
-    { kind: 'assistant-message', text: 'Done.' }
+    {
+      id: 'stored-hermes:json:1:message',
+      kind: 'user-message',
+      text: 'hi',
+      at: '2026-08-09T13:21:02.886Z'
+    },
+    {
+      id: 'stored-hermes:json:2:reasoning',
+      kind: 'reasoning',
+      text: 'Check the inbox.',
+      at: '2026-08-09T13:21:12.404Z'
+    },
+    {
+      id: 'stored-hermes:json:2:message',
+      kind: 'assistant-message',
+      text: 'Done.',
+      at: '2026-08-09T13:21:12.404Z'
+    }
   ]);
 });
 
@@ -454,16 +470,16 @@ test('Hermes history preserves matching tool call ids for card pairing', () => {
   ).toEqual([
     {
       kind: 'tool-call',
-      tool: { name: 'terminal', callId: 'terminal_1', input: '{"command":"pwd"}' }
+      tool: { name: 'terminal', category: 'shell', callId: 'terminal_1', input: '{"command":"pwd"}' }
     },
     {
       kind: 'tool-result',
-      tool: { name: 'terminal', callId: 'terminal_1', output: '/project' }
+      tool: { name: 'terminal', category: 'shell', callId: 'terminal_1', output: '/project' }
     }
   ]);
 });
 
-test('Hermes history backfill reads the managed profile home from provider context', async () => {
+test('Hermes history backfill reads the managed profile home and keeps raw records chronological', async () => {
   const runtimeWorkspace = mkdtempSync(join(tmpdir(), 'hermes-history-'));
   const home = join(runtimeWorkspace, '.hermes-managed');
   mkdirSync(home, { recursive: true });
@@ -506,6 +522,10 @@ test('Hermes history backfill reads the managed profile home from provider conte
       'INSERT INTO messages (id, session_id, role, content, timestamp, reasoning_content, active) VALUES (?, ?, ?, ?, ?, ?, ?)',
       [1, 'managed-session', 'assistant', 'Ready.', 2, 'Checked managed history.', 1]
     );
+    db.run(
+      'INSERT INTO messages (id, session_id, role, content, timestamp, reasoning_content, active) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      [2, 'managed-session', 'user', 'Continue.', 3, null, 1]
+    );
   } finally {
     db.close();
   }
@@ -534,10 +554,44 @@ test('Hermes history backfill reads the managed profile home from provider conte
           timestamp: 2,
           reasoning: null,
           reasoning_content: 'Checked managed history.'
+        },
+        {
+          id: 2,
+          session_id: 'managed-session',
+          role: 'user',
+          content: 'Continue.',
+          tool_call_id: null,
+          tool_calls: null,
+          tool_name: null,
+          timestamp: 3,
+          reasoning: null,
+          reasoning_content: null
         }
       ],
       nextCursor: undefined
     });
+
+    const raw = await hermesMeshAgentAdapter.events.readPage?.(
+      {
+        providerSessionRef: 'managed-session',
+        workingPath: '/project',
+        managedRuntimeWorkspace: runtimeWorkspace,
+        env: { HERMES_API_BASE_URL: 'http://127.0.0.1:1', PATH: '/nonexistent' }
+      },
+      { view: 'raw', limit: 50 }
+    );
+    expect(
+      raw?.state === 'available' && raw.view === 'raw'
+        ? raw.records.map(({ cursor, data, providerIdentity }) => ({
+            id: data && typeof data === 'object' && 'id' in data ? data.id : undefined,
+            cursor,
+            providerIdentity
+          }))
+        : raw
+    ).toEqual([
+      { id: 1, cursor: '1', providerIdentity: '1' },
+      { id: 2, cursor: '2', providerIdentity: '2' }
+    ]);
   } finally {
     rmSync(runtimeWorkspace, { recursive: true, force: true });
   }

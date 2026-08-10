@@ -346,6 +346,21 @@ test('Codex app-server failure makes history temporarily unavailable', async () 
   });
 });
 
+test('Codex reports a missing native thread as unavailable instead of leaking the reader error', async () => {
+  const source = createCodexEventSource({
+    pageRead: async () => {
+      throw new Error('Thread not found');
+    }
+  });
+  const readPage = source.readPage;
+  if (!readPage) throw new Error('expected Codex provider event paging');
+
+  expect(await readPage(context, { view: 'convenience', limit: 20 })).toEqual({
+    state: 'unavailable',
+    reason: 'not-found'
+  });
+});
+
 test('line cursors remain stable when the provider file grows between pages', async () => {
   let records = Array.from({ length: 6 }, (_, index) => ({ id: `record-${index}`, text: `${index}` }));
   const source = createOutputEventSource({

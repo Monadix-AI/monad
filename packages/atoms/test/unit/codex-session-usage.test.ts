@@ -94,3 +94,40 @@ test('Codex session usage resumes with turns and returns the replayed notificati
   ]);
   expect(killed).toBe(true);
 });
+
+test('Codex archived sessions return no usage instead of leaking thread/resume errors', async () => {
+  let killed = false;
+  const usage = await readCodexSessionUsage(
+    {
+      providerSessionRef: 'thread-archived',
+      workingPath: '/workspace',
+      executable: '/bin/codex'
+    },
+    {
+      spawn: () => ({
+        stdin: { write: () => {} },
+        stdout: new ReadableStream({
+          start(controller) {
+            controller.enqueue(
+              new TextEncoder().encode(
+                `${JSON.stringify({
+                  id: 2,
+                  error: {
+                    message:
+                      'session thread-archived is archived. Run `codex unarchive thread-archived` to unarchive it first.'
+                  }
+                })}\n`
+              )
+            );
+            controller.close();
+          }
+        }),
+        kill: () => {
+          killed = true;
+        }
+      })
+    }
+  );
+
+  expect({ killed, usage }).toEqual({ killed: true, usage: null });
+});

@@ -13,7 +13,13 @@ import type {
 import type { LiveMeshSession } from '#/services/mesh-agent/host/host-types.ts';
 import type { Store } from '#/store/db/index.ts';
 
-import { formatObservationCursor, observationCursorSchema, parseObservationPageBefore } from '@monad/protocol';
+import { createLogger } from '@monad/logger';
+import {
+  formatObservationCursor,
+  MESH_NATIVE_SESSION_UNAVAILABLE_REASON,
+  observationCursorSchema,
+  parseObservationPageBefore
+} from '@monad/protocol';
 import { toFallbackAgentObservationEvent } from '@monad/sdk-atom';
 
 import { MeshAgentError } from '#/services/mesh-agent/errors.ts';
@@ -45,6 +51,24 @@ interface MeshAgentEventPagesContext {
   resolveAgentEnv?: (agentName: string) => Promise<Record<string, string> | undefined>;
   store: Store;
 }
+
+type ProviderEventsUnavailableReason = 'unsupported' | 'not-found' | 'temporary';
+
+class ProviderEventsUnavailableError extends Error {
+  constructor(
+    readonly reason: ProviderEventsUnavailableReason,
+    readonly providerCause?: unknown
+  ) {
+    super(`provider events unavailable: ${reason}`);
+    this.name = 'ProviderEventsUnavailableError';
+  }
+}
+
+function unavailableConveniencePage(reason: string): MeshConvenienceEventPage {
+  return { frames: [{ kind: 'unavailable', reason }] };
+}
+
+const log = createLogger('mesh-agent');
 
 export class MeshAgentEventPages {
   constructor(private readonly context: MeshAgentEventPagesContext) {}
@@ -170,8 +194,25 @@ export class MeshAgentEventPages {
     try {
       page = await this.projectedEventsPage(id, { ...req, view: 'convenience' }, beforePosition);
     } catch (error) {
+      if (error instanceof ProviderEventsUnavailableError) {
+        if (error.providerCause !== undefined) {
+          log.error(
+            { meshSessionId: id, provider, err: error.providerCause, event: 'mesh.convenienceEventsPage' },
+            'convenience event page failed'
+          );
+        }
+        return unavailableConveniencePage(
+          error.reason === 'not-found' ? MESH_NATIVE_SESSION_UNAVAILABLE_REASON : 'provider events unavailable'
+        );
+      }
       if (error instanceof MeshAgentError && error.code === 'unsupported_capability') return { frames: [] };
-      throw error;
+      // The frame is deliberately generic, so without this line an internal failure is
+      // indistinguishable from an offline provider and leaves no trace to report.
+      log.error(
+        { meshSessionId: id, provider, err: error, event: 'mesh.convenienceEventsPage' },
+        'convenience event page failed'
+      );
+      return unavailableConveniencePage('provider events unavailable');
     }
     const adapter = getMeshAgentProviderAdapter(provider);
     const runtime = adapter.observationRuntime;
@@ -239,21 +280,26 @@ export class MeshAgentEventPages {
     const workingPath = live.workingPath;
     const providerReq = providerEventPageRequest(req, cursor);
     if (live.adapter.events.readPage && providerSessionRef && workingPath) {
-      const result = await live.adapter.events.readPage(
-        await this.providerContext({
-          meshSessionId: id,
-          agentName: live.agentName,
-          providerSessionRef,
-          workingPath
-        }),
-        { view: 'convenience', before: providerReq.before, limit: providerReq.limit }
-      );
+      const result = await live.adapter.events
+        .readPage(
+          await this.providerContext({
+            meshSessionId: id,
+            agentName: live.agentName,
+            providerSessionRef,
+            workingPath
+          }),
+          { view: 'convenience', before: providerReq.before, limit: providerReq.limit }
+        )
+        .catch((error) => {
+          throw new ProviderEventsUnavailableError('temporary', error);
+        });
       if (result.state === 'available' && result.view === 'convenience') {
         return {
           events: result.events,
           ...(result.nextCursor ? { nextCursor: encodeEventCursor(result.nextCursor) } : {})
         };
       }
+      if (result.state === 'unavailable') throw new ProviderEventsUnavailableError(result.reason);
     }
     throw new MeshAgentError('unsupported_capability', `provider events unavailable for live session: ${id}`);
   }
@@ -282,13 +328,16 @@ export class MeshAgentEventPages {
           }),
           pageRequest
         )
-        .catch(() => undefined);
+        .catch((error) => {
+          throw new ProviderEventsUnavailableError('temporary', error);
+        });
       if (local?.state === 'available' && local.view === 'convenience') {
         return {
           events: local.events,
           ...(local.nextCursor ? { nextCursor: encodeEventCursor(local.nextCursor) } : {})
         };
       }
+      if (local?.state === 'unavailable') throw new ProviderEventsUnavailableError(local.reason);
     }
     throw new MeshAgentError('unsupported_capability', `provider events unavailable for stopped session: ${id}`);
   }

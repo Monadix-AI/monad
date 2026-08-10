@@ -270,6 +270,7 @@ export {
   nativeAgentTurnPointerSchema
 } from './mesh-agent-observation.ts';
 export {
+  MESH_NATIVE_SESSION_UNAVAILABLE_REASON,
   meshConnectionSnapshotSchema,
   meshConvenienceEventPageSchema,
   meshConvenienceFrameSchema,

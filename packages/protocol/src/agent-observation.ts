@@ -38,8 +38,12 @@ export const agentObservationTurnEndReasonSchema = z.enum([
 ]);
 export type AgentObservationTurnEndReason = z.infer<typeof agentObservationTurnEndReasonSchema>;
 
+export const agentObservationToolCategorySchema = z.enum(['shell']);
+export type AgentObservationToolCategory = z.infer<typeof agentObservationToolCategorySchema>;
+
 export const agentObservationToolSchema = z.object({
   name: z.string().min(1),
+  category: agentObservationToolCategorySchema.optional(),
   callId: z.string().min(1).optional(),
   input: z.unknown().optional(),
   output: z.unknown().optional(),

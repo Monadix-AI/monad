@@ -475,13 +475,15 @@ test('OpenClaw history maps user, reasoning blocks, and assistant text separatel
       JSON.stringify({
         type: 'message',
         id: 'user-1',
-        message: { role: 'user', content: 'hi' }
+        timestamp: '2026-08-09T13:20:59.901Z',
+        message: { role: 'user', content: 'hi', timestamp: 1_786_281_659_928 }
       }),
       JSON.stringify({
         type: 'message',
         id: 'assistant-1',
         message: {
           role: 'assistant',
+          timestamp: 1_786_281_671_507,
           content: [
             { type: 'thinking', thinking: 'Inspect the batch.' },
             { type: 'text', text: 'Done.' }
@@ -493,12 +495,12 @@ test('OpenClaw history maps user, reasoning blocks, and assistant text separatel
   expect(
     events.map((event) => {
       const neutral = toAgentObservationEvent(event, openClawMeshAgentAdapter.observation);
-      return neutral ? { kind: neutral.kind, text: neutral.text } : null;
+      return neutral ? { kind: neutral.kind, text: neutral.text, at: neutral.at } : null;
     })
   ).toEqual([
-    { kind: 'user-message', text: 'hi' },
-    { kind: 'reasoning', text: 'Inspect the batch.' },
-    { kind: 'assistant-message', text: 'Done.' }
+    { kind: 'user-message', text: 'hi', at: '2026-08-09T13:20:59.901Z' },
+    { kind: 'reasoning', text: 'Inspect the batch.', at: '2026-08-09T13:21:11.507Z' },
+    { kind: 'assistant-message', text: 'Done.', at: '2026-08-09T13:21:11.507Z' }
   ]);
 });
 

@@ -8,7 +8,8 @@ import {
   classifyObservationActivity,
   isStreamingObservationFragment,
   recordValue,
-  textValue
+  textValue,
+  toolCategoryByName
 } from '../../observation-projection.ts';
 import {
   codexAppServerBatchRecordEvents,
@@ -84,6 +85,15 @@ export const codexObservationProjection = {
   usageRecords: codexUsageRecordsFromRecord,
   messageGroup: codexObservationMessageGroupAdapter,
   classifyActivity: classifyObservationActivity,
+  toolCategory: toolCategoryByName('shell', [
+    'commandExecution',
+    'command_execution',
+    'execCommand',
+    'exec_command',
+    'shell',
+    'shell_exec',
+    'bash'
+  ]),
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
     {

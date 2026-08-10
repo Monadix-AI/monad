@@ -7,7 +7,8 @@ import {
   observation,
   providerIsoTimestamp,
   textValue,
-  thinkingObservation
+  thinkingObservation,
+  toolCategoryByName
 } from '../observation-projection.ts';
 
 export function geminiRecordEvents(
@@ -145,6 +146,7 @@ function geminiHistoryEntries(entries: MeshAgentObservationJsonRecordEntry[]): M
 export const geminiObservationProjection = {
   eventEntries: geminiHistoryEntries,
   classifyActivity: classifyObservationActivity,
+  toolCategory: toolCategoryByName('shell', ['run_shell_command', 'shell']),
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => geminiRecordEvents(id, record, recordIndex) }]
 } satisfies MeshAgentObservationProjector;

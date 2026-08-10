@@ -25,7 +25,8 @@ import {
   recordValue,
   resultMarkerText,
   textValue,
-  thinkingObservation
+  thinkingObservation,
+  toolCategoryByName
 } from '../observation-projection.ts';
 
 export type ClaudeObservationMessage = Partial<SDKMessage> & Record<string, unknown> & { type: string };
@@ -372,6 +373,7 @@ export const claudeCodeObservationProjection = {
   identity: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
+  toolCategory: toolCategoryByName('shell', ['Bash']),
   isStreamingFragment: isStreamingObservationFragment,
   mergeStreamingRun: (events: MeshAgentObservationEvent[]) => {
     const first = events[0];
