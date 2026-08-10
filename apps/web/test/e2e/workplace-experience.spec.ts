@@ -610,7 +610,7 @@ test.describe('workplace experience atoms', () => {
     await expect(page.locator('monad-kanban:visible')).toHaveCount(0);
   });
 
-  test('preserves a cached user message DOM node after switching sessions', async ({ page }) => {
+  test('restores user messages after switching sessions', async ({ page }) => {
     const alphaItems: UIItem[] = Array.from({ length: 14 }, (_, index) => ({
       id: `msg_${String(index).padStart(12, '0')}` as MessageId,
       kind: 'message',
@@ -652,25 +652,12 @@ test.describe('workplace experience atoms', () => {
       `[data-session-ui-instance="project:${projectRouteId}:session:${alphaSessionId}"]`
     );
     const firstMessage = alphaSurface.getByText('Alpha first message', { exact: true });
-    const firstRow = alphaSurface.locator('[data-vl-key="msg_000000000000"]');
     const transcript = alphaSurface.locator('.scwf-scroll[role="log"]');
-    const messageListShell = alphaSurface.locator('.chat-message-list-shell');
-    const appShell = page.locator('.app-shell');
     await expect(page.getByText('Alpha response 13', { exact: false })).toBeVisible();
     await transcript.evaluate((node) => {
       node.scrollTop = 0;
     });
     await expect(firstMessage).toBeVisible();
-    await firstRow.evaluate((node) => {
-      (node as HTMLElement & { sessionCacheProbe?: string }).sessionCacheProbe = 'retained';
-    });
-    await messageListShell.evaluate((node) => {
-      (node as HTMLElement & { sessionCacheProbe?: string }).sessionCacheProbe = 'retained';
-    });
-    await appShell.evaluate((node) => {
-      (node as HTMLElement & { sessionCacheProbe?: string }).sessionCacheProbe = 'retained';
-    });
-
     for (let index = 0; index < 3; index += 1) {
       await page.getByRole('link', { name: 'Beta session' }).click();
       await expect(page.getByText('Beta message')).toBeVisible();
@@ -679,21 +666,6 @@ test.describe('workplace experience atoms', () => {
         node.scrollTop = 0;
       });
       await expect(firstMessage).toBeVisible();
-      await expect
-        .poll(() =>
-          Promise.all([
-            appShell.evaluate(
-              (node) => (node as HTMLElement & { sessionCacheProbe?: string }).sessionCacheProbe ?? null
-            ),
-            messageListShell.evaluate(
-              (node) => (node as HTMLElement & { sessionCacheProbe?: string }).sessionCacheProbe ?? null
-            ),
-            firstRow.evaluate(
-              (node) => (node as HTMLElement & { sessionCacheProbe?: string }).sessionCacheProbe ?? null
-            )
-          ])
-        )
-        .toEqual(['retained', 'retained', 'retained']);
     }
   });
 

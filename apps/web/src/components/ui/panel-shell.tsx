@@ -61,7 +61,7 @@ export function PanelShellHeader({
       {hasHeading ? (
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {icon}
-          {title != null ? <h2 className="min-w-0 font-medium text-sm">{title}</h2> : null}
+          {title != null ? <h2 className="min-w-0 flex-1 font-medium text-sm">{title}</h2> : null}
           {badge}
           {subtitle && <span className="min-w-0 truncate text-muted-foreground text-xs">{subtitle}</span>}
         </div>
@@ -87,14 +87,14 @@ export function PanelShellBreadcrumbHeader({
   leading?: ReactNode;
 }) {
   const breadcrumb = (
-    <span className="inline-flex min-w-0 items-center gap-1.5">
+    <span className="flex min-w-0 items-center gap-1.5">
       {crumbs.map((crumb, index) => (
         <span
-          className={index === crumbs.length - 1 ? 'truncate' : 'shrink-0'}
+          className={index === crumbs.length - 1 ? 'flex min-w-0 flex-1 items-center' : 'shrink-0'}
           key={crumb.id}
         >
-          {index > 0 ? <span className="mr-1.5 text-muted-foreground/70">/</span> : null}
-          {crumb.label}
+          {index > 0 ? <span className="mr-1.5 shrink-0 text-muted-foreground/70">/</span> : null}
+          <span className={index === crumbs.length - 1 ? 'min-w-0 flex-1 truncate' : undefined}>{crumb.label}</span>
         </span>
       ))}
     </span>
@@ -105,7 +105,18 @@ export function PanelShellBreadcrumbHeader({
       badge={badge}
       className={className}
       leading={leading}
-      title={ariaLabel ? <nav aria-label={ariaLabel}>{breadcrumb}</nav> : breadcrumb}
+      title={
+        ariaLabel ? (
+          <nav
+            aria-label={ariaLabel}
+            className="min-w-0"
+          >
+            {breadcrumb}
+          </nav>
+        ) : (
+          breadcrumb
+        )
+      }
     />
   );
 }

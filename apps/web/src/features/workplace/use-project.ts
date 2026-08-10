@@ -32,6 +32,7 @@ import {
   useListWorkplaceProjectsQuery,
   useStreamMeshAgentStateQuery,
   useStreamUiItemsQuery,
+  useUpdateSessionMutation,
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
@@ -96,6 +97,7 @@ export function useProject(
     [projectSessionData]
   );
   const [deleteSession] = useDeleteSessionMutation();
+  const [updateSession] = useUpdateSessionMutation();
   // Manual pick (tab click) wins over the default; forgotten when the project changes so a fresh
   // project always starts on its own default rather than a stale sibling's manual selection.
   const [sessionOverride, setSessionOverride] = useState<SessionId | null>(null);
@@ -124,6 +126,12 @@ export function useProject(
       if (sessionOverride === id) setSessionOverride(null);
     },
     [deleteSession, sessionOverride]
+  );
+  const renameSession = useCallback(
+    async (id: SessionId, title: string) => {
+      await updateSession({ id, title }).unwrap();
+    },
+    [updateSession]
   );
 
   // --- live stream + lazy older history ---
@@ -309,7 +317,8 @@ export function useProject(
       stopMeshAgent,
       refreshMeshAgentCatalog,
       switchSession,
-      closeSession
+      closeSession,
+      renameSession
     }),
     [
       activeProjectId,
@@ -318,6 +327,7 @@ export function useProject(
       projectSessions,
       switchSession,
       closeSession,
+      renameSession,
       projectId,
       projects,
       participants,

@@ -6,6 +6,7 @@ import { lazy, memo, type ReactNode, Suspense, useEffect, useMemo, useState } fr
 
 import { PanelLoading } from '#/components/PanelLoading';
 import { WorkspaceRoute } from '#/features/workspace/WorkspaceRoute';
+import { SessionUiActivity } from './SessionUiActivity';
 import {
   activateSessionUiInstance,
   pruneSessionUiInstances,
@@ -37,17 +38,19 @@ const SessionUiInstancePane = memo(function SessionUiInstancePane({
   visible: boolean;
 }) {
   return (
-    <div
-      aria-hidden={!visible}
-      className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
-      data-session-ui-instance={surface.key}
-      inert={visible ? undefined : true}
-      style={{ pointerEvents: visible ? undefined : 'none', visibility: visible ? 'visible' : 'hidden' }}
-    >
-      <Suspense fallback={visible ? <PanelLoading /> : null}>
-        {surface.kind === 'chat' ? <SessionRoute model={surface.model} /> : <WorkspaceRoute {...surface.props} />}
-      </Suspense>
-    </div>
+    <SessionUiActivity visible={visible}>
+      <div
+        aria-hidden={!visible}
+        className="absolute inset-0 flex min-h-0 min-w-0 flex-col overflow-hidden"
+        data-session-ui-instance={surface.key}
+        inert={visible ? undefined : true}
+        style={{ pointerEvents: visible ? undefined : 'none', visibility: visible ? 'visible' : 'hidden' }}
+      >
+        <Suspense fallback={visible ? <PanelLoading /> : null}>
+          {surface.kind === 'chat' ? <SessionRoute model={surface.model} /> : <WorkspaceRoute {...surface.props} />}
+        </Suspense>
+      </div>
+    </SessionUiActivity>
   );
 });
 
