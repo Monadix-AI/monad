@@ -311,7 +311,7 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
       this.pendingRequests.set(id, { method, resolve, reject });
       this.handle.pendingRequests?.set(id, kind);
     });
-    return this.send(jsonRpcRequest(method, id, params)).then(() => response);
+    return Promise.all([this.send(jsonRpcRequest(method, id, params)), response]).then(([, result]) => result);
   }
 
   private async requireThreadId(): Promise<string> {
