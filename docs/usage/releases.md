@@ -1,6 +1,6 @@
 ---
 title: "Releases, Channels, and Upgrading"
-description: "Choose a Monad release channel, upgrade or roll back safely, and understand client-daemon compatibility."
+description: "Choose a Monad release channel, upgrade safely, and understand client-daemon compatibility."
 sidebarTitle: "Releases and Upgrading"
 keywords: ["release channels", "stable beta nightly", "upgrade Monad", "version compatibility"]
 ---
@@ -22,15 +22,7 @@ The contributor-facing side of this — how releases are cut — is in
 Nightly has no release PR and no changelog entry. It is `main` as it stands — use it when
 you want the newest work and can tolerate a broken day.
 
-Install a specific channel:
-
-```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta
-```
-
-Without `curl`, use `wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta`.
-
-Switch an existing install:
+Each dist installer is bound to its release tag. Install stable with the latest installer, then switch an existing install explicitly when needed:
 
 ```bash
 monad upgrade --channel beta
@@ -42,13 +34,18 @@ monad upgrade --channel beta
 monad upgrade --check         # report only, changes nothing
 monad upgrade                 # apply the latest release on the current channel
 monad upgrade --notes         # show release notes alongside version info
-monad upgrade rollback        # restore the previous binary
-monad upgrade --prune-backups # keep only the 3 most recent binary backups
+monad upgrade --tag v0.1.3    # install that exact release, including a downgrade
+monad upgrade --force         # reinstall the selected/current release
+monad doctor update           # inspect updater, receipt, channel, and the last attempt log
 ```
 
-The upgrade contacts GitHub Releases **only when you run it** — there is no background
-update check and no auto-update. The previous binary is kept under `~/.monad/backup/binaries/`,
-which is what `rollback` restores.
+The CLI resolves the selected channel to one exact GitHub release tag and passes that tag to
+`monad-update`. The Web UI follows the current build channel, exits the daemon before replacing
+the executable, and restarts it after a successful update.
+
+`--tag` and `--channel` are mutually exclusive. Exact tags are intentional operations and may
+downgrade the installation; `--force` still uses the release checksum and only bypasses the
+same-version check.
 
 Your configuration and data are untouched by an upgrade: the installer leaves an existing
 `~/.monad` in place.
@@ -81,7 +78,5 @@ Upgrade before reporting a vulnerability. Full policy: [SECURITY.md](https://git
 
 ## Verifying a download
 
-The installer verifies the release SHA256 checksum before installing; `--no-verify` skips
-that and should only be used when you have verified the artifact another way. For manual
-installation and checksum verification, see
+Release assets include SHA256 files. For manual installation and checksum verification, see
 [the README](https://github.com/Monadix-AI/monad/blob/main/README.md#manual-installation).

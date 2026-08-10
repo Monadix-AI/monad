@@ -18,7 +18,7 @@
   "cli.cmd.init.desc": "以交互方式设置 Monad（主文件夹和 model provider）",
   "cli.cmd.upgrade.desc": "检查并应用 Monad 更新",
   "cli.cmd.upgrade.checkFlag": "仅检查是否有更新，不执行安装",
-  "cli.cmd.upgrade.channelFlag": "发布渠道：stable（默认）、beta 或 nightly",
+  "cli.cmd.upgrade.channelFlag": "发布渠道：stable、beta 或 nightly（默认跟随当前构建渠道）",
   "cli.cmd.upgrade.pruneFlag": "删除旧备份（仅保留最近 3 份）后退出",
   "cli.cmd.upgrade.notesFlag": "同时显示 release notes",
   "cli.cmd.purge.desc": "永久删除已存储的状态（sessions、config、auth，或整个 Monad home）",

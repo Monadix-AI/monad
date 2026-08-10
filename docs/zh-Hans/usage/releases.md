@@ -1,7 +1,7 @@
 ---
 title: "发行版与升级"
 sidebarTitle: "发行与升级"
-description: "选择 Monad 发行通道，安全升级或回滚，并理解客户端与守护进程兼容性。"
+description: "选择 Monad 发行通道，安全升级，并理解客户端与守护进程兼容性。"
 keywords: ["Monad 升级", "stable", "beta", "nightly", "版本兼容"]
 ---
 Monad 把守护进程、CLI 和 Web 界面作为同一个带版本号的构建一起发布，分三条通道：默认的 `stable`、预发布的 `beta`，以及跟随 `main` 最新提交的 `nightly`。
@@ -16,31 +16,27 @@ Monad 把守护进程、CLI 和 Web 界面作为同一个带版本号的构建�
 | `beta` | 愿意反馈问题的早期用户 | 使用同一质量门的预发行版本 | `v0.2.0-beta.1` |
 | `nightly` | 跟踪 `main` 的开发者 | 自动构建当天 `main` 最新提交 | `v0.2.0-nightly.<date>+<sha>` |
 
-安装时选择 beta：
-
-```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta
-```
-
-没有 `curl` 时，可运行 `wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --channel beta`。
-
-已有安装可切换通道：
+每个 dist 安装器都绑定到一个精确发行 tag。先用 latest 安装稳定版，需要时再显式切换已有安装：
 
 ```bash
 monad upgrade --channel beta
 ```
 
-## 升级与回滚
+## 升级
 
 ```bash
 monad upgrade --check
 monad upgrade
-monad upgrade --changelog
-monad upgrade rollback
-monad upgrade --prune-backups
+monad upgrade --notes
+monad upgrade --tag v0.1.3    # 安装指定版本，也可用于降级
+monad upgrade --force         # 强制重装当前选择的版本
+monad doctor update           # 检查更新器、receipt、通道和上次升级日志
 ```
 
-`--check` 只报告，不修改文件。正常升级会校验下载并保留上一二进制；`rollback` 恢复上一次版本；`--prune-backups` 只保留最近三个备份。
+`--check` 只报告，不修改文件。CLI 会把所选 channel 解析为精确 GitHub release tag，再交给 `monad-update`。Web UI 跟随当前构建的 channel，先退出守护进程，更新成功后再重启。
+
+`--tag` 与 `--channel` 不能同时使用。指定 tag 属于明确操作，因此允许降级；`--force`
+只跳过“版本相同”判断，下载和校验流程保持不变。
 
 ## 版本与兼容性
 

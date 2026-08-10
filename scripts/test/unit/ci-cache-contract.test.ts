@@ -67,7 +67,6 @@ test('every Bun dependency install restores the package cache first', async () =
     { cacheConfigured: true, job: 'ci.yml:unit' },
     { cacheConfigured: true, job: 'ci.yml:hermetic-e2e' },
     { cacheConfigured: true, job: 'ci.yml:web-e2e' },
-    { cacheConfigured: true, job: 'nightly.yml:build' },
     { cacheConfigured: true, job: 'nightly.yml:live-e2e' },
     { cacheConfigured: true, job: 'npm-publish.yml:publish' },
     { cacheConfigured: true, job: 'release.yml:atom-pack' },

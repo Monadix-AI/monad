@@ -1,247 +1,178 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join, relative, sep } from 'node:path';
+import { join } from 'node:path';
 import { MONAD_VERSION } from '@monad/protocol';
 
-import { createSystemUpgradeModule } from '#/handlers/system-upgrade.ts';
+import { createSystemUpgradeModule, workerCommand } from '#/handlers/system-upgrade.ts';
 
 type SpawnOptions = NonNullable<Parameters<typeof Bun.spawn>[1]>;
 
-function stream(text: string): ReadableStream<Uint8Array> {
-  return new ReadableStream({
-    start(controller) {
-      controller.enqueue(new TextEncoder().encode(text));
-      controller.close();
-    }
-  });
-}
-
-function sha256(bytes: Uint8Array): string {
-  const hasher = new Bun.CryptoHasher('sha256');
-  hasher.update(bytes);
-  return hasher.digest('hex');
-}
-
-function relativeCachePath(cacheDir: string, path: string | undefined): string | undefined {
-  return path === undefined ? undefined : relative(cacheDir, path).split(sep).join('/');
-}
-
-function createFetch(): typeof fetch {
-  const tarball = new TextEncoder().encode('monad artifact');
-  const checksum = new TextEncoder().encode(`${sha256(tarball)}  monad-9.9.9-darwin-arm64.tar.gz\n`);
-  const script = new TextEncoder().encode('#!/usr/bin/env bash\n');
-  const scriptChecksum = new TextEncoder().encode(`${sha256(script)}  install.sh\n`);
-
-  return ((url: string) => {
-    if (url.endsWith('.tar.gz.sha256')) return Promise.resolve(new Response(checksum));
-    if (url.endsWith('.tar.gz')) return Promise.resolve(new Response(tarball));
-    if (url.endsWith('/install.sh.sha256')) return Promise.resolve(new Response(scriptChecksum));
-    if (url.endsWith('/install.sh')) return Promise.resolve(new Response(script));
-    return Promise.resolve(new Response('missing', { status: 404 }));
-  }) as unknown as typeof fetch;
-}
-
-async function withTempDir<T>(fn: (dir: string) => Promise<T>): Promise<T> {
-  const dir = await mkdtemp(join(tmpdir(), 'monad-upgrade-test-'));
-  try {
-    return await fn(dir);
-  } finally {
-    await rm(dir, { force: true, recursive: true });
-  }
+function releaseFetch(tag = 'v9.9.9'): typeof fetch {
+  return (async () => new Response(JSON.stringify({ tag_name: tag }))) as unknown as typeof fetch;
 }
 
 async function waitForStage(upgrade: ReturnType<typeof createSystemUpgradeModule>, stage: string): Promise<void> {
-  for (let i = 0; i < 20; i += 1) {
+  for (let index = 0; index < 30; index += 1) {
     if (upgrade.getStatus().stage === stage) return;
-    await Bun.sleep(10);
+    await Bun.sleep(5);
   }
   throw new Error(`timed out waiting for ${stage}; got ${upgrade.getStatus().stage}`);
 }
 
-test('system upgrade status reflects background latest version availability', () => {
+async function writeAttempt(cacheDir: string, targetVersion: string, exitCode: number): Promise<void> {
+  await writeFile(
+    join(cacheDir, 'attempt.json'),
+    JSON.stringify({
+      targetVersion,
+      tag: `v${targetVersion}`,
+      startedAt: '2026-08-10T00:00:00.000Z',
+      completedAt: null,
+      exitCode: null,
+      logPath: join(cacheDir, 'updater.log'),
+      state: 'installing'
+    })
+  );
+  await writeFile(join(cacheDir, 'result.txt'), `${exitCode}\n2026-08-10T00:00:05Z\n`);
+}
+
+test.each([
+  ['newer', '9.9.9', true],
+  ['older', '0.0.0', false]
+] as const)('system upgrade reflects cached stable release: %s', (_case, latestVersion, available) => {
   const upgrade = createSystemUpgradeModule({
-    getUpgradeInfo: () => ({ latestVersion: '9.9.9', latestVersionCheckedAt: '2026-07-06T00:00:00.000Z' })
+    getUpgradeInfo: () => ({ latestVersion, latestVersionCheckedAt: '2026-08-10T00:00:00.000Z' })
   });
 
+  expect(upgrade.getStatus()).toMatchObject({ available, currentVersion: MONAD_VERSION, latestVersion, stage: 'idle' });
+});
+
+test('system upgrade resolves the exact release and verifies monad-update exists', async () => {
+  const checked: string[] = [];
+  const upgrade = createSystemUpgradeModule({
+    access: async (path) => {
+      checked.push(path);
+    },
+    binaryPath: '/opt/monad/bin/monad',
+    cacheDir: '/unused-trigger',
+    fetch: releaseFetch()
+  });
+
+  upgrade.getStatus();
+  await waitForStage(upgrade, 'ready');
+
+  expect(checked).toEqual(['/opt/monad/bin/monad-update']);
+  expect(upgrade.getStatus()).toMatchObject({ available: true, latestVersion: '9.9.9', progress: 100 });
+});
+
+test('system upgrade reports a reinstall requirement when monad-update is missing', async () => {
+  const upgrade = createSystemUpgradeModule({
+    access: async () => {
+      throw Object.assign(new Error('missing'), { code: 'ENOENT' });
+    },
+    cacheDir: '/unused-trigger',
+    fetch: releaseFetch(),
+    updaterPath: '/opt/monad/bin/monad-update'
+  });
+
+  upgrade.getStatus();
+  await waitForStage(upgrade, 'failed');
+  expect(upgrade.getStatus().error).toContain('reinstall Monad');
+});
+
+test('system upgrade detaches a worker, returns restarting, then schedules daemon exit', async () => {
+  const cacheDir = await mkdtemp(join(tmpdir(), 'monad-system-upgrade-'));
+  let argv: string[] | undefined;
+  let spawnOptions: SpawnOptions | undefined;
+  let unrefCalled = false;
+  let exitScheduled = false;
+  const upgrade = createSystemUpgradeModule({
+    access: async () => {},
+    binaryPath: '/opt/monad/bin/monad',
+    cacheDir,
+    fetch: releaseFetch(),
+    parentPid: 1234,
+    platform: 'linux',
+    scheduleExit: () => {
+      exitScheduled = true;
+    },
+    spawn: ((args: string[], options?: SpawnOptions) => {
+      argv = args;
+      spawnOptions = options;
+      return {
+        exited: Promise.resolve(0),
+        unref: () => {
+          unrefCalled = true;
+        }
+      };
+    }) as typeof Bun.spawn
+  });
+
+  upgrade.getStatus();
+  await waitForStage(upgrade, 'ready');
+  await upgrade.start();
+
+  expect(argv?.slice(0, 2)).toEqual(['sh', '-c']);
+  expect(argv?.[2]).toContain('"$2" --tag "$3" >"$6" 2>&1');
+  expect(argv?.[2]).toContain('printf "%s\\n%s\\n" "$update_code" "$completed" >"$5.tmp"');
+  expect(argv?.[2]).toContain('"$4" restart >>"$6" 2>&1');
+  expect(argv?.slice(3)).toEqual([
+    'monad-upgrade',
+    '1234',
+    '/opt/monad/bin/monad-update',
+    'v9.9.9',
+    '/opt/monad/bin/monad',
+    join(cacheDir, 'result.txt'),
+    join(cacheDir, 'updater.log')
+  ]);
+  expect(spawnOptions).toMatchObject({ detached: true, stderr: 'ignore', stdin: 'ignore', stdout: 'ignore' });
+  expect(unrefCalled).toBe(true);
+  expect(exitScheduled).toBe(true);
+  expect(upgrade.getStatus().stage).toBe('restarting');
+  expect(upgrade.getStatus().lastAttempt).toMatchObject({ state: 'installing', targetVersion: '9.9.9' });
+  await rm(cacheDir, { force: true, recursive: true });
+});
+
+test('Windows worker waits for the daemon before updating and restarting', () => {
+  const command = workerCommand('win32', 42, 'C:\\Monad\\monad-update.exe', 'v2.0.0', 'C:\\Monad\\monad.exe');
+
+  expect(command.slice(0, 6)).toEqual([
+    'powershell',
+    '-NoProfile',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    expect.stringContaining('Wait-Process')
+  ]);
+  expect(command.slice(-6)).toEqual([
+    '42',
+    'C:\\Monad\\monad-update.exe',
+    'v2.0.0',
+    'C:\\Monad\\monad.exe',
+    'NUL',
+    'NUL'
+  ]);
+});
+
+test('system upgrade restores a durable failed updater result after daemon restart', async () => {
+  const cacheDir = await mkdtemp(join(tmpdir(), 'monad-system-upgrade-result-'));
+  await writeAttempt(cacheDir, '9.9.9', 42);
+
+  const upgrade = createSystemUpgradeModule({ cacheDir });
   expect(upgrade.getStatus()).toMatchObject({
-    available: true,
-    currentVersion: MONAD_VERSION,
-    latestVersion: '9.9.9',
-    stage: 'idle',
-    progress: 0,
-    error: null
+    stage: 'failed',
+    error: expect.stringContaining('exit code 42'),
+    lastAttempt: { completedAt: '2026-08-10T00:00:05Z', exitCode: 42, state: 'failed' }
   });
+  await rm(cacheDir, { force: true, recursive: true });
 });
 
-test('system upgrade prepares a cached artifact when status is requested with a cache directory', async () => {
-  await withTempDir(async (cacheDir) => {
-    const upgrade = createSystemUpgradeModule({
-      cacheDir,
-      fetch: createFetch(),
-      getUpgradeInfo: () => ({ latestVersion: '9.9.9', latestVersionCheckedAt: '2026-07-06T00:00:00.000Z' }),
-      platform: 'darwin',
-      arch: 'arm64'
-    });
+test('a durable successful attempt does not block checking the next release', async () => {
+  const cacheDir = await mkdtemp(join(tmpdir(), 'monad-system-upgrade-complete-'));
+  await writeAttempt(cacheDir, MONAD_VERSION, 0);
 
-    expect(upgrade.getStatus()).toMatchObject({
-      available: true,
-      stage: 'checking'
-    });
-
-    await waitForStage(upgrade, 'ready');
-
-    expect(upgrade.getStatus()).toMatchObject({
-      available: true,
-      latestVersion: '9.9.9',
-      stage: 'ready',
-      progress: 100,
-      error: null
-    });
-    const prepared = Array.from(new Bun.Glob('prepare-*/*').scanSync(cacheDir));
-    expect(prepared.map((path) => basename(path)).sort()).toEqual([
-      'install.sh',
-      'install.sh.sha256',
-      'monad-9.9.9-darwin-arm64.tar.gz',
-      'monad-9.9.9-darwin-arm64.tar.gz.sha256'
-    ]);
-  });
-});
-
-test('system upgrade start downloads first when the artifact is not ready', async () => {
-  await withTempDir(async (cacheDir) => {
-    let spawnCount = 0;
-    const upgrade = createSystemUpgradeModule({
-      cacheDir,
-      fetch: createFetch(),
-      getUpgradeInfo: () => ({ latestVersion: '9.9.9', latestVersionCheckedAt: '2026-07-06T00:00:00.000Z' }),
-      platform: 'darwin',
-      arch: 'arm64',
-      spawn: (() => {
-        spawnCount += 1;
-        return { stdout: stream('Installing\n'), stderr: stream(''), exited: Promise.resolve(0) };
-      }) as unknown as typeof Bun.spawn
-    });
-
-    await upgrade.start();
-    expect(spawnCount).toBe(0);
-    expect(upgrade.getStatus().stage).not.toBe('installing');
-
-    await waitForStage(upgrade, 'ready');
-    expect(spawnCount).toBe(0);
-  });
-});
-
-test('system upgrade installs the cached artifact and is idempotent while running', async () => {
-  await withTempDir(async (cacheDir) => {
-    let spawnCount = 0;
-    let resolveExit!: () => void;
-    const exited = new Promise<number>((resolve) => {
-      resolveExit = () => resolve(0);
-    });
-    const upgrade = createSystemUpgradeModule({
-      cacheDir,
-      fetch: createFetch(),
-      getUpgradeInfo: () => ({ latestVersion: '9.9.9', latestVersionCheckedAt: '2026-07-06T00:00:00.000Z' }),
-      platform: 'darwin',
-      arch: 'arm64',
-      spawn: (() => {
-        spawnCount += 1;
-        return { stdout: stream('Installing\n'), stderr: stream(''), exited };
-      }) as unknown as typeof Bun.spawn
-    });
-
-    upgrade.getStatus();
-    await waitForStage(upgrade, 'ready');
-
-    await upgrade.start();
-    await upgrade.start();
-    expect(spawnCount).toBe(1);
-    expect(upgrade.getStatus().stage).toBe('installing');
-
-    resolveExit();
-    await Bun.sleep(0);
-    expect(upgrade.getStatus().stage).toBe('complete');
-  });
-});
-
-test('system upgrade reports failure when cached installer exits non-zero', async () => {
-  await withTempDir(async (cacheDir) => {
-    const upgrade = createSystemUpgradeModule({
-      cacheDir,
-      fetch: createFetch(),
-      getUpgradeInfo: () => ({ latestVersion: '9.9.9', latestVersionCheckedAt: '2026-07-06T00:00:00.000Z' }),
-      platform: 'darwin',
-      arch: 'arm64',
-      spawn: (() => ({
-        stdout: stream('Installing\n'),
-        stderr: stream(''),
-        exited: Promise.resolve(7)
-      })) as unknown as typeof Bun.spawn
-    });
-
-    upgrade.getStatus();
-    await waitForStage(upgrade, 'ready');
-    await upgrade.start();
-    await Bun.sleep(0);
-
-    expect(upgrade.getStatus()).toMatchObject({
-      stage: 'failed',
-      progress: 100,
-      error: 'upgrade exited with code 7'
-    });
-  });
-});
-
-test('system upgrade can detach the cached installer from the daemon process', async () => {
-  await withTempDir(async (cacheDir) => {
-    let spawnArgv: string[] | undefined;
-    let spawnOptions: SpawnOptions | undefined;
-    let unrefCalled = false;
-    const upgrade = createSystemUpgradeModule({
-      cacheDir,
-      detached: true,
-      fetch: createFetch(),
-      getUpgradeInfo: () => ({ latestVersion: '9.9.9', latestVersionCheckedAt: '2026-07-06T00:00:00.000Z' }),
-      platform: 'darwin',
-      arch: 'arm64',
-      spawn: ((argv: string[], options?: SpawnOptions) => {
-        spawnArgv = argv;
-        spawnOptions = options;
-        return {
-          exited: Promise.resolve(0),
-          unref: () => {
-            unrefCalled = true;
-          }
-        };
-      }) as unknown as typeof Bun.spawn
-    });
-
-    upgrade.getStatus();
-    await waitForStage(upgrade, 'ready');
-    await upgrade.start();
-    await Bun.sleep(0);
-
-    expect(spawnArgv?.[0]).toBe('bash');
-    expect(relativeCachePath(cacheDir, spawnArgv?.[1])).toMatch(/^prepare-[^/]+\/install\.sh$/);
-    expect(spawnArgv?.slice(2)).toEqual(['--version', '9.9.9']);
-    expect(spawnOptions).toMatchObject({
-      detached: true,
-      env: {
-        MONAD_NO_OPEN: '1',
-        MONAD_VERSION: '9.9.9'
-      },
-      stderr: 'ignore',
-      stdin: 'ignore',
-      stdout: 'ignore'
-    });
-    expect(relativeCachePath(cacheDir, spawnOptions?.env?.MONAD_TARBALL)).toMatch(
-      /^prepare-[^/]+\/monad-9\.9\.9-darwin-arm64\.tar\.gz$/
-    );
-    expect(unrefCalled).toBe(true);
-    expect(upgrade.getStatus()).toMatchObject({
-      stage: 'restarting',
-      progress: 90
-    });
-  });
+  const upgrade = createSystemUpgradeModule({ access: async () => {}, cacheDir, fetch: releaseFetch() });
+  expect(upgrade.getStatus()).toMatchObject({ lastAttempt: { state: 'complete' }, stage: 'checking' });
+  await waitForStage(upgrade, 'ready');
+  await rm(cacheDir, { force: true, recursive: true });
 });

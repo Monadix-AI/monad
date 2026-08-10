@@ -50,14 +50,15 @@ monad stop                   stop the running daemon
 monad restart                restart the daemon
 monad status                 check whether the daemon is running
 monad logs [-f] [-n <lines>] show the daemon log (-f to follow, default 200 lines)
-monad doctor                 diagnose configuration, connection, and version problems
+monad doctor [update]        diagnose runtime or update installation problems
 monad version                print the Monad version
-monad upgrade [rollback]     check for and apply updates; rollback reverts the last one
+monad upgrade                check for and apply updates
 monad remote tls <renew|show|trust> manage the daemon TLS certificate
 ```
 
 `monad upgrade` accepts `--check` (report only), `--channel <stable|beta|nightly>`,
-`--notes` (release notes), and `--prune-backups`.
+`--tag <version>` (exact release), `--force` (same-version reinstall),
+and `--notes` (release notes).
 
 ## Setup and configuration
 

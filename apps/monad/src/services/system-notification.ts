@@ -50,9 +50,9 @@ export function systemNotificationCommand(
 ): SystemNotificationCommand | null {
   const pathExists = options.pathExists ?? existsSync;
   const executablePath = options.executablePath ?? process.execPath;
-  const iconPath = options.notificationIconPath ?? join(dirname(executablePath), '..', 'assets', 'monad-icon-1024.png');
+  const iconPath = options.notificationIconPath ?? join(dirname(executablePath), 'assets', 'monad-icon-1024.png');
   if (platform === 'darwin') {
-    const appPath = options.notificationAppPath ?? join(dirname(executablePath), '..', 'helpers', 'Monad.app');
+    const appPath = options.notificationAppPath ?? join(dirname(executablePath), 'helpers', 'Monad.app');
     if (pathExists(appPath)) {
       return {
         argv: [

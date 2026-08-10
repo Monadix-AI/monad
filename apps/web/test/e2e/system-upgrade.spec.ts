@@ -1,3 +1,4 @@
+import { isUpgradeAvailable } from '@monad/utils/release-version';
 import { expect, type Page, test } from '@playwright/test';
 
 import { API_ROUTE_PATTERN } from './api-route-pattern';
@@ -12,16 +13,19 @@ function json(body: unknown, status = 200) {
 
 async function installSystemSettingsApiMock(
   page: Page,
-  health: { version: string; latestVersion?: string; latestVersionCheckedAt?: string }
+  health: { version: string; latestVersion?: string; latestVersionCheckedAt?: string },
+  upgrade: { latestVersion?: string } = {}
 ) {
   let upgradeGets = 0;
   let upgradeStarts = 0;
   let startup = { enabled: false, supported: true };
+  const upgradeLatestVersion = upgrade.latestVersion ?? health.latestVersion;
   let upgradeState = {
-    available: Boolean(health.latestVersion && health.latestVersion !== health.version),
+    available: Boolean(upgradeLatestVersion && isUpgradeAvailable(health.version, upgradeLatestVersion)),
     currentVersion: health.version,
     error: null,
-    latestVersion: health.latestVersion ?? null,
+    latestVersion: upgradeLatestVersion ?? null,
+    lastAttempt: null,
     progress: 0,
     stage: 'idle'
   };
@@ -157,6 +161,19 @@ test.describe('System upgrade settings', () => {
     await expect(page.getByText('monad upgrade')).toHaveCount(0);
   });
 
+  test('shows a channel update resolved by the system upgrade endpoint', async ({ page }) => {
+    await installSystemSettingsApiMock(
+      page,
+      { version: '0.2.0-beta.1', latestVersion: '0.1.3' },
+      { latestVersion: '0.2.0-beta.2' }
+    );
+
+    await page.goto('/settings/system');
+
+    await expect(page.getByText('0.2.0-beta.2 available')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Update' })).toBeVisible();
+  });
+
   test('auto-prepares update from the daemon menu and starts install when ready', async ({ page }) => {
     const api = await installSystemSettingsApiMock(page, {
       version: '0.1.1',
@@ -171,11 +188,11 @@ test.describe('System upgrade settings', () => {
     await page.getByTestId('daemon-menu-trigger').focus();
     await page.keyboard.press('Enter');
     await expect.poll(api.upgradeGets).toBeGreaterThan(0);
-    await expect(page.getByText('Relaunch to update')).toBeVisible();
-    await page.getByText('Relaunch to update').click();
+    await expect(page.getByText('Update', { exact: true })).toBeVisible();
+    await page.getByText('Update', { exact: true }).click();
 
     await expect.poll(api.upgradeStarts).toBe(1);
-    await expect(page.getByText('Restart')).toBeVisible();
+    await expect(page.getByText('Restarting')).toBeVisible();
 
     await page.goto('/settings/system');
 
@@ -183,8 +200,8 @@ test.describe('System upgrade settings', () => {
     await expect(page.getByText('0.2.0 available')).toBeVisible();
 
     const settingsPage = page.locator('main');
-    await expect(settingsPage.getByText('Restart', { exact: true })).toBeVisible();
-    await expect(page.getByText('90%')).toBeVisible();
+    await expect(settingsPage.getByText('Restarting', { exact: true })).toBeVisible();
+    await expect(page.getByText('90%')).toHaveCount(0);
     await expect(page.getByText('Checking')).toHaveCount(0);
     await expect(page.getByText('Verifying')).toHaveCount(0);
   });

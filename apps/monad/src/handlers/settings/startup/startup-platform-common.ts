@@ -46,7 +46,7 @@ function assetCandidates(command: string[], filename: string): string[] {
   }
   const executable = command[0];
   if (executable) {
-    candidates.push(join(dirname(executable), '..', 'assets', filename));
+    candidates.push(join(dirname(executable), 'assets', filename));
     if (filename === 'favicon.ico' && basename(executable).toLowerCase().includes('monad')) candidates.push(executable);
   }
   candidates.push(join(process.cwd(), 'apps', 'web', 'public', filename), join(process.cwd(), 'assets', filename));

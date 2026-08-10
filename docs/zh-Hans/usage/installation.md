@@ -1,9 +1,9 @@
 ---
 title: "安装或移除 Monad"
-description: "在 macOS、Linux 或 Windows 上安装 Monad，并安全地升级、回滚或移除。"
+description: "在 macOS、Linux 或 Windows 上安装 Monad，并安全地升级或移除。"
 keywords: ["安装 Monad", "macOS Linux Windows 安装", "卸载", "升级", "单个二进制"]
 ---
-Monad 在 macOS、Linux 和 Windows 上安装为单个二进制，并作为一个本地守护进程运行。发行版安装器会校验下载、把 `monad` 加入 `PATH`、启动守护进程并打开 Web 界面。
+Monad 在 macOS、Linux 和 Windows 上作为本地守护进程运行。发行版安装器会下载对应构建，并同时安装 `monad` 与 CLI、Web UI 共用的 `monad-update` 更新器。
 
 本指南涵盖系统要求、发行版安装器、手动安装、升级和移除。安装后按[开始使用](/zh-Hans/getting-started)连接模型并运行第一个会话。
 
@@ -21,69 +21,47 @@ Monad 为以下平台发布自包含版本：
 
 ## 安装发行版
 
-运行对应平台的安装器。它会选择发行包、校验 SHA256、在支持的平台安装启动器、更新 `PATH` 并启动守护进程。
+运行对应平台的安装器。它会选择发行包，把 Monad 与更新器安装到 `~/.monad/bin`，然后更新 `PATH`。
 
 macOS 或 Linux：
 
 ```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash
+curl -fsSL https://release.monadix.ai/monad/install.sh | sh
 ```
 
 如果没有 `curl`，可运行：
 
 ```bash
-wget -qO- https://release.monadix.ai/monad/install.sh | bash
+wget -qO- https://release.monadix.ai/monad/install.sh | sh
 ```
 
 Windows PowerShell 5.1 或更高版本：
 
 ```powershell
-irm https://release.monadix.ai/monad/install.ps1 | iex
+irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-macOS 和 Linux 安装器会启动守护进程并打开 Web UI。Windows 安装器只初始化 Monad；
 随后运行 `monad up` 启动守护进程并打开 Web UI。
 
-### 强制全新安装
-
-仅在安装损坏或未完成、需要恢复时使用 `--force`。它会在解压发行包前删除整个安装目录，并跳过 SHA256 校验。默认安装目录是 `~/.monad`，因此继续前请备份需要保留的本地会话、配置、凭据、记忆和已安装扩展。常规安装与升级应使用不带 `--force` 的安装器。
-
-macOS 或 Linux 需要在 `bash -s --` 后传入安装器参数：
-
-```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --force
-```
-
-没有 `curl` 时：
-
-```bash
-wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --force
-```
-
-Windows 需要先下载安装脚本，再传入 `--force`：
-
-```powershell
-$installer = Join-Path $env:TEMP "monad-install.ps1"
-irm https://release.monadix.ai/monad/install.ps1 -OutFile $installer
-& $installer --force
-```
+交互式安装器会在终端宽度允许时显示下载大小、速度和预计剩余时间。自动化场景可设置
+`MONAD_OUTPUT=json`，改为输出逐行 JSON 阶段与摘要事件；临时下载失败会自动重试三次。
 
 ## 手动安装压缩包
 
-从 [GitHub Releases](https://github.com/Monadix-AI/monad/releases) 下载压缩包和对应 `.sha256` 文件。文件名格式为 `monad-version-os-arch.tar.gz`。
+从 [GitHub Releases](https://github.com/Monadix-AI/monad/releases) 下载压缩包和对应 `.sha256` 文件。文件名使用 dist target triple，例如 `monad-aarch64-apple-darwin.tar.gz`。
 
 Apple Silicon macOS 示例：
 
 ```bash
-release_version=release_version_here
-asset="monad-${release_version}-darwin-arm64"
-release_url="https://github.com/Monadix-AI/monad/releases/download/v${release_version}"
+release_tag=v0.1.3
+asset="monad-aarch64-apple-darwin"
+release_url="https://github.com/Monadix-AI/monad/releases/download/${release_tag}"
 
 curl -fSLO "${release_url}/${asset}.tar.gz"
 curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
-"./${asset}/bin/monad" --help
+"./${asset}/monad" --help
 ```
 
 没有 `curl` 时，可用以下命令下载压缩包和校验文件：
@@ -95,9 +73,9 @@ wget -q "${release_url}/${asset}.tar.gz.sha256"
 
 Linux 没有 `shasum` 时使用 `sha256sum -c`。Windows 可用 `Get-FileHash -Algorithm SHA256` 比对校验和，再用 `tar` 解压。Debian、Ubuntu、Fedora 等 glibc 发行版使用常规 `linux-arch` 构建；Alpine 等 musl 发行版使用 `linux-arch-musl`。
 
-## 升级或回滚
+## 升级
 
-当已安装客户端需要新版本时，运行 `monad` 会更新守护进程。发行通道、兼容性、显式升级命令与回滚方式见[发行与升级](/zh-Hans/usage/releases)。
+使用 `monad upgrade` 或 Web UI 中的升级操作。发行通道与显式升级命令见[发行与升级](/zh-Hans/usage/releases)。
 
 ## 移除 Monad
 

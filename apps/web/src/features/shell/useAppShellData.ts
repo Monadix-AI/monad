@@ -17,6 +17,7 @@ import {
   workplaceProjectAdapter,
   workplaceProjectSelectors
 } from '@monad/client-rtk';
+import { isUpgradeAvailable } from '@monad/utils/release-version';
 import { useEffect, useMemo } from 'react';
 
 import { buildWorkspaceProjects } from '#/lib/workspace-sessions';
@@ -67,11 +68,8 @@ export function useAppShellData({ loadModelData = true }: { loadModelData?: bool
   const daemonStatus: DaemonStatus = health?.status === 'ok' ? 'online' : healthError ? 'offline' : 'checking';
   const daemonVersion = health?.version;
   const networkRuntime = health?.networkRuntime;
-  const hasUpgrade = Boolean(
-    (health as { latestVersion?: string; version?: string } | undefined)?.latestVersion &&
-      (health as { latestVersion?: string; version?: string } | undefined)?.latestVersion !==
-        (health as { latestVersion?: string; version?: string } | undefined)?.version
-  );
+  const latestVersion = (health as { latestVersion?: string } | undefined)?.latestVersion;
+  const hasUpgrade = Boolean(latestVersion && daemonVersion && isUpgradeAvailable(daemonVersion, latestVersion));
 
   const {
     data: sessionData,

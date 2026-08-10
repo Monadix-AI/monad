@@ -2,7 +2,7 @@
 # Multi-stage test pipeline — nothing touches the host.
 #
 #   Stage 1 (builder): compile all binaries + Next.js standalone
-#   Stage 2 (tester):  run install.sh in a fresh Debian environment + smoke tests
+#   Stage 2 (tester):  extract the test artifact in a fresh Debian environment + smoke tests
 #
 # Platform defaults to the host's native architecture (fast, no QEMU emulation).
 # Override for CI:  docker build --platform linux/amd64 ...
@@ -37,22 +37,16 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends ca-certificates curl \
   && rm -rf /var/lib/apt/lists/*
 
-# Copy install script and the built tarball (arch-agnostic glob)
-COPY scripts/install.sh /install.sh
-RUN chmod +x /install.sh
 COPY --from=builder /workspace/dist/monad-*-linux-*.tar.gz /dist/
 
-# Run the installer — pick whichever tarball was built (exactly one per arch)
+# Extract whichever test tarball was built. The production dist installers have their own native
+# smoke-test matrix in .github/workflows/release.yml.
 RUN set -e; \
   tarball=$(ls /dist/monad-*-linux-*.tar.gz | head -1); \
-  echo "[docker-test] Installing: $(basename $tarball)"; \
-  MONAD_TARBALL="$tarball" \
-  MONAD_SKIP_VERIFY=1 \
-  MONAD_INSTALL_DIR=/opt/monad \
-  MONAD_BIN_DIR=/opt/monad/local-bin \
-  MONAD_HOME=/opt/monad/home \
-  MONAD_NO_PATH_MODIFY=1 \
-  bash /install.sh
+  mkdir -p /opt/monad/local-bin /opt/monad/home /tmp/monad-release; \
+  tar -xzf "$tarball" -C /tmp/monad-release; \
+  cp /tmp/monad-release/*/bin/monad /opt/monad/local-bin/monad; \
+  chmod +x /opt/monad/local-bin/monad
 
 # ── Smoke tests ────────────────────────────────────────────────────────────────
 

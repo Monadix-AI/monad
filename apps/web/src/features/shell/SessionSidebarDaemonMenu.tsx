@@ -201,7 +201,7 @@ export function DaemonMenu({
   const upgradeStage = upgradeStatus?.stage ?? 'idle';
   const upgradeActive = upgradeStatusIsActive(upgradeStage) || isStartingUpgrade;
   const upgradeReady = upgradeStatus?.available === true && upgradeStatus.stage === 'ready';
-  const upgradeLabel = upgradeActive ? upgradeDisplayLabel(upgradeStage) : 'Relaunch to update';
+  const upgradeLabel = upgradeActive ? upgradeDisplayLabel(t, upgradeStage) : t('web.settings.system.updateButton');
 
   useEffect(() => {
     setUpgradePolling(upgradeStatusIsActive(upgradeStage) || isStartingUpgrade);
@@ -470,8 +470,21 @@ function upgradeStatusIsActive(stage: SystemUpgradeStatus['stage']): boolean {
   );
 }
 
-function upgradeDisplayLabel(stage: SystemUpgradeStatus['stage']): string {
-  if (stage === 'installing') return 'Installing';
-  if (stage === 'restarting' || stage === 'complete') return 'Restart';
-  return 'Downloading';
+function upgradeDisplayLabel(t: TFunction, stage: SystemUpgradeStatus['stage']): string {
+  switch (stage) {
+    case 'checking':
+      return t('web.settings.system.upgradeStage.checking');
+    case 'downloading':
+      return t('web.settings.system.upgradeStage.downloading');
+    case 'verifying':
+      return t('web.settings.system.upgradeStage.verifying');
+    case 'installing':
+      return t('web.settings.system.upgradeStage.installing');
+    case 'restarting':
+      return t('web.settings.system.upgradeStage.restarting');
+    case 'complete':
+      return t('web.settings.system.upgradeStage.complete');
+    default:
+      return t('web.settings.system.upgradeStage.idle');
+  }
 }

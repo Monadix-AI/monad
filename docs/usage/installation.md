@@ -1,11 +1,11 @@
 ---
 title: "Install or Remove Monad"
-description: "Install Monad on macOS, Linux, or Windows; upgrade, roll back, or remove it safely."
+description: "Install Monad on macOS, Linux, or Windows; upgrade or remove it safely."
 keywords: ["install Monad", "macOS Linux Windows install", "uninstall", "upgrade", "single binary"]
 ---
 Monad installs as a single binary on macOS, Linux, and Windows and runs as one local daemon.
-The release installer verifies the download, adds `monad` to your `PATH`, starts the daemon,
-and opens the Web UI.
+The release installer downloads the matching archive and installs both `monad` and the `monad-update`
+updater used by the CLI and Web UI.
 
 This guide covers system requirements, the release installer, manual installation, upgrades, and removal. Use [getting started](/getting-started) after installation to connect a model and run your first session.
 
@@ -23,69 +23,48 @@ You need outbound HTTPS access to your chosen model provider. Monad does not bun
 
 ## Install a release
 
-Run the installer for your platform. It selects the release archive, verifies its SHA256 checksum, installs launchers where supported, updates `PATH`, and starts the daemon.
+Run the installer for your platform. It selects the release archive, installs Monad and its updater under `~/.monad/bin`, and updates `PATH`.
 
 On macOS or Linux:
 
 ```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash
+curl -fsSL https://release.monadix.ai/monad/install.sh | sh
 ```
 
 If `curl` is unavailable, use:
 
 ```bash
-wget -qO- https://release.monadix.ai/monad/install.sh | bash
+wget -qO- https://release.monadix.ai/monad/install.sh | sh
 ```
 
 On Windows PowerShell 5.1 or later:
 
 ```powershell
-irm https://release.monadix.ai/monad/install.ps1 | iex
+irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-The macOS and Linux installer starts the daemon and opens the Web UI. The Windows installer
-initializes Monad; run `monad up` afterwards to start the daemon and open the Web UI.
+Run `monad up` afterwards to start the daemon and open the Web UI.
 
-### Force a clean reinstall
-
-Use `--force` only to recover from a damaged or incomplete installation. It removes the entire installation directory before extracting the release and skips SHA256 verification. The default installation directory is `~/.monad`, so back up any local sessions, configuration, credentials, memory, or installed extensions that you need before continuing. Prefer the regular installer for routine installs and upgrades.
-
-On macOS or Linux, pass installer arguments after `bash -s --`:
-
-```bash
-curl -fsSL https://release.monadix.ai/monad/install.sh | bash -s -- --force
-```
-
-Without `curl`:
-
-```bash
-wget -qO- https://release.monadix.ai/monad/install.sh | bash -s -- --force
-```
-
-On Windows, download the script before passing `--force`:
-
-```powershell
-$installer = Join-Path $env:TEMP "monad-install.ps1"
-irm https://release.monadix.ai/monad/install.ps1 -OutFile $installer
-& $installer --force
-```
+The interactive installer shows download size, speed, and ETA when terminal width permits. For
+automation, set `MONAD_OUTPUT=json` to emit newline-delimited stage and summary events instead of
+animation. Downloads retry transient failures three times.
 
 ## Install an archive manually
 
-Download the archive and matching `.sha256` file from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). Release names use `monad-version-os-arch.tar.gz`.
+Download the archive and matching `.sha256` file from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). Release names use dist target triples such as `monad-aarch64-apple-darwin.tar.gz`.
 
 For Apple Silicon macOS:
 
 ```bash
-release_version=release_version_here
-asset="monad-${release_version}-darwin-arm64"
-release_url="https://github.com/Monadix-AI/monad/releases/download/v${release_version}"
+release_tag=v0.1.3
+asset="monad-aarch64-apple-darwin"
+release_url="https://github.com/Monadix-AI/monad/releases/download/${release_tag}"
 
 curl -fSLO "${release_url}/${asset}.tar.gz"
 curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
 shasum -a 256 -c "${asset}.tar.gz.sha256"
 tar -xzf "${asset}.tar.gz"
-"./${asset}/bin/monad" --help
+"./${asset}/monad" --help
 ```
 
 Without `curl`, download the archive and checksum with:
@@ -99,9 +78,9 @@ Use `sha256sum -c` on Linux when `shasum` is unavailable. On Windows, compare th
 
 Use the regular `linux-arch` build on glibc distributions such as Debian, Ubuntu, and Fedora. Use `linux-arch-musl` on Alpine and other musl-based distributions.
 
-## Upgrade or roll back
+## Upgrade
 
-Running `monad` updates the daemon when the installed client requires it. See [releases and upgrading](/usage/releases) for release channels, compatibility, explicit upgrade commands, and rollback.
+Use `monad upgrade` or the Web UI upgrade action. See [releases and upgrading](/usage/releases) for release channels and explicit upgrade commands.
 
 ## Remove Monad
 

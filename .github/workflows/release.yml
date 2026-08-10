@@ -1,16 +1,10 @@
 name: Release
 
-# Builds every binary target and verifies the installers before creating a draft release.
-# Every job checks out the same immutable SHA; the publish job points the release at that SHA.
-#
-# The draft is created only after CI, builds, and install tests pass. Publishing is what creates
-# the git tag and, for stable releases, moves the `latest` pointer. `install.sh` therefore cannot
-# resolve a release until every required asset has been uploaded.
 on:
   workflow_call:
     inputs:
       tag:
-        description: Draft release tag created by release-please (e.g. v0.2.0).
+        description: Release tag (for example v0.2.0 or v0.2.0-beta.1).
         required: true
         type: string
       sha:
@@ -18,7 +12,7 @@ on:
         required: true
         type: string
       make_latest:
-        description: Whether publishing should move GitHub's latest stable release pointer.
+        description: Whether publishing moves GitHub's latest stable release pointer.
         required: false
         type: boolean
         default: false
@@ -29,7 +23,7 @@ on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Existing draft release tag to rebuild and publish.
+        description: Release tag to build and publish.
         required: true
         type: string
       sha:
@@ -37,13 +31,19 @@ on:
         required: false
         type: string
       make_latest:
-        description: Whether publishing should move GitHub's latest stable release pointer.
+        description: Whether publishing moves GitHub's latest stable release pointer.
         required: false
         type: boolean
         default: false
 
 permissions:
   contents: read
+
+env:
+  DIST_VERSION: "0.32.0"
+  RELEASE_REF: ${{ inputs.sha || inputs.tag }}
+  RELEASE_TAG: ${{ inputs.tag }}
+  MONAD_DIST_VERSION: ${{ inputs.tag }}
 
 jobs:
   ci-gate:
@@ -61,35 +61,25 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.sha || inputs.tag }}
-
+          ref: ${{ env.RELEASE_REF }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
-
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
       - name: Generate contracts
         run: bun run generate
-
-      - name: Build Power Pack
-        run: bun run --cwd packages/monad-power-pack build:atom-pack
-
-      - name: Create canonical artifact
-        run: bun apps/cli/src/main.ts atom pack packages/monad-power-pack --out dist/monad-power-pack.atom-pack.zip
-
-      - name: Verify Power Pack
-        run: bun scripts/bun-test.ts packages/monad-power-pack/test/unit --only-failures
-
-      - name: Upload Power Pack artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Build and verify Power Pack
+        run: |
+          bun run --cwd packages/monad-power-pack build:atom-pack
+          bun apps/cli/src/main.ts atom pack packages/monad-power-pack --out dist/monad-power-pack.atom-pack.zip
+          bun scripts/bun-test.ts packages/monad-power-pack/test/unit --only-failures
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: monad-power-pack
           path: |
@@ -97,80 +87,100 @@ jobs:
             dist/monad-power-pack.atom-pack.zip.sha256
           retention-days: 1
 
-  # ── Build ─────────────────────────────────────────────────────────────────────
-  # Split by OS: linux+windows cross-compile on a Linux runner; darwin builds on a macOS runner.
   build:
-    name: build (${{ matrix.id }})
+    name: dist build (${{ matrix.target }})
     needs: ci-gate
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          - id: linux-windows
+          - target: aarch64-apple-darwin
+            runner: macos-14
+          - target: x86_64-apple-darwin
+            runner: macos-14
+          - target: aarch64-unknown-linux-gnu
             runner: ubuntu-latest
-            os_filter: linux,windows
-          - id: darwin
-            runner: macos-latest
-            os_filter: darwin
+          - target: x86_64-unknown-linux-gnu
+            runner: ubuntu-latest
+          - target: aarch64-unknown-linux-musl
+            runner: ubuntu-latest
+          - target: x86_64-unknown-linux-musl
+            runner: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            runner: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.sha || inputs.tag }}
-
+          ref: ${{ env.RELEASE_REF }}
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version: 1.3.14
-
       - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ~/.bun/install/cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
           restore-keys: ${{ runner.os }}-bun-
-
-      - name: Install cross-compilers for native sandbox launcher
-        if: matrix.id == 'linux-windows'
+      - name: Install Linux and Windows cross-compilers
+        if: runner.os == 'Linux'
         run: |
           sudo apt-get update -qq
-          # gcc-aarch64-linux-gnu: linux-arm64 sandbox launcher
-          # musl-tools: linux-x64-musl sandbox launcher (musl-gcc)
-          # gcc-mingw-w64-x86-64: windows-x64 sandbox launcher (monad-sandbox-launcher.exe)
           sudo apt-get install -y --no-install-recommends gcc-aarch64-linux-gnu musl-tools gcc-mingw-w64-x86-64
-
-      - name: Install llvm-mingw (Windows ARM64 cross-compiler)
-        if: matrix.id == 'linux-windows'
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          # aarch64-w64-mingw32-clang is not in Ubuntu apt — download from mstorsjo/llvm-mingw.
-          # The ucrt/ubuntu-20.04 tarball is statically linked and runs on any Ubuntu version.
-          TAG=$(curl -fsSL -H "Authorization: Bearer ${GH_TOKEN}" https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest | jq -r .tag_name)
-          TARBALL="llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64.tar.xz"
-          curl -fsSL "https://github.com/mstorsjo/llvm-mingw/releases/download/${TAG}/${TARBALL}" | tar -xJ
-          echo "$PWD/llvm-mingw-${TAG}-ucrt-ubuntu-22.04-x86_64/bin" >> "$GITHUB_PATH"
-
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      # macOS leg emits darwin-arm64 + darwin-x64; Linux leg emits linux*/windows*.
-      - name: Build release binaries
-        run: bun run scripts/build-release.ts --all --os=${{ matrix.os_filter }}
-
-      - name: Upload tarballs as artifacts (shared with install-test jobs)
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+      - name: Install dist
+        run: curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
+      - name: Build target archive and updater
+        run: |
+          dist build --artifacts=local --target=${{ matrix.target }} --tag=${{ env.RELEASE_TAG }} --force-tag --output-format=json > dist-manifest.json
+          cp dist-manifest.json target/distrib/${{ matrix.target }}-dist-manifest.json
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: release-tarballs-${{ matrix.id }}
+          name: dist-${{ matrix.target }}
           path: |
-            dist/*.tar.gz
-            dist/*.sha256
+            target/distrib/monad-${{ matrix.target }}-update
+            target/distrib/monad-${{ matrix.target }}.tar.gz
+            target/distrib/monad-${{ matrix.target }}.tar.gz.sha256
+            target/distrib/monad-${{ matrix.target }}.zip
+            target/distrib/monad-${{ matrix.target }}.zip.sha256
+            target/distrib/${{ matrix.target }}-dist-manifest.json
+          if-no-files-found: error
           retention-days: 1
 
-  # ── Install tests (one job per OS) ───────────────────────────────────────────
-  # Each job downloads only its own tarball and runs three flows:
-  #   1. fresh install  2. upgrade (re-run over existing)  3. overwrite (home data survives)
-  install-test:
-    name: install-test (${{ matrix.os }})
+  installers:
+    name: generate dist installers
     needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_REF }}
+      - name: Install dist
+        run: curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: target/distrib
+      - name: Generate shell and PowerShell installers
+        run: |
+          dist build --artifacts=global --tag=${{ env.RELEASE_TAG }} --force-tag --output-format=json > dist-manifest.json
+          bun scripts/enhance-dist-installers.ts
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: dist-installers
+          path: |
+            target/distrib/install.sh
+            target/distrib/install.ps1
+            target/distrib/sha256.sum
+            target/distrib/source.tar.gz
+            target/distrib/source.tar.gz.sha256
+          if-no-files-found: error
+          retention-days: 1
+
+  install-test:
+    name: installer smoke test (${{ matrix.os }})
+    needs: installers
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -178,124 +188,142 @@ jobs:
         include:
           - os: linux
             runner: ubuntu-latest
-            tarball_glob: monad-*-linux-x64.tar.gz
-            script: bun run scripts/test/install-test.ts
           - os: macos
-            runner: macos-latest
-            tarball_glob: monad-*-darwin-arm64.tar.gz
-            script: bun run scripts/test/install-test.ts
+            runner: macos-14
           - os: windows
             runner: windows-latest
-            tarball_glob: monad-*-windows-x64.tar.gz
-            script: bun run scripts/test/install-test.ts
-
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
-          ref: ${{ inputs.sha || inputs.tag }}
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.14
-
-      - name: Download tarballs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: release-tarballs-*
+          pattern: dist-*
           merge-multiple: true
-          path: dist/
+          path: artifacts
+      - name: Test shell installer and updater receipt
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          python3 -m http.server 8123 --directory artifacts >"${RUNNER_TEMP}/monad-dist-http.log" 2>&1 &
+          for attempt in {1..20}; do curl -fsS http://127.0.0.1:8123/ >/dev/null && break; sleep 0.25; done
+          export MONAD_DOWNLOAD_URL=http://127.0.0.1:8123
+          export MONAD_INSTALL_DIR="${RUNNER_TEMP}/monad-install"
+          export MONAD_NO_MODIFY_PATH=1
+          if [[ "${RUNNER_OS}" == "macOS" ]]; then
+            script -q "${RUNNER_TEMP}/install.log" sh artifacts/install.sh
+          else
+            script -qefc "sh artifacts/install.sh" "${RUNNER_TEMP}/install.log"
+          fi
+          cat "${RUNNER_TEMP}/install.log"
+          grep -F "◆ MONAD" "${RUNNER_TEMP}/install.log"
+          grep -F "▮" "${RUNNER_TEMP}/install.log"
+          ! grep -F "no checksums to verify" "${RUNNER_TEMP}/install.log"
+          test -x "${MONAD_INSTALL_DIR}/monad"
+          test -x "${MONAD_INSTALL_DIR}/monad-update"
+          test -f "${HOME}/.config/monad/monad-receipt.json"
+          "${MONAD_INSTALL_DIR}/monad" --version | grep -F "${MONAD_DIST_VERSION#v}"
+      - name: Test PowerShell installer and updater receipt
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          Start-Process python -ArgumentList '-m','http.server','8123','--directory','artifacts' -WindowStyle Hidden
+          for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            try { Invoke-WebRequest http://127.0.0.1:8123/ -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Milliseconds 250 }
+          }
+          $env:MONAD_DOWNLOAD_URL = 'http://127.0.0.1:8123'
+          $env:MONAD_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'monad-install'
+          $env:MONAD_NO_MODIFY_PATH = '1'
+          $env:MONAD_FORCE_INTERACTIVE = '1'
+          & artifacts/install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'install.log')
+          Select-String -SimpleMatch '◆ MONAD' (Join-Path $env:RUNNER_TEMP 'install.log') | Out-Null
+          if (Select-String -SimpleMatch 'no checksums to verify' (Join-Path $env:RUNNER_TEMP 'install.log')) {
+            throw 'installer did not verify the archive checksum'
+          }
+          if (!(Test-Path (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe'))) { throw 'monad.exe was not installed' }
+          if (!(Test-Path (Join-Path $env:MONAD_INSTALL_DIR 'monad-update.exe'))) { throw 'monad-update.exe was not installed' }
+          if (!(Test-Path (Join-Path $env:LOCALAPPDATA 'monad\monad-receipt.json'))) { throw 'dist receipt was not installed' }
+          & (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe') --version | Select-String ($env:MONAD_DIST_VERSION -replace '^v','')
 
-      - name: Run install test (fresh + upgrade + overwrite)
-        run: ${{ matrix.script }}
-        env:
-          # Windows: skip the ~150 MB PortableGit download in CI.
-          # The Git Bash download path is covered by a dedicated job below.
-          MONAD_SKIP_GIT: "1"
-          TARBALL_GLOB: ${{ matrix.tarball_glob }}
-
-  # ── Git Bash download test (Windows only, network-gated) ─────────────────────
-  # Runs separately so a network hiccup doesn't block the main install-test matrix.
-  install-test-gitbash:
-    name: install-test git-bash download (windows)
-    needs: build
-    continue-on-error: true
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ inputs.sha || inputs.tag }}
-
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.14
-
-      - name: Download tarballs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: release-tarballs-*
-          merge-multiple: true
-          path: dist/
-
-      - name: Run install test with real Git Bash download
-        run: bun run scripts/test/install-test.ts
-        env:
-          MONAD_SKIP_GIT: "0"
-
-  # ── Publish release assets ────────────────────────────────────────────────────
-  publish:
-    permissions:
-      contents: write
-    name: publish release assets
-    needs: [ci-gate, atom-pack, install-test, install-test-gitbash]
+  upgrade-test:
+    name: dist CLI and Web upgrade e2e
+    needs: installers
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ inputs.sha || inputs.tag }}
-
-      - name: Download tarballs
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+          ref: ${{ env.RELEASE_REF }}
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
-          pattern: release-tarballs-*
-          merge-multiple: true
-          path: dist/
+          bun-version: 1.3.14
+      - name: Install dist
+        run: curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
+      - name: Build an older managed installation
+        env:
+          MONAD_DIST_VERSION: 0.0.1
+        run: |
+          rm -rf target/distrib
+          dist build --artifacts=local --target=x86_64-unknown-linux-gnu --tag=v0.0.1 --force-tag --output-format=json > old-local-dist-manifest.json
+          cp old-local-dist-manifest.json target/distrib/x86_64-unknown-linux-gnu-dist-manifest.json
+          dist build --artifacts=global --tag=v0.0.1 --force-tag --output-format=json > old-global-dist-manifest.json
+          bun scripts/enhance-dist-installers.ts
+          mkdir -p artifacts/old
+          find target/distrib -maxdepth 1 -type f -exec cp {} artifacts/old/ \;
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-x86_64-unknown-linux-gnu
+          path: artifacts/new
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist-installers
+          path: artifacts/new
+      - name: Upgrade an active daemon through CLI and Web
+        run: |
+          CHANNEL=stable
+          case "${RELEASE_TAG}" in
+            *-beta.*) CHANNEL=beta ;;
+            *-nightly.*) CHANNEL=nightly ;;
+          esac
+          bun scripts/test/upgrade-dist-e2e.ts \
+            --old-dir artifacts/old \
+            --new-dir artifacts/new \
+            --tag "${RELEASE_TAG}" \
+            --channel "${CHANNEL}"
 
-      - name: Download Power Pack
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+  publish:
+    name: publish GitHub release
+    needs: [atom-pack, install-test, upgrade-test]
+    permissions:
+      attestations: write
+      contents: write
+      id-token: write
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          pattern: dist-*
+          merge-multiple: true
+          path: artifacts
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: monad-power-pack
-          path: dist/
-
-      - name: Generate installer checksums
-        run: |
-          sha256sum scripts/install.sh > scripts/install.sh.sha256
-          sha256sum scripts/install.ps1 > scripts/install.ps1.sha256
-
+          path: artifacts
+      - name: Attest release assets
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
+        with:
+          subject-path: artifacts/*
       - name: Upload release assets
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
-          tag_name: ${{ inputs.tag }}
+          tag_name: ${{ env.RELEASE_TAG }}
           target_commitish: ${{ inputs.sha || inputs.tag }}
-          # Keep the release a draft while the assets land; the next step publishes it.
           draft: true
-          files: |
-            dist/*.tar.gz
-            dist/*.sha256
-            dist/monad-power-pack.atom-pack.zip
-            scripts/install.sh
-            scripts/install.ps1
-            scripts/install.sh.sha256
-            scripts/install.ps1.sha256
+          prerelease: ${{ contains(env.RELEASE_TAG, '-') }}
+          files: artifacts/*
           fail_on_unmatched_files: true
-
-      # Publishing creates the git tag and, for stable releases, moves `latest`, so it must come
-      # last: from here on, `install.sh` can resolve this version and all of its assets exist.
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "${{ inputs.make_latest }}" == "true" ]]; then
-            gh release edit "${{ inputs.tag }}" --draft=false --latest
+            gh release edit "${RELEASE_TAG}" --draft=false --latest
           else
-            gh release edit "${{ inputs.tag }}" --draft=false
+            gh release edit "${RELEASE_TAG}" --draft=false
           fi

@@ -155,7 +155,6 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
   const clarify = createClarifyHandlers(interactions);
   const systemUpgrade = createSystemUpgradeModule({
     cacheDir: join(paths.cache, 'upgrade'),
-    detached: true,
     getUpgradeInfo: deps.getUpgradeInfo
   });
   const system = createSystemHandlers(systemUpgrade);

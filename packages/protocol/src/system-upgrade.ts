@@ -13,12 +13,24 @@ export const systemUpgradeStageSchema = z.enum([
 ]);
 export type SystemUpgradeStage = z.infer<typeof systemUpgradeStageSchema>;
 
+export const systemUpgradeAttemptSchema = z.object({
+  targetVersion: z.string(),
+  tag: z.string(),
+  startedAt: z.string(),
+  completedAt: z.string().nullable(),
+  exitCode: z.number().int().nullable(),
+  logPath: z.string(),
+  state: z.enum(['installing', 'complete', 'failed'])
+});
+export type SystemUpgradeAttempt = z.infer<typeof systemUpgradeAttemptSchema>;
+
 export const systemUpgradeStatusSchema = z.object({
   available: z.boolean(),
   currentVersion: z.string(),
   latestVersion: z.string().nullable(),
   stage: systemUpgradeStageSchema,
   progress: z.number().min(0).max(100),
-  error: z.string().nullable()
+  error: z.string().nullable(),
+  lastAttempt: systemUpgradeAttemptSchema.nullable()
 });
 export type SystemUpgradeStatus = z.infer<typeof systemUpgradeStatusSchema>;

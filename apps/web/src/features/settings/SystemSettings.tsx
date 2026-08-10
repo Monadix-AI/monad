@@ -24,6 +24,7 @@ import {
   useStartSystemUpgradeMutation
 } from '@monad/client-rtk';
 import { Badge, Button, ScrollArea, Separator, Skeleton } from '@monad/ui';
+import { isUpgradeAvailable } from '@monad/utils/release-version';
 import { useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -61,11 +62,13 @@ export function SystemSettings() {
 
   const version = health?.version ?? '—';
   const latestVersion = (health as { latestVersion?: string } | undefined)?.latestVersion;
-  const hasUpgrade = latestVersion && latestVersion !== version;
   const [startSystemUpgrade, { isLoading: isStartingUpgrade }] = useStartSystemUpgradeMutation();
   const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
     pollingInterval: isStartingUpgrade || upgradePolling ? 1000 : 0
   });
+  const upgradeVersion = upgradeStatus?.latestVersion ?? latestVersion;
+  const hasUpgrade =
+    upgradeStatus?.available === true || Boolean(latestVersion && isUpgradeAvailable(version, latestVersion));
   const upgradeStage = upgradeStatus?.stage ?? 'idle';
   const upgradeActive =
     upgradeStage === 'checking' ||
@@ -73,7 +76,6 @@ export function SystemSettings() {
     upgradeStage === 'verifying' ||
     upgradeStage === 'installing' ||
     upgradeStage === 'restarting';
-  const upgradeProgress = upgradeStatus?.progress ?? 0;
 
   useEffect(() => {
     setUpgradePolling(upgradeActive);
@@ -119,7 +121,7 @@ export function SystemSettings() {
     watchUpgradeRestartAndReload({
       baseUrl: resolveConnection().baseUrl,
       currentVersion: version,
-      targetVersion: upgradeStatus?.latestVersion ?? latestVersion
+      targetVersion: upgradeVersion
     });
     await startSystemUpgrade().unwrap();
   }
@@ -158,7 +160,7 @@ export function SystemSettings() {
                         className="size-3"
                         icon={SquareArrowUp01Icon}
                       />
-                      {t('web.settings.system.updateAvailable', { version: latestVersion })}
+                      {t('web.settings.system.updateAvailable', { version: upgradeVersion ?? '' })}
                     </Badge>
                   ) : (
                     <Badge
@@ -181,7 +183,7 @@ export function SystemSettings() {
                   <div className="flex min-w-0 flex-col gap-0.5">
                     <span className="text-sm">{t('web.settings.system.updateTitle')}</span>
                     <span className="text-muted-foreground text-xs">
-                      {t('web.settings.system.updateDesc', { version: latestVersion })}
+                      {t('web.settings.system.updateDesc', { version: upgradeVersion ?? '' })}
                     </span>
                   </div>
                   <Button
@@ -206,11 +208,16 @@ export function SystemSettings() {
                   </Button>
                 </div>
                 {upgradeStage !== 'idle' ? (
-                  <div className="flex items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-2 text-xs">
+                    {upgradeActive ? (
+                      <HugeiconsIcon
+                        className="size-3.5 animate-spin text-muted-foreground"
+                        icon={LoaderPinwheelIcon}
+                      />
+                    ) : null}
                     <span className={upgradeStage === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>
                       {upgradeStatus?.error ?? upgradeStageLabel(t, upgradeStage)}
                     </span>
-                    <span className="font-mono text-muted-foreground">{Math.round(upgradeProgress)}%</span>
                   </div>
                 ) : null}
               </div>
@@ -387,14 +394,19 @@ export function SystemSettings() {
 function upgradeStageLabel(t: ReturnType<typeof useT>, stage: string): string {
   switch (stage) {
     case 'checking':
+      return t('web.settings.system.upgradeStage.checking');
     case 'downloading':
-    case 'verifying':
       return t('web.settings.system.upgradeStage.downloading');
+    case 'verifying':
+      return t('web.settings.system.upgradeStage.verifying');
+    case 'ready':
+      return t('web.settings.system.upgradeStage.idle');
     case 'installing':
       return t('web.settings.system.upgradeStage.installing');
     case 'restarting':
+      return t('web.settings.system.upgradeStage.restarting');
     case 'complete':
-      return t('web.settings.system.upgradeStage.restart');
+      return t('web.settings.system.upgradeStage.complete');
     case 'failed':
       return t('web.settings.system.upgradeStage.failed');
     default:

@@ -18,7 +18,7 @@
   "cli.cmd.init.desc": "set up Monad interactively (home folder and model provider)",
   "cli.cmd.upgrade.desc": "check for and apply Monad updates",
   "cli.cmd.upgrade.checkFlag": "check for updates without applying them",
-  "cli.cmd.upgrade.channelFlag": "release channel: stable (default), beta, or nightly",
+  "cli.cmd.upgrade.channelFlag": "release channel: stable, beta, or nightly (defaults to the current build channel)",
   "cli.cmd.upgrade.pruneFlag": "remove all but the 3 most recent binary backups and exit",
   "cli.cmd.upgrade.notesFlag": "show release notes alongside version info",
   "cli.cmd.purge.desc": "permanently delete stored state (sessions, config, auth, or all of Monad home)",

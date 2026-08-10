@@ -1,9 +1,16 @@
 import type { CommandDef } from './types.ts';
 
-import { rm, stat } from 'node:fs/promises';
+import { access, readFile, rm, stat } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { certExpiry, certFingerprint, getPaths, loadConfig, resolveClientConn } from '@monad/environment';
 import { getHealthResponseSchema, MONAD_VERSION } from '@monad/protocol';
+import {
+  isUpgradeAvailable,
+  monadUpdaterPath,
+  releaseChannelOfVersion,
+  resolveRelease
+} from '@monad/utils/release-update';
 
 import { dim, green, json, out, red, yellow } from '../lib/output.ts';
 import { CliError, EXIT } from './types.ts';
@@ -21,11 +28,16 @@ interface Check {
 export const command: CommandDef = {
   name: 'doctor',
   group: 'daemon',
-  synopsis: 'doctor',
+  synopsis: 'doctor [update]',
+  subcommands: ['update'],
   description: 'diagnose configuration, connection, and version problems',
   descriptionKey: 'cli.cmd.doctor.desc',
-  async run({ client }) {
+  async run({ client, positionals }) {
     const paths = getPaths();
+    if (positionals[0] === 'update') {
+      await runUpdateDoctor(paths.cache);
+      return;
+    }
     const checks: Check[] = [];
 
     // config.json present and valid.
@@ -78,7 +90,7 @@ export const command: CommandDef = {
 
     // upstream version check (surfaced by daemon background poller, best-effort).
     const latestVersion = healthData?.latestVersion;
-    if (daemonOk && latestVersion && latestVersion !== daemonVersion) {
+    if (daemonOk && latestVersion && daemonVersion && isUpgradeAvailable(daemonVersion, latestVersion)) {
       checks.push({
         name: 'upgrade',
         ok: false,
@@ -170,21 +182,89 @@ export const command: CommandDef = {
       /* no TLS cert — skip; only present when remote access is enabled */
     }
 
-    const hardFail = checks.some((c) => !c.ok && !c.warn);
-    json({ ok: !hardFail, checks });
-
-    for (const c of checks) {
-      const mark = c.ok ? green('✓') : c.warn ? yellow('!') : red('✖');
-      out(`${mark} ${c.name.padEnd(8)} ${dim(c.detail)}`);
-    }
-    if (hardFail) {
-      const failed = checks
-        .filter((c) => !c.ok && !c.warn)
-        .map((c) => c.name)
-        .join(', ');
-      out(yellow(`✖ ${failed} check${failed.includes(',') ? 's' : ''} failed`));
-      throw new CliError('', EXIT.CONFIG);
-    }
-    out(green('✓ all checks passed'));
+    renderChecks(checks);
   }
 };
+
+async function runUpdateDoctor(cacheRoot: string): Promise<void> {
+  const updater = monadUpdaterPath(process.execPath, process.platform);
+  const receipt =
+    process.platform === 'win32'
+      ? join(Bun.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'monad', 'monad-receipt.json')
+      : join(Bun.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'monad', 'monad-receipt.json');
+  const upgradeCache = join(cacheRoot, 'upgrade');
+  const attemptPath = join(upgradeCache, 'attempt.json');
+  const resultPath = join(upgradeCache, 'result.txt');
+  const logPath = join(upgradeCache, 'updater.log');
+  const channel = releaseChannelOfVersion(MONAD_VERSION);
+  const checks: Check[] = [];
+
+  for (const [name, path] of [
+    ['updater', updater],
+    ['receipt', receipt]
+  ] as const) {
+    try {
+      await access(path);
+      checks.push({ name, ok: true, detail: path });
+    } catch {
+      checks.push({ name, ok: false, detail: `missing: ${path}` });
+    }
+  }
+
+  checks.push({ name: 'channel', ok: true, detail: `${channel} (${MONAD_VERSION})` });
+  try {
+    const release = await resolveRelease(channel, { userAgent: `monad-doctor/${MONAD_VERSION}` });
+    checks.push({
+      name: 'release',
+      ok: release !== null,
+      warn: release === null,
+      detail: release ? `latest ${release.version} (${release.tag})` : `no ${channel} release resolved`
+    });
+  } catch (error) {
+    checks.push({
+      name: 'release',
+      ok: false,
+      warn: true,
+      detail: `lookup failed: ${error instanceof Error ? error.message : String(error)}`
+    });
+  }
+
+  try {
+    const attempt = JSON.parse(await readFile(attemptPath, 'utf8')) as { tag?: string; targetVersion?: string };
+    let result = 'no completion result';
+    try {
+      const [exitCode, completedAt] = (await readFile(resultPath, 'utf8')).trim().split('\n');
+      result = `exit=${exitCode ?? '?'} completed=${completedAt ?? '?'}`;
+    } catch {
+      /* The attempt may still be in progress or have been interrupted. */
+    }
+    checks.push({
+      name: 'attempt',
+      ok: true,
+      detail: `${attempt.tag ?? attempt.targetVersion ?? 'unknown'}; ${result}; log=${logPath}`
+    });
+  } catch {
+    checks.push({ name: 'attempt', ok: true, detail: `none recorded (${attemptPath})` });
+  }
+
+  renderChecks(checks);
+}
+
+function renderChecks(checks: Check[]): void {
+  const hardFail = checks.some((check) => !check.ok && !check.warn);
+  json({ ok: !hardFail, checks });
+
+  for (const check of checks) {
+    const mark = check.ok ? green('✓') : check.warn ? yellow('!') : red('✖');
+    out(`${mark} ${check.name.padEnd(8)} ${dim(check.detail)}`);
+  }
+  if (hardFail) {
+    const failed = checks
+      .filter((check) => !check.ok && !check.warn)
+      .map((check) => check.name)
+      .join(', ');
+    out(yellow(`✖ ${failed} check${failed.includes(',') ? 's' : ''} failed`));
+    throw new CliError('', EXIT.CONFIG);
+  }
+  out(green('✓ all checks passed'));
+}
