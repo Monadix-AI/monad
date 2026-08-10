@@ -339,7 +339,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           if [[ "${{ inputs.make_latest }}" == "true" ]]; then
-            gh release edit "${RELEASE_TAG}" --draft=false --latest
+            gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false --latest
           else
-            gh release edit "${RELEASE_TAG}" --draft=false
+            gh release edit "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --draft=false
           fi

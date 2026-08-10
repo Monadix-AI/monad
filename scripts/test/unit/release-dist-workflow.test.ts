@@ -61,6 +61,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
     'scripts/test/upgrade-dist-e2e.ts'
   );
   expect(namedStep('upgrade-test', 'Install dependencies')?.run).toBe('bun install --frozen-lockfile');
+  expect(namedStep('publish', 'Publish release')?.run).toContain(`--repo "\${GITHUB_REPOSITORY}"`);
   expect(upgradeE2e).toContain('readdirSync(newDir');
   expect(upgradeE2e).toContain('browser_download_url: assetUrl');
   expect(upgradeE2e).toContain("await run([monad, 'up'], env)");
