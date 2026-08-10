@@ -1,4 +1,4 @@
 {
   "extends": "../tsconfig/tsconfig.monad-source-consumer.json",
-  "include": ["src", "test"]
+  "include": ["src", "stories", "test"]
 }

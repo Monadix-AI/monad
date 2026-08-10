@@ -14,31 +14,44 @@ export function commandToolView(
     standaloneResult && result.tool?.name === 'tool' ? 'tool-result' : (call.tool?.name ?? result.tool?.name);
   if (!name) return null;
   const tool = result.tool ?? call.tool;
-  const shellCommand = shellCommandInput(name, call.tool?.input ?? result.tool?.input);
+  const shellCommand = shellCommandInput(
+    name,
+    call.tool?.input ?? result.tool?.input,
+    call.tool?.category ?? result.tool?.category
+  );
   const command = standaloneResult
     ? structuredText(result.tool?.input)
     : (shellCommand ?? structuredText(call.tool?.input ?? result.tool?.input) ?? toolCallTextInput(call.text));
-  const output = standaloneCall ? undefined : (structuredText(result.tool?.output) ?? result.text);
+  const output = standaloneCall
+    ? undefined
+    : (structuredOutputText(result.tool?.output, shellCommand !== undefined) ?? result.text);
   const jsonOutput = output ? jsonCodeText(output) : null;
   return {
     type: name,
     provider,
     command,
     commandLanguage: shellCommand ? 'bash' : command && jsonCodeText(command) ? 'json' : 'bash',
-    cwd: tool?.cwd,
-    status: tool?.status,
-    exitCode: tool?.exitCode,
-    durationMs: tool?.durationMs,
+    cwd: result.tool?.cwd ?? call.tool?.cwd,
+    status: result.tool?.status ?? call.tool?.status,
+    exitCode: result.tool?.exitCode ?? call.tool?.exitCode,
+    durationMs: result.tool?.durationMs ?? call.tool?.durationMs,
     output: tool?.status ? output : (jsonOutput ?? output),
     outputLanguage: jsonOutput ? 'json' : commandOutputLanguage(output)
   };
 }
 
-function shellCommandInput(name: string, input: unknown): string | undefined {
-  if (!['bash', 'shell'].includes(name.toLowerCase())) return undefined;
+function shellCommandInput(name: string, input: unknown, category: string | undefined): string | undefined {
+  if (category !== 'shell' && !['bash', 'shell'].includes(name.toLowerCase())) return undefined;
+  if (typeof input === 'string') return input.trim() || undefined;
+  if (Array.isArray(input) && input.every((part) => typeof part === 'string'))
+    return input.join(' ').trim() || undefined;
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;
-  const command = (input as Record<string, unknown>).command;
-  return typeof command === 'string' && command.trim() ? command.trim() : undefined;
+  const record = input as Record<string, unknown>;
+  const command = record.command ?? record.cmd;
+  if (typeof command === 'string') return command.trim() || undefined;
+  return Array.isArray(command) && command.every((part) => typeof part === 'string')
+    ? command.join(' ').trim() || undefined
+    : undefined;
 }
 
 function toolCallTextInput(text: string | undefined): string | undefined {
@@ -63,6 +76,12 @@ function structuredText(value: unknown): string | undefined {
   } catch {
     return String(value);
   }
+}
+
+function structuredOutputText(value: unknown, preserveLeadingWhitespace: boolean): string | undefined {
+  if (typeof value !== 'string') return structuredText(value);
+  const normalized = preserveLeadingWhitespace ? value.trimEnd() : value.trim();
+  return normalized || undefined;
 }
 
 function commandOutputLanguage(text: string | undefined): BundledLanguage {

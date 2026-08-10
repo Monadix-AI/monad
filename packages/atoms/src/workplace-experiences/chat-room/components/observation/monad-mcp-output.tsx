@@ -1,8 +1,12 @@
+import type { Participant } from '../../../experience/types.ts';
 import type { MonadMcpToolName } from './monad-mcp-projection.ts';
 
 import { CheckmarkSquare02Icon, Clock03Icon, SquareIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { cn } from '@monad/ui';
+
+import { MonadMcpLongText } from './monad-mcp-long-text.tsx';
+import { monadMcpSemanticOutput } from './monad-mcp-semantic-output.tsx';
 
 type MonadMcpOutputProps = {
   body?: string;
@@ -10,6 +14,8 @@ type MonadMcpOutputProps = {
   emptyLabel: string;
   falseLabel: string;
   inProgressLabel: string;
+  memberIdentities?: ReadonlyMap<string, Participant>;
+  omitAttachments?: boolean;
   output: unknown;
   pendingLabel: string;
   planEmptyLabel: string;
@@ -25,7 +31,19 @@ export function MonadMcpOutput(props: MonadMcpOutputProps) {
   const output = compactFriendlyOutput(friendlyMonadMcpOutput(props.output));
   const planTodos = monadPlanTodos(props.toolName, output);
   const body = props.body?.trim() ? props.body : undefined;
-  const promoteTextBody = props.toolName === 'project_post' || props.toolName === 'project_read';
+  const promoteTextBody = ['project_post', 'project_read', 'project_inbox_check', 'agent_send', 'agent_read'].includes(
+    props.toolName
+  );
+  const semanticOutput = planTodos
+    ? undefined
+    : monadMcpSemanticOutput({
+        emptyLabel: props.emptyLabel,
+        falseLabel: props.falseLabel,
+        memberIdentities: props.memberIdentities,
+        output,
+        toolName: props.toolName,
+        trueLabel: props.trueLabel
+      });
   return (
     <div
       className="min-w-0"
@@ -43,6 +61,8 @@ export function MonadMcpOutput(props: MonadMcpOutputProps) {
             pendingLabel={props.pendingLabel}
             todos={planTodos}
           />
+        ) : semanticOutput !== undefined ? (
+          semanticOutput
         ) : output === undefined && !body ? (
           <span className="text-muted-foreground">{props.emptyLabel}</span>
         ) : output !== undefined ? (
@@ -50,6 +70,7 @@ export function MonadMcpOutput(props: MonadMcpOutputProps) {
             depth={0}
             emptyLabel={props.emptyLabel}
             falseLabel={props.falseLabel}
+            omitAttachments={props.omitAttachments === true}
             omitTextBody={body !== undefined}
             path="result"
             promoteTextBody={promoteTextBody}
@@ -63,7 +84,7 @@ export function MonadMcpOutput(props: MonadMcpOutputProps) {
   );
 }
 
-function compactFriendlyOutput(value: unknown): unknown {
+export function compactFriendlyOutput(value: unknown): unknown {
   if (value === undefined || value === null || value === '') return undefined;
   if (Array.isArray(value)) {
     const entries = value.map(compactFriendlyOutput).filter((entry) => entry !== undefined);
@@ -82,6 +103,7 @@ function MonadMcpOutputValue({
   depth,
   emptyLabel,
   falseLabel,
+  omitAttachments,
   omitTextBody,
   path,
   promoteTextBody,
@@ -91,6 +113,7 @@ function MonadMcpOutputValue({
   depth: number;
   emptyLabel: string;
   falseLabel: string;
+  omitAttachments: boolean;
   omitTextBody: boolean;
   path: string;
   promoteTextBody: boolean;
@@ -122,6 +145,7 @@ function MonadMcpOutputValue({
                 depth={depth + 1}
                 emptyLabel={emptyLabel}
                 falseLabel={falseLabel}
+                omitAttachments={omitAttachments}
                 omitTextBody={omitTextBody}
                 path={itemPath}
                 promoteTextBody={promoteTextBody}
@@ -147,14 +171,19 @@ function MonadMcpOutputValue({
     );
   }
   const entries = Object.entries(record).filter(
-    ([key, entry]) => entry !== undefined && entry !== null && !(omitTextBody && key === 'text')
+    ([key, entry]) =>
+      key.toLowerCase() !== 'ok' &&
+      entry !== undefined &&
+      entry !== null &&
+      !(omitAttachments && key === 'attachments') &&
+      !(omitTextBody && key === 'text')
   );
   if (entries.length === 0) return <span className="text-muted-foreground">{emptyLabel}</span>;
   const orderedEntries = promoteTextBody
     ? [...entries.filter(([key]) => key !== 'text'), ...entries.filter(([key]) => key === 'text')]
     : entries;
   return (
-    <div className="grid grid-cols-[repeat(auto-fit,minmax(16rem,1fr))] gap-x-6 gap-y-0.5">
+    <div className="grid grid-cols-[minmax(0,1fr)] gap-y-0">
       {orderedEntries.slice(0, MAX_OUTPUT_ENTRIES).map(([key, entry]) => {
         if (promoteTextBody && key === 'text' && typeof entry === 'string') {
           return (
@@ -170,12 +199,12 @@ function MonadMcpOutputValue({
         if (isGroup) {
           return (
             <section
-              className="col-span-full min-w-0 pt-2"
+              className="col-span-full min-w-0 pt-3"
               data-slot="monad-mcp-output-group"
               key={`${path}:${key}`}
             >
               <h4
-                className="mb-1 font-medium text-muted-foreground"
+                className="mb-1 font-medium text-foreground"
                 data-slot="monad-mcp-output-group-label"
               >
                 {friendlyOutputKey(key)}
@@ -184,6 +213,7 @@ function MonadMcpOutputValue({
                 depth={depth + 1}
                 emptyLabel={emptyLabel}
                 falseLabel={falseLabel}
+                omitAttachments={omitAttachments}
                 omitTextBody={omitTextBody}
                 path={`${path}:${key}`}
                 promoteTextBody={promoteTextBody}
@@ -195,7 +225,7 @@ function MonadMcpOutputValue({
         }
         return (
           <div
-            className="grid min-w-0 grid-cols-[minmax(7.5rem,10rem)_minmax(0,1fr)] items-start gap-x-3 py-0.5"
+            className="grid min-w-0 grid-cols-[minmax(6rem,9.5rem)_minmax(0,1fr)] items-start gap-x-3 border-border/70 border-b py-1.5"
             data-slot="monad-mcp-output-field"
             key={`${path}:${key}`}
           >
@@ -213,6 +243,7 @@ function MonadMcpOutputValue({
                 depth={depth + 1}
                 emptyLabel={emptyLabel}
                 falseLabel={falseLabel}
+                omitAttachments={omitAttachments}
                 omitTextBody={omitTextBody}
                 path={`${path}:${key}`}
                 promoteTextBody={promoteTextBody}
@@ -230,12 +261,12 @@ function MonadMcpOutputValue({
 
 function MonadMcpBodyText({ text }: { text: string }) {
   return (
-    <div
+    <MonadMcpLongText
       className="col-span-full min-w-0 pt-1.5"
-      data-slot="monad-mcp-output-body"
-    >
-      <p className="wrap-anywhere whitespace-pre-wrap text-foreground">{boundedOutputText(text)}</p>
-    </div>
+      dataSlot="monad-mcp-output-body"
+      disclosureKey="output-body"
+      text={boundedOutputText(text)}
+    />
   );
 }
 
@@ -281,13 +312,16 @@ function MonadPlanTodoList({
 }) {
   if (todos.length === 0) return <span className="text-muted-foreground">{emptyLabel}</span>;
   return (
-    <ul className="divide-y divide-border/50 border-border/50 border-y">
+    <ul
+      className="overflow-hidden rounded-lg border border-border/70 bg-card/35 px-3"
+      data-slot="monad-mcp-plan"
+    >
       {todos.map((todo) => {
         const completed = todo.status === 'completed';
         const label = todo.status === 'in_progress' ? inProgressLabel : completed ? completedLabel : pendingLabel;
         return (
           <li
-            className="flex min-w-0 items-start gap-2 py-1.5"
+            className="flex min-w-0 items-start gap-2.5 border-border/60 border-b py-2.5 last:border-b-0"
             key={todo.id ?? `${todo.status}:${todo.text}`}
           >
             <HugeiconsIcon
@@ -336,7 +370,7 @@ function outputIdentity(value: unknown): string {
   }
 }
 
-function friendlyMonadMcpOutput(output: unknown): unknown {
+export function friendlyMonadMcpOutput(output: unknown): unknown {
   const parsed = parseJsonValue(output);
   if (Array.isArray(parsed)) {
     const content = mcpTextContent(parsed).map(parseJsonValue);
@@ -385,7 +419,7 @@ function parseJsonValue(value: unknown): unknown {
   }
 }
 
-function recordValue(value: unknown): Record<string, unknown> | undefined {
+export function recordValue(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 

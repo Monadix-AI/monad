@@ -10,6 +10,7 @@ import {
   ArrowUp01Icon,
   Cancel01Icon,
   CircleGaugeIcon,
+  InformationCircleIcon,
   Target01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -25,6 +26,11 @@ import { VirtualList, type VirtualListHandle } from '@monad/ui/components/Virtua
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { workplaceExperienceT } from '../../../i18n.ts';
+import {
+  createObservationDisclosureStore,
+  ObservationDisclosureProvider,
+  type ObservationDisclosureStore
+} from './disclosure.tsx';
 import { ObservationSessionUsageControl } from './session-usage-control.tsx';
 import {
   type ObservationTimelineRow,
@@ -108,6 +114,8 @@ export function MeshAgentObservationPanel({
   eventsActive,
   eventsLoadError,
   loadingOlderEvents,
+  memberIdentities,
+  nativeSessionUnavailable,
   observationLoading,
   observationUnavailable,
   showEventsButton,
@@ -127,6 +135,8 @@ export function MeshAgentObservationPanel({
   headerActions?: ReactNode;
   icon?: MeshAgentStreamView['icon'];
   loadingOlderEvents?: boolean;
+  memberIdentities?: ReadonlyMap<string, Participant>;
+  nativeSessionUnavailable?: boolean;
   observationLoading?: boolean;
   observationUnavailable?: boolean;
   onBack?: () => void;
@@ -157,6 +167,17 @@ export function MeshAgentObservationPanel({
   const listRef = useRef<VirtualListHandle>(null);
   const [follow, setFollow] = useState(true);
   const streamId = stream?.id;
+  // Expanded cards live above the virtualized rows, so scrolling one out of the window and back does
+  // not reset it. Scoped to the stream: a different agent's timeline starts from its own defaults.
+  const disclosureCacheRef = useRef<{ store: ObservationDisclosureStore; streamId?: string }>({
+    store: createObservationDisclosureStore()
+  });
+  const disclosureStore = useMemo(() => {
+    const cached = disclosureCacheRef.current;
+    if (cached.streamId !== streamId)
+      disclosureCacheRef.current = { store: createObservationDisclosureStore(), streamId };
+    return disclosureCacheRef.current.store;
+  }, [streamId]);
   const [usageOpen, setUsageOpen] = useState(false);
   const timelineProvider = stream?.provider ?? '';
   const itemCacheRef = useRef<{ streamId?: string; items: MeshAgentStreamView['items'] }>({ items: [] });
@@ -299,13 +320,16 @@ export function MeshAgentObservationPanel({
   const renderObservationItem = useCallback(
     (item: ObservationTurnTimelineItem) => (
       <div style={{ boxSizing: 'border-box', padding: '0 14px 2px', width: '100%' }}>
-        <ObservationTimelineRowView
-          provider={timelineProvider}
-          row={item.row}
-        />
+        <ObservationDisclosureProvider store={disclosureStore}>
+          <ObservationTimelineRowView
+            memberIdentities={memberIdentities}
+            provider={timelineProvider}
+            row={item.row}
+          />
+        </ObservationDisclosureProvider>
       </div>
     ),
-    [timelineProvider]
+    [disclosureStore, memberIdentities, timelineProvider]
   );
   const scrollToTop = () => {
     setFollow(false);
@@ -477,6 +501,29 @@ export function MeshAgentObservationPanel({
         ) : null}
       </header>
       {usageMeter && usageOpen ? <UsageLimitPopover meter={usageMeter} /> : null}
+      {nativeSessionUnavailable ? (
+        <div
+          aria-atomic="true"
+          aria-live="polite"
+          className="mx-3 mt-3 flex items-start gap-2.5 rounded-md border border-border/80 bg-secondary/70 px-3 py-2.5"
+          data-slot="observation-native-session-notice"
+          role="status"
+        >
+          <HugeiconsIcon
+            aria-hidden="true"
+            className="mt-0.5 size-4 shrink-0 text-muted-foreground"
+            icon={InformationCircleIcon}
+          />
+          <div className="min-w-0 font-sans">
+            <div className="font-medium text-foreground text-xs">
+              {t('web.workplace.nativeSessionUnavailableTitle')}
+            </div>
+            <div className="mt-0.5 text-muted-foreground text-xs leading-relaxed">
+              {t('web.workplace.nativeSessionUnavailableDescription')}
+            </div>
+          </div>
+        </div>
+      ) : null}
 
       <div
         style={{
@@ -538,9 +585,13 @@ export function MeshAgentObservationPanel({
             }}
           >
             {eventsHeader}
-            <div style={{ maxWidth: 180 }}>
-              {observationUnavailable ? t('web.workplace.eventsUnavailable') : t('web.workplace.noObservationActivity')}
-            </div>
+            {nativeSessionUnavailable ? null : (
+              <div style={{ maxWidth: 180 }}>
+                {observationUnavailable
+                  ? t('web.workplace.eventsUnavailable')
+                  : t('web.workplace.noObservationActivity')}
+              </div>
+            )}
           </div>
         )}
         <div

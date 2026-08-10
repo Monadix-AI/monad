@@ -171,7 +171,7 @@ test('observation reasoning uses the shared collapsed reasoning component', () =
   );
 
   expect({
-    alignedTitle: markup.includes('min-h-6') && markup.includes('px-1.5 py-0'),
+    alignedTitle: markup.includes('min-h-6') && markup.includes('px-0 py-0'),
     collapseTrigger: markup.includes('aria-expanded'),
     content: markup.includes('Inspect the render path.'),
     label: markup.includes('Thought for a few seconds'),

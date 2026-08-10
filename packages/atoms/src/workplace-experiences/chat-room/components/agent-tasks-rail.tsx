@@ -40,7 +40,7 @@ import {
   resolveProductIcon,
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { agentObservationCards } from '../../../agent-adapters/observation-cards.ts';
 import { workplaceExperienceT } from '../../i18n.ts';
@@ -662,6 +662,15 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   );
   const closeFilePreview = useCallback(() => closeFilePreviewForSession(uiKey), [closeFilePreviewForSession, uiKey]);
   const agents = sortedProjectRailAgents(room.railAgents);
+  const memberIdentities = useMemo(() => {
+    const identities = new Map<string, Participant>();
+    for (const member of room.railAgents) {
+      identities.set(member.id, member);
+      identities.set(member.name, member);
+      if (member.metadata?.agent) identities.set(member.metadata.agent, member);
+    }
+    return identities;
+  }, [room.railAgents]);
   const observationHooks = room.dualObservationHooks ?? DEFAULT_DUAL_OBSERVATION_HOOKS;
   const observedStream = agentObservationStream(observation, room.meshAgentStreams);
   const observedMeshSessionId = observation?.meshSessionId ?? observedStream?.id;
@@ -1114,6 +1123,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           connectionSignal={observedStream?.status}
           hooks={observationHooks}
           icon={observedAgent?.icon ?? observedEventsStream?.icon}
+          key={observedMeshSessionId}
+          memberIdentities={memberIdentities}
           meshSessionId={observedMeshSessionId}
           onBack={closeRailObservation}
           provider={observedAccessStream?.provider ?? observedStream?.provider ?? 'mesh-agent'}
@@ -1134,6 +1145,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           focusTurnId={observation.turnId}
           icon={observedAgent?.icon ?? observedEventsStream?.icon}
           loadingOlderEvents={eventsPresentation.active && Boolean(eventsPages?.loading)}
+          memberIdentities={memberIdentities}
           observationLoading={observationLoading}
           observationUnavailable={observationUnavailable}
           onBack={closeRailObservation}

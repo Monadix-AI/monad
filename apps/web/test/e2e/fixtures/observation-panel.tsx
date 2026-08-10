@@ -92,7 +92,19 @@ function makeObservationItems(agentKey: string, count = 18): AgentObservationCar
   );
 }
 
-function ToolActivityFixture(): React.ReactElement {
+function ToolActivityFixture({ provider }: { provider: FixtureProvider }): React.ReactElement {
+  const filePath = `/workspace/${Array.from({ length: 16 }, (_, index) => `directory-segment-${index + 1}`).join('/')}/ObservationCard.tsx`;
+  const sourceLines = Array.from(
+    { length: 32 },
+    (_, index) => `export const observationLine${index + 1} = ${index + 1};`
+  );
+  const fileSource = sourceLines
+    .map((line, index) => (provider === 'claude-code' ? `${index + 11}\t${line}` : line))
+    .join('\n');
+  const fileContent =
+    provider === 'claude-code'
+      ? `${fileSource}\n\n<system-reminder>Provider metadata outside the file body.</system-reminder>`
+      : fileSource;
   const events: AgentObservationEvent[] = [
     {
       id: 'tool-command-call',
@@ -100,8 +112,9 @@ function ToolActivityFixture(): React.ReactElement {
       streaming: false,
       text: 'Tool call shell',
       tool: {
+        category: 'shell',
         callId: 'tool-command',
-        input: { command: 'rg -n "ObservationToolCardShell" packages/atoms' },
+        input: { command: 'grep -rln "WorkplaceProjectMemberSettings" packages/protocol/src | head' },
         name: 'shell',
         status: 'completed'
       },
@@ -128,7 +141,7 @@ function ToolActivityFixture(): React.ReactElement {
       text: 'Tool call Read',
       tool: {
         callId: 'tool-file',
-        input: { file_path: 'packages/ui/src/components/ObservationCard.tsx' },
+        input: { file_path: filePath },
         name: 'Read',
         status: 'completed'
       },
@@ -138,11 +151,11 @@ function ToolActivityFixture(): React.ReactElement {
       id: 'tool-file-result',
       kind: 'tool-result',
       streaming: false,
-      text: 'export function ObservationMeta() {}',
+      text: fileContent,
       tool: {
         callId: 'tool-file',
         name: 'Read',
-        output: 'export function ObservationMeta() {}',
+        output: fileContent,
         status: 'completed'
       },
       provenance: { contractEvents: [{ id: 'raw-file-result' }] }
@@ -172,9 +185,24 @@ function ToolActivityFixture(): React.ReactElement {
         status: 'completed'
       },
       provenance: { contractEvents: [{ id: 'raw-generic-result' }] }
+    },
+    {
+      hasContent: false,
+      id: 'reasoning-alignment',
+      kind: 'reasoning',
+      provenance: { contractEvents: [{ id: 'raw-reasoning-alignment' }] },
+      streaming: false,
+      text: 'Thinking…'
+    },
+    {
+      id: 'agent-message-alignment',
+      kind: 'assistant-message',
+      provenance: { contractEvents: [{ id: 'raw-agent-message-alignment' }] },
+      streaming: false,
+      text: 'Agent message alignment anchor'
     }
   ];
-  const items = agentObservationCards(events, 'codex');
+  const items = agentObservationCards(events, provider);
   return (
     <TooltipProvider>
       <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
@@ -184,7 +212,7 @@ function ToolActivityFixture(): React.ReactElement {
           stream={{
             id: 'tool-activity',
             agentName: 'Tool Activity',
-            provider: 'codex',
+            provider,
             tag: 'Agent',
             status: 'ok',
             output: '',
@@ -526,7 +554,7 @@ function Harness(): React.ReactElement {
         provider={fixtureProvider}
       />
     );
-  if (mode === 'tool') return <ToolActivityFixture />;
+  if (mode === 'tool') return <ToolActivityFixture provider={fixtureProvider} />;
   if (mode === 'monad-output') return <MonadOutputLayoutFixture />;
   if (mode === 'monad-message-body') return <MonadMessageBodyLayoutFixture />;
 
