@@ -50,6 +50,13 @@ export function resolvePlaywrightTrace(
   return env.PLAYWRIGHT_TRACE ? 'retain-on-failure' : 'off';
 }
 
+export function resolvePlaywrightRetryPolicy(env: NodeJS.ProcessEnv | { CI?: string | undefined } = process.env): {
+  retries: number;
+  failOnFlakyTests: boolean;
+} {
+  return env.CI ? { retries: 1, failOnFlakyTests: true } : { retries: 0, failOnFlakyTests: false };
+}
+
 export function resolvePlaywrightBrowserChannel(
   platform = process.platform,
   arch = process.arch
@@ -80,7 +87,7 @@ const browserChannel = resolvePlaywrightBrowserChannel();
 export default defineConfig({
   testDir: './test/e2e',
   fullyParallel: true,
-  retries: process.env.CI ? 1 : 0,
+  ...resolvePlaywrightRetryPolicy(),
   workers: resolvePlaywrightWorkers(),
   shard: resolvePlaywrightShard(),
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
