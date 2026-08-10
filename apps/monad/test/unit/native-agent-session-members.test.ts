@@ -179,3 +179,38 @@ test('two members from one Profile track their own runtime bindings independentl
     ]
   });
 });
+
+test('the roster resolves an internal Monad profile name to its display name and provider icon', async () => {
+  const internalName = 'monad--agt_eAmWnO0FDkBJ';
+  const store = makeStore({
+    bindings: [{ projectMemberId: 'pmem_monad', lifecycle: 'active', currentNativeRuntimeSessionId: null }],
+    members: { pmem_monad: member('pmem_monad', internalName, internalName) }
+  });
+  const service = createNativeAgentSessionMembersService({
+    store,
+    meshAgents: () => [
+      {
+        name: internalName,
+        displayName: 'Researcher',
+        provider: 'monad',
+        productIcon: 'monad',
+        command: 'monad',
+        enabled: true,
+        allowAutopilot: false,
+        approvalOwnership: 'provider-owned'
+      }
+    ]
+  });
+
+  expect(await service.list(SESSION, 'pmem_requester')).toEqual({
+    members: [
+      {
+        id: 'pmem_monad',
+        displayName: 'Researcher',
+        provider: 'monad',
+        productIcon: 'monad',
+        status: 'offline'
+      }
+    ]
+  });
+});

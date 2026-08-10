@@ -62,6 +62,7 @@ export interface SessionIdentityModel {
   isDraft: boolean;
   isReadOnly: boolean;
   isUnarchiving: boolean;
+  onRename?: (title: string) => void | Promise<void>;
   onRetryDraftSession?: () => void;
   onSelectSession: (sessionId: SessionId) => void;
   onUnarchive: () => void;

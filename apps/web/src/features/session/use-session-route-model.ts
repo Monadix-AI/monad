@@ -283,6 +283,13 @@ export function useSessionRouteModel({
     await updateSession({ id: currentId, archived: false }).unwrap();
     onSessionUnarchived();
   }, [currentId, onSessionUnarchived, updateSession]);
+  const renameCurrentSession = useCallback(
+    async (title: string) => {
+      if (currentId === null) return;
+      await updateSession({ id: currentId, title }).unwrap();
+    },
+    [currentId, updateSession]
+  );
   const {
     isBusy,
     optimistic,
@@ -520,6 +527,7 @@ export function useSessionRouteModel({
               isDraft: sessionIsDraft(currentSession),
               isReadOnly,
               isUnarchiving: updateSessionState.isLoading,
+              onRename: currentSession ? renameCurrentSession : undefined,
               onRetryDraftSession: draftSession?.status === 'failed' ? retryDraftSession : undefined,
               onSelectSession: (sessionId) => {
                 setOptimistic([]);
@@ -619,6 +627,7 @@ export function useSessionRouteModel({
       clarifyRespond,
       removeQueuedMessage,
       removeAttachment,
+      renameCurrentSession,
       replyTarget,
       replyTargetId,
       replyTargets,

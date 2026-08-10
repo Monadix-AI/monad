@@ -1,4 +1,10 @@
-import type { NativeAgentSessionMembersResponse, SessionBinding, SessionId } from '@monad/protocol';
+import type {
+  MeshAgentView,
+  NativeAgentSessionMembersResponse,
+  ProjectMember,
+  SessionBinding,
+  SessionId
+} from '@monad/protocol';
 import type { Store } from '#/store/db/index.ts';
 
 import { nativeAgentSessionMembersResponseSchema } from '@monad/protocol';
@@ -6,7 +12,18 @@ import { nativeAgentSessionMembersResponseSchema } from '@monad/protocol';
 import { HandlerError } from '#/handlers/handler-error.ts';
 
 export interface NativeAgentSessionMembersDeps {
+  meshAgents?: () => readonly MeshAgentView[];
   store: Store;
+}
+
+function memberAgent(deps: NativeAgentSessionMembersDeps, member: ProjectMember): MeshAgentView | undefined {
+  const agents = deps.meshAgents?.() ?? [];
+  if (agents.length === 0) return undefined;
+  const direct = agents.find((agent) => agent.name === member.profileId);
+  if (direct) return direct;
+  const project = deps.store.getWorkplaceProject(member.projectId);
+  const profileName = project?.memberTemplates.find((template) => template.id === member.profileId)?.name;
+  return profileName ? agents.find((agent) => agent.name === profileName) : undefined;
 }
 
 // A member is online iff its binding is active and points at a live NativeRuntimeSession that is genuinely
@@ -31,7 +48,7 @@ export function createNativeAgentSessionMembersService(deps: NativeAgentSessionM
   return {
     async list(sessionId: SessionId, requesterProjectMemberId: string): Promise<NativeAgentSessionMembersResponse> {
       const session = deps.store.getSession(sessionId);
-      const members: { id: string; displayName: string; status: 'online' | 'offline' }[] = [];
+      const members: NativeAgentSessionMembersResponse['members'] = [];
       if (!session?.projectId) return nativeAgentSessionMembersResponseSchema.parse({ members });
       // Canonical roster: the session's non-left bindings joined to their ProjectMember identity. The
       // requester excludes itself by projectMemberId. A binding with no ProjectMember is a corrupted graph
@@ -47,9 +64,16 @@ export function createNativeAgentSessionMembersService(deps: NativeAgentSessionM
             `session member binding has no project member: ${binding.projectMemberId}`
           );
         }
+        const agent = memberAgent(deps, member);
+        const displayName =
+          agent?.displayName && (member.displayName === member.profileId || member.displayName === agent.name)
+            ? agent.displayName
+            : member.displayName;
         members.push({
           id: member.id,
-          displayName: member.displayName,
+          displayName,
+          ...(agent?.provider ? { provider: agent.provider } : {}),
+          ...(agent?.productIcon ? { productIcon: agent.productIcon } : {}),
           status: isMemberOnline(deps.store, sessionId, binding) ? 'online' : 'offline'
         });
       }

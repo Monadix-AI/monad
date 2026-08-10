@@ -449,6 +449,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     messageIngress
   });
   const nativeAgentSessionMembers = createNativeAgentSessionMembersService({
+    meshAgents: () => invitableMeshAgentConfigs(deps.configManager.get().cfg).map(meshAgentConfigToView),
     store: deps.store
   });
   meshAgentHost.setManagedProjectOutputHandler(

@@ -19,12 +19,103 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger
 } from '@monad/ui';
-import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
+import { AgentIdentity, AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
+import { ProductIcon } from '@monad/ui/components/ProductIcon';
 
 import { useT } from '#/components/I18nProvider';
+import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 import { PanelShellBreadcrumbHeader } from '#/components/ui/panel-shell';
+import { SessionHeaderTitle } from '#/features/session/SessionHeader';
 import { meshWorkspaceStatusView } from '../mesh-workspace-status';
 import { fileManagerLabel, terminalLabel, workdirLabel } from './project-header-utils';
+
+function SessionMemberRoster({ room }: { room: ProjectController }): React.ReactElement {
+  const t = useT();
+  const countLabel = t('web.workplace.sessionMemberCount', { count: room.sessionMembers.length });
+  const participantsById = new Map(room.projectParticipants.map((participant) => [participant.id, participant]));
+
+  return (
+    <HoverCard
+      closeDelay={100}
+      openDelay={150}
+    >
+      <HoverCardTrigger asChild>
+        <Button
+          aria-label={countLabel}
+          className="h-7 gap-1.5 px-2 font-mono text-xs tabular-nums"
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          <HugeiconsIcon
+            aria-hidden
+            icon={UserGroupIcon}
+            size={14}
+          />
+          {room.sessionMembers.length}
+        </Button>
+      </HoverCardTrigger>
+      <HoverCardContent
+        align="end"
+        className="w-72 overflow-hidden p-0"
+        side="bottom"
+        sideOffset={6}
+      >
+        <div className="border-border/70 border-b px-3 py-2.5">
+          <div className="font-medium text-sm">{t('web.workplace.sessionMembersTitle')}</div>
+          <div className="mt-0.5 text-muted-foreground text-xs">{countLabel}</div>
+        </div>
+        {room.sessionMembers.length > 0 ? (
+          <ul
+            aria-label={t('web.workplace.sessionMembersTitle')}
+            className="m-0 max-h-72 list-none overflow-y-auto overscroll-contain p-1.5"
+          >
+            {room.sessionMembers.map(({ member }) => {
+              const participant = participantsById.get(member.id);
+              const name = participant?.name ?? member.displayName;
+              const icon =
+                participant?.icon ??
+                room.source.meshAgentIcons.get(member.id) ??
+                room.source.meshAgentIcons.get(member.profileId);
+              return (
+                <li
+                  className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5 rounded-md px-2 py-2"
+                  key={member.id}
+                >
+                  <AgentInstanceAvatar
+                    agent={{
+                      av: participant?.av,
+                      avatarUrl: participant?.avatarUrl,
+                      name
+                    }}
+                    bare
+                    size={28}
+                  />
+                  <AgentIdentity
+                    badge={
+                      icon ? (
+                        <ProductIcon
+                          background="none"
+                          product={icon}
+                          size={13}
+                        />
+                      ) : undefined
+                    }
+                    className="min-w-0"
+                    name={name}
+                    nameStyle={{ fontSize: 13, fontWeight: 500 }}
+                  />
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="m-0 px-3 py-3 text-muted-foreground text-sm">{t('web.workplace.noSessionMembersHint')}</p>
+        )}
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
 
 function WorkdirControl({
   gitRemoteUrl,
@@ -122,7 +213,6 @@ export function ProjectHeader({
   const git = workspaceMeta?.git;
   const meshStatus = meshWorkspaceStatusView(room.source.meshAgentState);
   const activeSession = room.projectSessions.find((session) => session.id === room.activeSessionId);
-  const memberCount = room.sessionMembers.length;
   return (
     <PanelShellBreadcrumbHeader
       actions={
@@ -151,17 +241,7 @@ export function ProjectHeader({
           ) : null}
           {room.activeSessionId ? (
             <>
-              <span
-                aria-label={t('web.workplace.sessionMemberCount', { count: memberCount })}
-                role="status"
-                style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontFamily: mono, fontSize: 11 }}
-              >
-                <HugeiconsIcon
-                  icon={UserGroupIcon}
-                  size={14}
-                />
-                {memberCount}
-              </span>
+              <SessionMemberRoster room={room} />
               <Button
                 aria-label={t('web.workplace.addMember')}
                 className="max-md:size-6 max-md:p-0"
@@ -187,7 +267,20 @@ export function ProjectHeader({
       ariaLabel={t('web.workplace.projectSessionBreadcrumb')}
       crumbs={[
         { id: room.projectId, label: activeProject?.name ?? room.projectId },
-        ...(activeSession ? [{ id: activeSession.id, label: activeSession.title }] : [])
+        ...(activeSession
+          ? [
+              {
+                id: activeSession.id,
+                label: (
+                  <SessionHeaderTitle
+                    onRename={(title) => room.renameSession(activeSession.id, title)}
+                    renameLabel={t('web.sidebar.renameSession')}
+                    title={activeSession.title}
+                  />
+                )
+              }
+            ]
+          : [])
       ]}
     />
   );

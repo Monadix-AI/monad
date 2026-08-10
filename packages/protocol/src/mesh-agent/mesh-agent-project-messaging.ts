@@ -22,6 +22,7 @@ import {
   messageAttachmentRefSchema,
   NATIVE_AGENT_INLINE_TEXT_MAX
 } from './mesh-agent-attachments.ts';
+import { meshAgentProductIconSchema, meshAgentProviderSchema } from './mesh-agent-config.ts';
 import { nativeAgentDirectMessageSchema } from './mesh-agent-direct-messaging.ts';
 import { nativeAgentTurnPointerSchema } from './mesh-agent-observation.ts';
 
@@ -197,6 +198,8 @@ export type NativeAgentProjectReadResponse = z.infer<typeof nativeAgentProjectRe
 export const nativeAgentSessionMemberSchema = z.object({
   id: projectMemberIdSchema,
   displayName: z.string().min(1),
+  provider: meshAgentProviderSchema.optional(),
+  productIcon: meshAgentProductIconSchema.optional(),
   status: z.enum(['online', 'offline'])
 });
 export type NativeAgentSessionMember = z.infer<typeof nativeAgentSessionMemberSchema>;
