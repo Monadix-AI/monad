@@ -13,6 +13,8 @@ test('dist installer enhancement preserves the product and download contracts', 
   expect(enhancer).toContain(docs.description);
   expect(enhancer).not.toContain('Local AI runtime');
   expect(enhancer).toContain('monad_download_progress "$1" "$2"');
+  expect(enhancer).toContain('MONAD_FORCE_INTERACTIVE:-');
+  expect(enhancer).toContain('shasum -a 256');
   expect(enhancer).not.toContain('--silent --head');
   expect(enhancer).toContain('--retry 3');
   expect(enhancer).toContain('MONAD_OUTPUT:-');

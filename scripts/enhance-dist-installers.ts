@@ -69,7 +69,7 @@ monad_event() {
 }
 
 monad_is_interactive() {
-    ! monad_is_json && [ "$PRINT_QUIET" = "0" ] && [ -t 2 ] && [ "\${TERM:-}" != "dumb" ]
+    ! monad_is_json && [ "$PRINT_QUIET" = "0" ] && { [ "\${MONAD_FORCE_INTERACTIVE:-}" = "1" ] || { [ -t 2 ] && [ "\${TERM:-}" != "dumb" ]; }; }
 }
 
 monad_banner() {
@@ -408,6 +408,25 @@ monad_summary() {
         else
             curl -sSfL --retry 3 --retry-delay 1 --connect-timeout 10 --speed-limit 1024 --speed-time 30 "$1" -o "$2"
         fi`
+  );
+  source = replaceOnce(
+    source,
+    `        sha256)
+            if ! check_cmd sha256sum; then
+                say "skipping sha256 checksum verification (it requires the 'sha256sum' command)"
+                return 0
+            fi
+            _calculated_checksum="$(sha256sum -b "$_file" | awk '{printf $1}')"
+            ;;`,
+    `        sha256)
+            if check_cmd sha256sum; then
+                _calculated_checksum="$(sha256sum -b "$_file" | awk '{printf $1}')"
+            elif check_cmd shasum; then
+                _calculated_checksum="$(shasum -a 256 "$_file" | awk '{printf $1}')"
+            else
+                err "cannot verify sha256 checksum: install sha256sum or shasum"
+            fi
+            ;;`
   );
 
   await writeFile(path, source);
