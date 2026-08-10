@@ -2,7 +2,13 @@ import { afterAll, beforeAll, expect, test } from 'bun:test';
 
 import { loopbackTlsOptions } from '#/lib/loopback-tls';
 import { proxyResponseBody } from '#/lib/proxy-stream';
-import { attachWebRoutes, proxyDevWebRequest, resolveDevWebProxyUrl, startWeb } from '../../server/index.ts';
+import {
+  attachWebRoutes,
+  proxyDevWebRequest,
+  readDaemonUrl,
+  resolveDevWebProxyUrl,
+  startWeb
+} from '../../server/index.ts';
 
 // The web server serves the embedded SPA and proxies /api/* to the daemon (replacing
 // the old Next route handler). Exercise the proxy against a fake provider.
@@ -274,95 +280,63 @@ test('proxyDevWebRequest forwards method, path, query, and body to Vite', async 
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { ensureTlsCert } from '@monad/environment/tls';
 
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete Bun.env[name];
   else Bun.env[name] = value;
 }
 
-test('readDaemonUrl reads port from MONAD_HOME/configs/mesh.json', async () => {
+test('readDaemonUrl reads port from MONAD_HOME/configs/mesh.json', () => {
   const home = join(tmpdir(), `monad-web-cfgpath-${Date.now()}`);
   mkdirSync(join(home, 'configs'), { recursive: true });
-
-  // Fake HTTPS daemon returns a sentinel status so we can confirm the proxy reached it.
-  const cert = await ensureTlsCert(join(home, 'tls'));
-  const fake = Bun.serve({
-    port: 0,
-    tls: { key: Bun.file(cert.keyPath), cert: Bun.file(cert.certPath) },
-    fetch: () => new Response('hit', { status: 418, headers: { 'x-hit': '1' } })
-  });
   writeFileSync(
     join(home, 'configs', 'mesh.json'),
-    JSON.stringify({ network: { https: { enabled: true }, port: fake.port } })
+    JSON.stringify({ network: { https: { enabled: true }, port: 43_210 } })
   );
 
   const prevHome = Bun.env.MONAD_HOME;
   const prevMonadUrl = Bun.env.MONAD_URL;
   const prevPort = Bun.env.MONAD_PORT;
   const prevHost = Bun.env.MONAD_HOST;
-  const prevWebPort = Bun.env.WEB_PORT;
-  Bun.env.MONAD_HOME = home;
-  delete Bun.env.MONAD_URL;
-  delete Bun.env.MONAD_PORT;
-  delete Bun.env.MONAD_HOST;
-  Bun.env.WEB_PORT = '0';
-  const ws = startWeb();
-
   try {
-    const res = await fetch(`http://127.0.0.1:${ws.port}/api/probe`);
-    // 418 from the fake daemon confirms the proxy reached the right port.
-    expect(res.status).toBe(418);
-    expect(res.headers.get('x-hit')).toBe('1');
+    Bun.env.MONAD_HOME = home;
+    delete Bun.env.MONAD_URL;
+    delete Bun.env.MONAD_PORT;
+    delete Bun.env.MONAD_HOST;
+    expect(readDaemonUrl()).toBe('https://127.0.0.1:43210');
   } finally {
-    ws.stop(true);
-    fake.stop(true);
     restoreEnv('MONAD_HOME', prevHome);
     restoreEnv('MONAD_URL', prevMonadUrl);
     restoreEnv('MONAD_PORT', prevPort);
     restoreEnv('MONAD_HOST', prevHost);
-    restoreEnv('WEB_PORT', prevWebPort);
     rmSync(home, { recursive: true, force: true });
   }
 });
 
-test('readDaemonUrl uses HTTP when config disables HTTPS', async () => {
+test('readDaemonUrl uses HTTP when config disables HTTPS', () => {
   const home = join(tmpdir(), `monad-web-http-cfgpath-${Date.now()}`);
   mkdirSync(join(home, 'configs'), { recursive: true });
 
-  const fake = Bun.serve({
-    port: 0,
-    fetch: () => new Response('hit', { status: 418, headers: { 'x-hit': '1' } })
-  });
   writeFileSync(
     join(home, 'configs', 'mesh.json'),
-    JSON.stringify({ network: { https: { enabled: false }, port: fake.port } })
+    JSON.stringify({ network: { https: { enabled: false }, port: 43_211 } })
   );
 
   const prevHome = Bun.env.MONAD_HOME;
   const prevMonadUrl = Bun.env.MONAD_URL;
   const prevPort = Bun.env.MONAD_PORT;
   const prevHost = Bun.env.MONAD_HOST;
-  const prevWebPort = Bun.env.WEB_PORT;
-  Bun.env.MONAD_HOME = home;
-  delete Bun.env.MONAD_URL;
-  delete Bun.env.MONAD_PORT;
-  delete Bun.env.MONAD_HOST;
-  Bun.env.WEB_PORT = '0';
-  const ws = startWeb();
-
   try {
-    const res = await fetch(`http://127.0.0.1:${ws.port}/api/probe`);
-    expect(res.status).toBe(418);
-    expect(res.headers.get('x-hit')).toBe('1');
+    Bun.env.MONAD_HOME = home;
+    delete Bun.env.MONAD_URL;
+    delete Bun.env.MONAD_PORT;
+    delete Bun.env.MONAD_HOST;
+    expect(readDaemonUrl()).toBe('http://127.0.0.1:43211');
   } finally {
-    ws.stop(true);
-    fake.stop(true);
     restoreEnv('MONAD_HOME', prevHome);
     restoreEnv('MONAD_URL', prevMonadUrl);
     restoreEnv('MONAD_PORT', prevPort);
     restoreEnv('MONAD_HOST', prevHost);
-    restoreEnv('WEB_PORT', prevWebPort);
     rmSync(home, { recursive: true, force: true });
   }
 });
