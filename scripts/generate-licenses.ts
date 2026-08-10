@@ -3,7 +3,6 @@ import type { BunPlugin } from 'bun';
 
 import { mkdir } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
-import { type ModuleInfo, init as scanLicenses } from 'license-checker-rseidelsohn';
 
 import { listAvatarStyleSlugs } from './avatar-style-slugs.ts';
 import { mem0OptionalPeerExternals, optionalPeerExternals } from './lib/release-optional-peers.ts';
@@ -25,10 +24,30 @@ const LICENSE_OVERRIDES: Record<string, string> = {
   '@dicebear/styles': 'MIT'
 };
 
-interface PackageManifest {
+interface PackageAuthor {
+  name?: string;
+}
+
+interface PackageRepository {
+  url?: string;
+}
+
+interface PackageLicense {
+  name?: string;
+  type?: string;
+}
+
+export interface PackageManifest {
+  author?: PackageAuthor | string;
   dependencies?: Record<string, string>;
+  homepage?: string;
+  license?: PackageLicense | string;
+  licenses?: Array<PackageLicense | string>;
   name?: string;
   optionalDependencies?: Record<string, string>;
+  private?: boolean;
+  repository?: PackageRepository | string;
+  version?: string;
 }
 
 interface WorkspacePackage {
@@ -36,7 +55,7 @@ interface WorkspacePackage {
   path: string;
 }
 
-interface LicensePackage {
+export interface LicensePackage {
   author?: string;
   homepage?: string;
   license: string;
@@ -52,51 +71,52 @@ function avatarStyleLabel(slug: string): string {
 }
 
 function normalizeUrl(value: string | undefined): string | undefined {
-  const normalized = value?.replace(/^git\+/, '').replace(/\.git$/, '');
+  const normalized = value
+    ?.replace('git+ssh://git@', 'git://')
+    .replace('git+https://github.com', 'https://github.com')
+    .replace('git://github.com', 'https://github.com')
+    .replace('git@github.com:', 'https://github.com/')
+    .replace(/^git\+/, '')
+    .replace(/\.git$/, '');
   return normalized && /^https?:\/\//.test(normalized) ? normalized : undefined;
 }
 
-function packageIdentity(identity: string): { name: string; version: string } {
-  const separator = identity.lastIndexOf('@');
-  return { name: identity.slice(0, separator), version: identity.slice(separator + 1) };
+function repositoryUrl(repository: PackageManifest['repository']): string | undefined {
+  const value = typeof repository === 'string' ? repository : repository?.url;
+  const githubPath = value?.replace(/^github:/, '');
+  return normalizeUrl(githubPath && /^[^/:]+\/[^/]+$/.test(githubPath) ? `https://github.com/${githubPath}` : value);
 }
 
-function licenseName(name: string, value: string | string[] | undefined): string {
-  return LICENSE_OVERRIDES[name] ?? (Array.isArray(value) ? value.join(' OR ') : value) ?? 'unknown';
+function authorName(author: PackageManifest['author']): string | undefined {
+  if (typeof author !== 'string') return author?.name;
+  return author.match(/^([^(<]+)/)?.[0].trim();
 }
 
-function scanDependencyTree(start: string): Promise<Record<string, ModuleInfo>> {
-  return new Promise((resolveReport, reject) => {
-    scanLicenses(
-      {
-        start,
-        direct: 0,
-        production: true,
-        nopeer: true,
-        excludePrivatePackages: true
-      },
-      (error, report) => {
-        if (error) reject(error);
-        else resolveReport(report);
-      }
-    );
-  });
+function licenseValue(value: PackageLicense | string): string | undefined {
+  const raw = typeof value === 'string' ? value : (value.type ?? value.name);
+  const fileReference = raw?.match(/SEE LICENSE IN (.*)/i)?.[1];
+  return fileReference ? `Custom: ${fileReference}` : raw;
 }
 
-function reportPackages(report: Record<string, ModuleInfo>): LicensePackage[] {
-  return Object.entries(report)
-    .map(([identity, metadata]) => {
-      const { name, version } = packageIdentity(identity);
-      const homepage = normalizeUrl(metadata.repository ?? metadata.url);
-      return {
-        name,
-        version,
-        license: licenseName(name, metadata.licenses),
-        ...(homepage ? { homepage } : {}),
-        ...(metadata.publisher ? { author: metadata.publisher } : {})
-      };
-    })
-    .sort((a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version));
+function licenseName(manifest: PackageManifest): string {
+  const override = manifest.name ? LICENSE_OVERRIDES[manifest.name] : undefined;
+  if (override) return override;
+  if (manifest.license) return licenseValue(manifest.license) ?? 'unknown';
+  const licenses = manifest.licenses?.map(licenseValue).filter((license): license is string => license !== undefined);
+  return licenses?.length ? licenses.join(' OR ') : 'unknown';
+}
+
+export function licensePackageFromManifest(manifest: PackageManifest): LicensePackage | undefined {
+  if (!manifest.name || !manifest.version || manifest.private) return undefined;
+  const homepage = repositoryUrl(manifest.repository);
+  const author = authorName(manifest.author);
+  return {
+    name: manifest.name,
+    version: manifest.version,
+    license: licenseName(manifest),
+    ...(homepage ? { homepage } : {}),
+    ...(author ? { author } : {})
+  };
 }
 
 function productionDependencies(manifest: PackageManifest): string[] {
@@ -110,6 +130,22 @@ async function loadWorkspacePackages(): Promise<Map<string, WorkspacePackage>> {
     if (manifest.name) packages.set(manifest.name, { manifest, path: dirname(join(ROOT, relativePath)) });
   }
   return packages;
+}
+
+async function reportPackages(workspacePackage: WorkspacePackage, workspaceNames: ReadonlySet<string>) {
+  return mergePackages(
+    await Promise.all(
+      productionDependencies(workspacePackage.manifest)
+        .filter((name) => !workspaceNames.has(name))
+        .map(async (name) => {
+          const manifest = (await Bun.file(
+            join(workspacePackage.path, 'node_modules', name, 'package.json')
+          ).json()) as PackageManifest;
+          const pkg = licensePackageFromManifest(manifest);
+          return pkg ? [pkg] : [];
+        })
+    )
+  );
 }
 
 function mergePackages(groups: LicensePackage[][]): LicensePackage[] {
@@ -173,8 +209,10 @@ async function scanPackageGroups() {
     }))
   );
   const scanPaths = new Set<string>();
+  const packagesByPath = new Map([...workspacePackages.values()].map((pkg) => [pkg.path, pkg]));
   const pathsByApp = appManifests.map((target) => {
     const appPath = join(ROOT, target.path);
+    packagesByPath.set(appPath, { manifest: target.manifest, path: appPath });
     const paths = [appPath];
     const queued = productionDependencies(target.manifest);
     const visited = new Set<string>();
@@ -190,9 +228,14 @@ async function scanPackageGroups() {
     for (const path of paths) scanPaths.add(path);
     return { id: target.id, paths };
   });
+  const workspaceNames = new Set(workspacePackages.keys());
   const reports = new Map(
     await Promise.all(
-      [...scanPaths].map(async (path) => [path, reportPackages(await scanDependencyTree(path))] as const)
+      [...scanPaths].map(async (path) => {
+        const workspacePackage = packagesByPath.get(path);
+        if (!workspacePackage) throw new Error(`missing workspace package for license scan: ${path}`);
+        return [path, await reportPackages(workspacePackage, workspaceNames)] as const;
+      })
     )
   );
   const monadManifest = appManifests.find((target) => target.id === 'monad')?.manifest;
@@ -201,16 +244,17 @@ async function scanPackageGroups() {
     Object.keys(monadManifest?.dependencies ?? {})
   );
   const external = [...optionalExternals, ...mem0OptionalPeerExternals];
-  const packageGroups = [];
-  for (const target of pathsByApp) {
-    const appTarget = APP_TARGETS.find((candidate) => candidate.id === target.id);
-    if (!appTarget) throw new Error(`missing application target: ${target.id}`);
-    const used = await usedExternalPackages(appTarget, external);
-    packageGroups.push({
-      id: target.id,
-      packages: mergePackages(target.paths.map((path) => reports.get(path) ?? [])).filter((pkg) => used.has(pkg.name))
-    });
-  }
+  const packageGroups = await Promise.all(
+    pathsByApp.map(async (target) => {
+      const appTarget = APP_TARGETS.find((candidate) => candidate.id === target.id);
+      if (!appTarget) throw new Error(`missing application target: ${target.id}`);
+      const used = await usedExternalPackages(appTarget, external);
+      return {
+        id: target.id,
+        packages: mergePackages(target.paths.map((path) => reports.get(path) ?? [])).filter((pkg) => used.has(pkg.name))
+      };
+    })
+  );
   return { packageGroups, packages: mergePackages(packageGroups.map((group) => group.packages)) };
 }
 
@@ -236,10 +280,14 @@ async function scanAvatarStyles() {
   );
 }
 
-const [{ packages, packageGroups }, avatarStyles] = await Promise.all([scanPackageGroups(), scanAvatarStyles()]);
-const outDir = join(ROOT, 'apps/monad/generated');
-await mkdir(outDir, { recursive: true });
-await Bun.write(
-  join(outDir, 'licenses.json'),
-  `${JSON.stringify({ packages, packageGroups, avatarStyles }, null, 2)}\n`
-);
+async function generateLicenses() {
+  const [{ packages, packageGroups }, avatarStyles] = await Promise.all([scanPackageGroups(), scanAvatarStyles()]);
+  const outDir = join(ROOT, 'apps/monad/generated');
+  await mkdir(outDir, { recursive: true });
+  await Bun.write(
+    join(outDir, 'licenses.json'),
+    `${JSON.stringify({ packages, packageGroups, avatarStyles }, null, 2)}\n`
+  );
+}
+
+if (import.meta.main) await generateLicenses();
