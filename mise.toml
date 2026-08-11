@@ -160,7 +160,7 @@ run = "bun run scripts/dev-ports.ts"
 [tasks."dev:services"]
 description = "Start optional local observability services"
 raw = true
-run = "docker compose -f dockers/compose.dev.yaml up -d phoenix"
+run = "docker compose -f docker/compose.dev.yaml up -d phoenix"
 
 [tasks."docker:shell"]
 description = "Build and open the Linux development image"
