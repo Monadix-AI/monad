@@ -5,6 +5,7 @@ import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import { POWERSHELL_INSTALLER_AUTO_START, SHELL_INSTALLER_AUTO_START } from './lib/dist-installer-autostart.ts';
+import { SHELL_INSTALLER_TERMINAL_GUARD } from './lib/dist-installer-terminal.ts';
 import { isPublicReleaseAsset } from './lib/public-release-assets.ts';
 
 const { values } = parseArgs({
@@ -122,6 +123,8 @@ monad_error() {
 
 ${SHELL_INSTALLER_AUTO_START}
 
+${SHELL_INSTALLER_TERMINAL_GUARD}
+
 MONAD_ACTIVITY_PID=''
 
 monad_activity_start() {
@@ -131,6 +134,7 @@ monad_activity_start() {
         return 0
     fi
     monad_activity_stop
+    monad_terminal_lock
     (
         set -- '◐' '◓' '◑' '◒'
         while :; do
@@ -150,6 +154,7 @@ monad_activity_stop() {
     wait "$MONAD_ACTIVITY_PID" 2>/dev/null || true
     MONAD_ACTIVITY_PID=''
     printf '\\r\\033[K' >&2
+    monad_terminal_unlock
 }
 
 monad_cleanup() {
@@ -159,6 +164,7 @@ monad_cleanup() {
         wait "$MONAD_DOWNLOAD_PID" 2>/dev/null || true
         MONAD_DOWNLOAD_PID=''
     fi
+    monad_terminal_unlock
 }
 
 trap 'monad_cleanup' EXIT
@@ -248,14 +254,18 @@ monad_download_progress() {
     _monad_total=$(monad_expected_size "$_monad_url")
 
     if ! [ "\${_monad_total:-0}" -gt 0 ] 2>/dev/null; then
+        monad_terminal_lock
         if [ -n "$_monad_auth" ]; then
             curl --fail --location --progress-bar --retry 3 --retry-delay 1 --connect-timeout 10 --speed-limit 1024 --speed-time 30 --header "Authorization: Bearer $_monad_auth" "$_monad_url" -o "$_monad_dest"
         else
             curl --fail --location --progress-bar --retry 3 --retry-delay 1 --connect-timeout 10 --speed-limit 1024 --speed-time 30 "$_monad_url" -o "$_monad_dest"
         fi
-        return
+        _monad_status=$?
+        monad_terminal_unlock
+        return "$_monad_status"
     fi
 
+    monad_terminal_lock
     : > "$_monad_dest"
     if [ -n "$_monad_auth" ]; then
         curl --fail --location --silent --show-error --retry 3 --retry-delay 1 --connect-timeout 10 --speed-limit 1024 --speed-time 30 --header "Authorization: Bearer $_monad_auth" "$_monad_url" -o "$_monad_dest" &
@@ -293,10 +303,12 @@ monad_download_progress() {
         _monad_rate=$(( _monad_total / _monad_elapsed ))
         monad_draw_bar 100 1 "$_monad_total" "$_monad_total" "$_monad_rate" 0
         printf '\\n' >&2
+        monad_terminal_unlock
     else
         _monad_status=$?
         MONAD_DOWNLOAD_PID=''
         printf '\\r\\033[K' >&2
+        monad_terminal_unlock
         return "$_monad_status"
     fi
 }
