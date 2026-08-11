@@ -25,9 +25,9 @@ flowchart LR
 ## 1. Install Monad
 
 Use one of the installation methods in the
-[root README](https://github.com/Monadix-AI/monad/blob/main/README.md#install-monad). The macOS
-and Linux installer already starts the daemon and opens the Web UI, including the setup flow for a
-new installation. After installing on Windows, run `monad up` to do the same.
+[root README](https://github.com/Monadix-AI/monad/blob/main/README.md#install-monad). In an interactive
+terminal, the installer starts the daemon and opens the Web UI on macOS, Linux, and Windows, including
+the setup flow for a new installation. After an automated or quiet install, run `monad up` to do the same.
 
 ```mermaid
 flowchart LR

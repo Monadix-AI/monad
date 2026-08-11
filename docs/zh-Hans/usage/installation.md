@@ -41,7 +41,8 @@ Windows PowerShell 5.1 或更高版本：
 irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-随后运行 `monad up` 启动守护进程并打开 Web UI。
+在交互式终端中，安装成功后会自动启动守护进程并打开 Web UI。自动化、JSON 或静默安装只安装二进制
+文件；准备启动时运行 `monad up`。
 
 交互式安装器会在终端宽度允许时显示下载大小、速度和预计剩余时间。自动化场景可设置
 `MONAD_OUTPUT=json`，改为输出逐行 JSON 阶段与摘要事件；临时下载失败会自动重试三次。

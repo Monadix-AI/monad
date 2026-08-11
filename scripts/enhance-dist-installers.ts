@@ -4,6 +4,7 @@ import { copyFile, readdir, readFile, rm, stat, writeFile } from 'node:fs/promis
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { POWERSHELL_INSTALLER_AUTO_START, SHELL_INSTALLER_AUTO_START } from './lib/dist-installer-autostart.ts';
 import { isPublicReleaseAsset } from './lib/public-release-assets.ts';
 
 const { values } = parseArgs({
@@ -118,6 +119,8 @@ monad_error() {
         printf '\\n  ! Installation failed\\n    %s\\n\\n' "$1" >&2
     fi
 }
+
+${SHELL_INSTALLER_AUTO_START}
 
 MONAD_ACTIVITY_PID=''
 
@@ -319,11 +322,8 @@ monad_summary() {
     [ "$PRINT_QUIET" = "0" ] || return 0
     printf '\\n    Channel    %s\\n    Target     %s\\n    Location   %s\\n' \
         "$(monad_channel)" "$_monad_arch" "$_monad_install_dir" >&2
-    if monad_is_interactive && [ -z "\${NO_COLOR:-}" ]; then
-        printf '\\n    \\033[2mRun\\033[0m \\033[1;36mmonad up\\033[0m \\033[2mto get started\\033[0m\\n\\n' >&2
-    else
-        printf '\\n    Run monad up to get started\\n\\n' >&2
-    fi
+    if monad_is_interactive; then printf '\\n' >&2; return 0; fi
+    printf '\\n    Run monad up to get started\\n\\n' >&2
 }
 `
   );
@@ -397,7 +397,11 @@ monad_summary() {
   );
   source = replaceOnce(source, '        say "  $_bin_name"', '        say_verbose "  $_bin_name"');
   source = replaceOnce(source, '        say "  $_lib_name"', '        say_verbose "  $_lib_name"');
-  source = replaceOnce(source, '    say "everything\'s installed!"', '    monad_summary "$_install_dir" "$_arch"');
+  source = replaceOnce(
+    source,
+    '    say "everything\'s installed!"',
+    '    monad_summary "$_install_dir" "$_arch"\n    monad_start_after_install "$_install_dir"'
+  );
 
   source = replaceOnce(
     source,
@@ -502,6 +506,8 @@ function Write-MonadError($message) {
   Write-Host ""
 }
 
+${POWERSHELL_INSTALLER_AUTO_START}
+
 function Start-MonadActivity($message) {
   if (Test-MonadInteractive) {
     Write-Progress -Id 2 -Activity $message -Status "Working…" -PercentComplete -1
@@ -539,6 +545,7 @@ function Write-MonadSummary($installDir, $arch) {
   Write-Host "    Channel    $(Get-MonadChannel)" -ForegroundColor DarkGray
   Write-Host "    Target     $arch" -ForegroundColor DarkGray
   Write-Host "    Location   $installDir" -ForegroundColor DarkGray
+  if (Test-MonadInteractive) { Write-Host ""; return }
   Write-Host ""
   Write-Host "    Run " -NoNewline -ForegroundColor DarkGray
   Write-Host "monad up" -NoNewline -ForegroundColor Cyan
@@ -653,7 +660,7 @@ function Invoke-MonadDownloadFileOnce($client, $url, $path) {
   source = replaceOnce(
     source,
     '  Write-Information "everything\'s installed!"',
-    '  Write-MonadSummary $dest_dir $arch'
+    '  Write-MonadSummary $dest_dir $arch\n  Start-MonadAfterInstall $dest_dir'
   );
   source = replaceOnce(
     source,

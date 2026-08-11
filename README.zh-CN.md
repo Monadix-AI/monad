@@ -76,8 +76,8 @@ wget -qO- https://release.monadix.ai/monad/install.sh | sh
 irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-dist 安装器会安装 `monad`、`monad-update` 并把安装目录加入 `PATH`。随后运行
-`monad up` 启动守护进程并打开 Web UI。
+dist 安装器会安装 `monad`、`monad-update` 并把安装目录加入 `PATH`，然后在交互式终端中自动启动
+守护进程和打开 Web UI。自动化或静默安装只安装二进制文件；准备启动时运行 `monad up`。
 
 ### 手动安装
 
