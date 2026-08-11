@@ -26,12 +26,15 @@ test('burst: capacity N allows N then blocks', () => {
 });
 
 test('refill: tokens replenish over elapsed time', () => {
-  const { rateLimiter } = createConnectionState({ capacity: 10, refillPerSec: 1000 });
+  // 10/s replenishes one token per 100ms, so the wall-clock time the drain loop itself takes
+  // cannot hand a token back. At 1000/s a single clock tick during the loop refilled the bucket,
+  // which is exactly what Windows does — its Date.now() advances in ~15ms steps.
+  const { rateLimiter } = createConnectionState({ capacity: 10, refillPerSec: 10 });
   if (!rateLimiter) throw new Error('expected a limiter');
   // Drain the bucket.
   for (let i = 0; i < 10; i++) consumeToken(rateLimiter);
   expect(consumeToken(rateLimiter)).toBe(false);
-  // Backdate the last refill by 1s → at 1000/s the bucket caps back at 10.
+  // Backdate the last refill by 1s → at 10/s the bucket caps back at 10.
   rateLimiter.lastRefillMs -= 1000;
   expect(consumeToken(rateLimiter)).toBe(true);
 });
