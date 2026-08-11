@@ -332,7 +332,9 @@ export class SessionEventRuntimeExecutor {
   }
 
   private failSession(error: unknown): void {
-    if (this.lifecycle.state === 'terminal') return;
+    // A stop already in flight owns the terminal state: the activation it cancels rejects on the
+    // way out, and that self-inflicted error must not turn a requested stop into a failure.
+    if (this.lifecycle.state === 'terminal' || this.closePromise) return;
     this.clearIdleTimer();
     const message = error instanceof Error ? error.message : String(error);
     this.lifecycle = {
@@ -361,8 +363,10 @@ export class SessionEventRuntimeExecutor {
     // The activation promise needs the same join. A stop landing mid-attach otherwise leaves
     // attachChannel writing into the child killed above, and its EPIPE has no subscriber left —
     // start() has long returned — so it surfaces as an unhandled rejection instead of settling here.
-    await this.residentActivationPromise?.catch(() => {});
+    // Dispose first: an attach still waiting on a response the dead child will never send only
+    // unwinds once the driver cancels it, otherwise this join sits out the whole startup timeout.
     await this.disposeDriver();
+    await this.residentActivationPromise?.catch(() => {});
     if (this.lifecycle.state !== 'terminal' || this.lifecycle.termination.kind === 'stopped') {
       this.lifecycle = {
         state: 'terminal',
@@ -460,7 +464,7 @@ export class SessionEventRuntimeExecutor {
     const { idleTimeoutMs } = this.definition.plan.suspend;
     this.idleTimer = setTimeout(() => {
       this.idleTimer = undefined;
-      void this.suspendResident();
+      void this.suspendResident().catch((error: unknown) => this.failSession(error));
     }, idleTimeoutMs);
   }
 

@@ -100,6 +100,7 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
   private inputTail: Promise<void> = Promise.resolve();
   private openPromise?: Promise<string>;
   private threadId?: string;
+  private channelFailure?: Error;
   private readonly pendingRequests = new Map<string | number, PendingRequest>();
   private readonly approvalRequests = new Map<string, Record<string, unknown>>();
   private readonly handle: CodexAppServerEventContext;
@@ -123,15 +124,12 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
   async attachChannel(channel: SessionEventChannel, context: SessionEventChannelContext) {
     this.rejectPending(new Error('Codex app-server channel was replaced'));
     this.channel = channel;
+    this.channelFailure = undefined;
     this.decoder = new TextDecoder();
     this.pendingText = '';
     this.handle.appServer = {
-      send: (frame) => {
-        void this.channel?.send(frame);
-      },
-      close: () => {
-        void this.channel?.close();
-      }
+      send: (frame) => this.dispatch(() => this.send(frame)),
+      close: () => this.dispatch(() => this.channel?.close() ?? Promise.resolve())
     };
     this.handle.providerSessionRef = context.providerSessionRef ?? this.threadId ?? null;
     this.openPromise = this.openThread(context.providerSessionRef ?? this.threadId);
@@ -172,8 +170,11 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
     this.pendingText = '';
     this.decoder = new TextDecoder();
     codexRuntimeState(this.handle).currentTurnId = undefined;
-    await this.channel?.close();
+    // Disposal runs on the stop path, where the child may already be gone; a broken pipe here is
+    // the expected shape of "already closed", not a disposal failure to propagate.
+    await this.channel?.close().catch(() => undefined);
     this.channel = undefined;
+    this.channelFailure = undefined;
     this.handle.appServer = undefined;
     this.openPromise = undefined;
   }
@@ -337,8 +338,24 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
   }
 
   private async send(frame: string): Promise<void> {
+    if (this.channelFailure) throw this.channelFailure;
     if (!this.channel) throw new Error('Codex app-server channel is not attached');
     await this.channel.send(frame);
+  }
+
+  // Frames the app-server protocol emits on its own (method-not-found replies, deferred thread
+  // frames, turn recovery, the delayed thread/resume retry) have no caller to await them. A write
+  // that loses the race with the child's death would surface as an unhandled rejection, so route
+  // the failure into the pending-request ledger instead: whoever is awaiting a request rejects
+  // with the real cause, and every later write short-circuits on the recorded failure.
+  private dispatch(write: () => Promise<void>): void {
+    void write().catch((error: unknown) => this.failChannel(error));
+  }
+
+  private failChannel(error: unknown): void {
+    const failure = error instanceof Error ? error : new Error(String(error));
+    this.channelFailure ??= failure;
+    this.rejectPending(this.channelFailure);
   }
 
   private rejectPending(error: Error): void {
