@@ -398,7 +398,21 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                 customPrompt: settings.customPrompt,
                 allowAutopilot: settings.allowAutopilot,
                 providerSessionRef: resumeFrom ?? undefined,
-                input: batch?.prompt ?? notice
+                input: batch?.prompt ?? notice,
+                reserveInitialTurn: async (meshSessionId) => {
+                  await emitManagedMeshAgentThinking(
+                    session.id,
+                    meshSessionId,
+                    member.projectMemberId,
+                    activeDeliveryId,
+                    displayName
+                  );
+                },
+                rollbackInitialTurn: async (meshSessionId) => {
+                  await retireManagedMeshAgentThinking(session.id, meshSessionId, member.projectMemberId, {
+                    settleTurn: false
+                  });
+                }
               });
               batch?.accept();
               await writeBatchDirectReceipts(batch);
@@ -445,15 +459,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
             return;
           }
           await admission.completion;
-          if (nativeSession) {
-            await emitManagedMeshAgentThinking(
-              session.id,
-              nativeSession.id,
-              member.projectMemberId,
-              activeDeliveryId,
-              displayName
-            );
-          }
         } catch (err) {
           batch?.release();
           await handleDeliveryFailure(member, err);

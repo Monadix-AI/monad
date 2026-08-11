@@ -14,11 +14,19 @@ test('session-only member starts in the project shared workspace when the sessio
   const monadHome = await mkdtemp(join(tmpdir(), 'monad-managed-join-'));
   const workingPaths: string[] = [];
   const startedMessages: string[] = [];
+  const lifecycle: string[] = [];
   const meshAgentHost = {
     list: () => ({ sessions: [] }),
     preflight: async () => ({ state: 'ready' as const }),
-    start: async (args: { agentName: string; workingPath: string }) => {
+    start: async (args: {
+      agentName: string;
+      workingPath: string;
+      beforeInitialTurn?: (meshSessionId: string) => Promise<void>;
+    }) => {
       workingPaths.push(args.workingPath);
+      lifecycle.push('runtime-owned');
+      await args.beforeInitialTurn?.('mesh_join00000000');
+      lifecycle.push('initial-turn-opened');
       return { id: 'mesh_join00000000', agentName: args.agentName } as unknown as MeshSessionView;
     }
   };
@@ -42,6 +50,7 @@ test('session-only member starts in the project shared workspace when the sessio
     messageIngress: {
       begin: async () => {
         startedMessages.push('started');
+        lifecycle.push('placeholder-reserved');
         return { id: 'msg_join00000000' };
       },
       deliver: async () => {
@@ -66,7 +75,8 @@ test('session-only member starts in the project shared workspace when the sessio
 
   const result = await createManagedMeshAgentJoin(ctx).spawnManagedSessionMember(session, member);
 
-  expect({ result, startedMessages, workingPaths }).toEqual({
+  expect({ lifecycle, result, startedMessages, workingPaths }).toEqual({
+    lifecycle: ['runtime-owned', 'placeholder-reserved', 'initial-turn-opened'],
     result: { started: true, nativeSessionId: 'mesh_join00000000' },
     startedMessages: ['started'],
     workingPaths: [join(monadHome, 'workplace', 'prj_join00000000', 'shared')]

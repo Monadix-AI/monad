@@ -217,12 +217,13 @@ export function createManagedMeshAgentMessages(ctx: SessionContext) {
   async function retireManagedMeshAgentThinking(
     sessionId: SessionId,
     meshSessionId: string,
-    agentName: string
+    agentName: string,
+    { settleTurn = true }: { settleTurn?: boolean } = {}
   ): Promise<MessageId | null> {
     const pending = pendingManagedMeshAgentWakeMessages.get(meshSessionId);
     const pendingMessageId = pending?.messageId ?? store.findManagedMeshAgentStreamingMessage(sessionId, meshSessionId);
     pendingManagedMeshAgentWakeMessages.delete(meshSessionId);
-    if (pending?.deliveryId) {
+    if (settleTurn && pending?.deliveryId) {
       managedAgentSessions?.settleTurn({ sessionId, memberId: agentName, deliveryId: pending.deliveryId });
     }
     const round: Event[] = [];
@@ -239,8 +240,10 @@ export function createManagedMeshAgentMessages(ctx: SessionContext) {
         }
       });
     }
-    emit(makeEvent(sessionId as SessionId, 'mesh.turn_settled', { meshSessionId }));
-    persistAndRetire(sessionId, round);
+    if (settleTurn) {
+      emit(makeEvent(sessionId as SessionId, 'mesh.turn_settled', { meshSessionId }));
+      persistAndRetire(sessionId, round);
+    }
     return (pendingMessageId as MessageId | undefined) ?? null;
   }
 
