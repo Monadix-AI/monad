@@ -11,7 +11,8 @@ import { toolResult } from '#/capabilities/tools/types.ts';
 export function createMessageRetrieveTool(lookup: MessageLookup): Tool<{ messageId: MessageId }> {
   return {
     name: 'message_retrieve',
-    description: 'Retrieve one active canonical message from the current transcript by id.',
+    description:
+      'Retrieve a referenced message only when its content is absent from the current context. Never retrieve the current message or a message whose content is already present.',
     scopes: [{ resource: 'message:read' }],
     inputSchema: z.object({ messageId: messageIdSchema }),
     run: async ({ messageId }, ctx) => {

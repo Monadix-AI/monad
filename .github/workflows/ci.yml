@@ -171,11 +171,21 @@ jobs:
       - name: Test workspace unit
         env:
           MONAD_TEST_COVERAGE: ${{ runner.os == 'Linux' && '1' || '0' }}
+          MONAD_TEST_JUNIT_DIR: ${{ runner.temp }}/monad-junit
         run: bun scripts/quiet-run.ts bunx --bun turbo run test --output-logs=errors-only
 
       - name: Test script unit
         if: ${{ !cancelled() }}
         run: bun scripts/bun-test.ts scripts/test/unit/ --only-failures
+
+      - name: Upload test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-unit-${{ matrix.os }}
+          path: ${{ runner.temp }}/monad-junit
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Report coverage
         if: runner.os == 'Linux' && !cancelled()
@@ -245,7 +255,9 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        # The daemon E2E suite needs no web/cli/tui dependency (that closure carries the heavy
+        # Playwright and React chains); install only @monad/monad's computed workspace closure.
+        run: bun scripts/workspace-install.ts @monad/monad
 
       - name: Build sandbox launcher (Linux)
         if: runner.os == 'Linux'
@@ -276,7 +288,20 @@ jobs:
           echo "✓ AppContainer launcher compiled"
 
       - name: Test hermetic daemon E2E
+        env:
+          MONAD_TEST_JUNIT_DIR: ${{ runner.temp }}/monad-junit
         run: bunx --bun turbo run test:e2e --filter=@monad/monad --output-logs=errors-only
+
+      # Per-case timings for finding where a slow leg spends its time; ignore when turbo replayed
+      # cached results and no tests actually ran.
+      - name: Upload test timings
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-hermetic-e2e-${{ matrix.os }}
+          path: ${{ runner.temp }}/monad-junit
+          if-no-files-found: ignore
+          retention-days: 7
 
       # Saves even when the job fails: a red Windows job used to skip the post step, so the next
       # run paid a cold install again — the slowness kept itself alive.

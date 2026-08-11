@@ -61,7 +61,9 @@ test('every Bun dependency install restores the package cache first', async () =
     Object.entries(workflow.jobs ?? {}).flatMap(([job, definition]) => {
       const steps = definition.steps ?? [];
       return steps.flatMap((step, index) => {
-        if (!step.run?.includes('bun install')) return [];
+        // workspace-install.ts wraps `bun install --frozen-lockfile --filter ...` for jobs that
+        // need only part of the workspace graph; it consumes the same package cache.
+        if (!step.run?.includes('bun install') && !step.run?.includes('scripts/workspace-install.ts')) return [];
         const cache = steps
           .slice(0, index)
           .findLast(

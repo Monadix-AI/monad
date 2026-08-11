@@ -247,6 +247,12 @@ test('message_retrieve returns one active current-transcript message without res
   const found = await tool.run({ messageId: reply.id }, context);
   const cross = await tool.run({ messageId: crossTranscript.id }, context);
 
+  expect({ name: tool.name, description: tool.description, scopes: tool.scopes }).toEqual({
+    name: 'message_retrieve',
+    description:
+      'Retrieve a referenced message only when its content is absent from the current context. Never retrieve the current message or a message whose content is already present.',
+    scopes: [{ resource: 'message:read' }]
+  });
   expect(found.metadata).toEqual({ status: 'found', message: reply });
   expect(JSON.stringify(found)).not.toContain(target.text);
   expect(cross.metadata).toEqual({ status: 'not-found' });

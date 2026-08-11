@@ -107,11 +107,15 @@
       "inputs": ["$TURBO_DEFAULT$", "!**/*.test.ts", "!**/*.test.tsx", "!test/**"]
     },
     "test": {
-      "dependsOn": ["generate", "^build"]
+      "dependsOn": ["generate", "^build"],
+      // Observability only (JUnit timing export) — passThrough so setting it cannot split the
+      // cache key: a replayed task ran nothing, so having no timing files for it is correct.
+      "passThroughEnv": ["MONAD_TEST_JUNIT_DIR"]
     },
     "test:e2e": {
       "dependsOn": ["generate", "^build"],
-      "env": ["PLAYWRIGHT_SHARD", "PLAYWRIGHT_TRACE", "PLAYWRIGHT_WORKERS"]
+      "env": ["PLAYWRIGHT_SHARD", "PLAYWRIGHT_TRACE", "PLAYWRIGHT_WORKERS"],
+      "passThroughEnv": ["MONAD_TEST_JUNIT_DIR"]
     },
     "generate": {
       "dependsOn": ["^generate"],

@@ -1,6 +1,6 @@
-import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, relative, resolve } from 'node:path';
+import { basename, join, relative, resolve } from 'node:path';
 
 import { mapWithConcurrency } from './lib/map-with-concurrency.ts';
 import {
@@ -88,12 +88,10 @@ const windowsShardConcurrency = 1;
 const inputArgs = process.argv.slice(2);
 const shardArg = inputArgs.find((arg) => arg.startsWith('--monad-shards='));
 const shardValue = shardArg?.slice('--monad-shards='.length);
-// Windows runs its shards one at a time, so splitting there buys no parallelism and pays the
-// process startup and module-graph load once per shard for the same set of files.
-const autoShardCount =
-  process.platform === 'win32'
-    ? windowsShardConcurrency
-    : Math.max(1, Math.min(autoShardCap, navigator.hardwareConcurrency - 2));
+// Splitting buys no parallelism on Windows, which runs the shards one at a time, but it still
+// earns its keep there: collapsing to a single shard puts every daemon suite in one process, and
+// the accumulated subprocess trees start resetting each other's local HTTP servers.
+const autoShardCount = Math.max(1, Math.min(autoShardCap, navigator.hardwareConcurrency - 2));
 const shardCount = shardValue === 'auto' ? autoShardCount : shardValue ? Number.parseInt(shardValue, 10) : 1;
 if (!Number.isInteger(shardCount) || shardCount < 1) throw new Error(`invalid shard count: ${shardValue}`);
 const rawArgs = inputArgs.filter((arg) => arg !== shardArg);
@@ -136,6 +134,18 @@ if (failed.length > 0) {
       `\n[monad-test] Skipped debug reruns for ${failed.length - selected.length} additional failed file(s).\n`
     );
   }
+}
+
+// The JUnit reports carry per-case timings, which is the only way to find where a slow CI leg
+// spends its time. The reports live in a temp dir that is deleted below, so CI sets this variable
+// and uploads the directory as an artifact. Names carry the invoking package and pid because
+// several packages' runs share one export directory.
+const junitExportDir = process.env.MONAD_TEST_JUNIT_DIR;
+if (junitExportDir && junitReports.length > 0) {
+  mkdirSync(junitExportDir, { recursive: true });
+  junitReports.forEach((report, index) => {
+    copyFileSync(report, join(junitExportDir, `${basename(process.cwd())}-${process.pid}-${index + 1}.xml`));
+  });
 }
 
 if (tempDir) rmSync(tempDir, { recursive: true, force: true });
