@@ -501,6 +501,10 @@ export class SessionEventRuntimeExecutor {
 
   private async withStartupTimeout<T>(promise: Promise<T>, timeoutMs: number, abort: AbortController): Promise<T> {
     let timer: ReturnType<typeof setTimeout> | undefined;
+    // The raced operation keeps running after the timeout wins and the abort tears the child down;
+    // its late rejection (an EPIPE from a write to the dead child) must land here, not as an
+    // unhandled rejection that takes the whole process down.
+    promise.catch(() => {});
     try {
       return await Promise.race([
         promise,

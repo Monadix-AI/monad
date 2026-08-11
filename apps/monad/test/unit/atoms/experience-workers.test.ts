@@ -1,27 +1,15 @@
 import { expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { createExperienceStateStore, createExperienceWorkerScheduler } from '#/atoms/experience-state.ts';
 import { ExperienceWorkerRegistry } from '#/atoms/experience-workers.ts';
 import { createStore } from '#/store/db/index.ts';
+import { removeDirectory } from '../../../../../scripts/test-fs.ts';
 
 const projectId = 'prj_aaaaaaaaaaaa';
 const missingProjectId = 'prj_missing00000';
-
-async function removeTempDirectory(path: string): Promise<void> {
-  for (let attempt = 0; ; attempt++) {
-    try {
-      await rm(path, { recursive: true, force: true });
-      return;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== 'EBUSY' || attempt === 49) throw error;
-      // biome-ignore lint/plugin: backoff inside a bounded retry loop; the next attempt is the condition, and Windows keeps directory handles open past the unlink.
-      await Bun.sleep(100);
-    }
-  }
-}
 
 function seedProject(store: ReturnType<typeof createStore>, id = projectId) {
   const now = '2026-07-14T00:00:00.000Z';
@@ -131,9 +119,10 @@ test('a scheduled wake-up survives reopening the database', async () => {
     ]);
   } finally {
     reopened.close();
-    await removeTempDirectory(base);
+    await removeDirectory(base);
   }
-});
+  // The Windows EBUSY retry in teardown can outlast Bun's 5s default on its own.
+}, 30_000);
 
 test('worker receives a project-scoped event and a durable wake-up', async () => {
   const store = createStore();
