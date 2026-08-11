@@ -255,9 +255,7 @@ jobs:
           restore-keys: ${{ runner.os }}-bun-
 
       - name: Install dependencies
-        # The daemon E2E suite needs no web/cli/tui dependency (that closure carries the heavy
-        # Playwright and React chains); install only @monad/monad's computed workspace closure.
-        run: bun scripts/workspace-install.ts @monad/monad
+        run: bun install --frozen-lockfile
 
       - name: Build sandbox launcher (Linux)
         if: runner.os == 'Linux'

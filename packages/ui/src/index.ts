@@ -17,6 +17,11 @@ import type {
   ToolProps,
   ToolStatusLabels
 } from './components/AIElements';
+
+export type { OrbState, ThinkingOrbProps } from 'thinking-orbs';
+
+export { ThinkingOrb } from 'thinking-orbs';
+
 import type { ApprovalResourceCardProps } from './components/ApprovalResourceCard';
 import type { AttachmentCardProps } from './components/AttachmentCard';
 import type { BrandGlyphIcon } from './components/BrandGlyph';

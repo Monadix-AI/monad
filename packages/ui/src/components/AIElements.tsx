@@ -18,6 +18,7 @@ import { motion } from 'motion/react';
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
 import * as React from 'react';
 import { isValidElement, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ThinkingOrb } from 'thinking-orbs';
 
 import { cn } from '../lib/utils';
 import { Badge } from './Badge';
@@ -375,10 +376,19 @@ export const ReasoningTrigger = memo(
       >
         {children ?? (
           <>
-            <HugeiconsIcon
-              className={cn('size-4', iconClassName)}
-              icon={BrainIcon}
-            />
+            {isStreaming ? (
+              <ThinkingOrb
+                aria-hidden="true"
+                className={cn('shrink-0', iconClassName)}
+                size={20}
+                state="solving"
+              />
+            ) : (
+              <HugeiconsIcon
+                className={cn('size-4', iconClassName)}
+                icon={BrainIcon}
+              />
+            )}
             {getThinkingMessage
               ? getThinkingMessage(isStreaming, duration)
               : defaultThinkingMessage(labels, isStreaming, duration)}
