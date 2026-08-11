@@ -1,12 +1,31 @@
 import { expect, test } from 'bun:test';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup as renderReactToStaticMarkup } from 'react-dom/server';
 
 import { MONAD_MCP_TOOL_NAMES } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-projection.ts';
+import { WorkplaceExperienceHostProvider } from '../../src/workplace-experiences/host-context.tsx';
 import {
   AllMonadMcpToolStoryCards,
   MONAD_MCP_STORY_VIEWS,
   MonadMcpToolStoryCard
 } from '../../stories/monad-mcp-tool-card-story-fixtures.tsx';
+
+function renderToStaticMarkup(node: React.ReactNode): string {
+  return renderReactToStaticMarkup(
+    <WorkplaceExperienceHostProvider
+      value={{
+        openStudio: () => {},
+        requestProjectDialog: () => {},
+        resolveAgentIdentity: (reference) => ({
+          id: reference.id ?? reference.name ?? 'agent',
+          name: 'Claude Code',
+          providerIcon: { path: 'M2 2h20v20H2z', title: 'Claude Code' }
+        })
+      }}
+    >
+      {node}
+    </WorkplaceExperienceHostProvider>
+  );
+}
 
 test('the Monad MCP Storybook catalog renders every supported semantic tool card expanded', () => {
   const markup = renderToStaticMarkup(<AllMonadMcpToolStoryCards />);
@@ -43,7 +62,7 @@ test('the Monad MCP Storybook catalog renders every supported semantic tool card
   });
 });
 
-test('the private-message title keeps the recipient name and product icon inside the title', () => {
+test('the private-message title keeps the recipient name and host provider icon inside the title', () => {
   const markup = renderToStaticMarkup(<MonadMcpToolStoryCard toolName="agent_send" />);
 
   // behavior-ok: rendering a known recipient produces one compound title with its avatar, name, and provider icon.

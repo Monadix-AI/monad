@@ -1,10 +1,11 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
 import type { Participant } from '../../src/workplace-experiences/experience/types.ts';
+import type { WorkplaceExperienceHost } from '../../src/workplace-experiences/host-context.tsx';
 
 import { expect, test } from 'bun:test';
 import React from 'react';
-import { renderToStaticMarkup } from 'react-dom/server';
+import { renderToStaticMarkup as renderReactToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
@@ -23,6 +24,36 @@ import {
   observationTimelineRows
 } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
+import { WorkplaceExperienceHostProvider } from '../../src/workplace-experiences/host-context.tsx';
+
+const experienceHost = {
+  openStudio: () => {},
+  requestProjectDialog: () => {},
+  resolveAgentIdentity: (reference) => {
+    const key = `${reference.id ?? ''} ${reference.name ?? ''}`.toLowerCase();
+    const providerName = key.includes('claude')
+      ? 'Claude Code'
+      : key.includes('claw')
+        ? 'OpenClaw'
+        : key.includes('monad')
+          ? 'Monad'
+          : undefined;
+    if (!providerName) return undefined;
+    return {
+      id: reference.id ?? reference.name ?? providerName,
+      name: providerName,
+      providerIcon: { path: 'M2 2h20v20H2z', title: providerName }
+    };
+  }
+} satisfies WorkplaceExperienceHost;
+
+function renderExperienceMarkup(node: React.ReactNode): string {
+  return renderReactToStaticMarkup(
+    <WorkplaceExperienceHostProvider value={experienceHost}>{node}</WorkplaceExperienceHostProvider>
+  );
+}
+
+const renderToStaticMarkup = renderExperienceMarkup;
 
 function toolEvent(args: {
   id: string;
@@ -79,7 +110,7 @@ function providerPipeline(
   const cards = agentObservationCards(events, provider);
   const entries = observationTimelineEntries(cards, provider);
   const markup = observationTimelineRows(entries).map((row) =>
-    renderToStaticMarkup(React.createElement(ObservationTimelineRowView, { memberIdentities, provider, row }))
+    renderExperienceMarkup(React.createElement(ObservationTimelineRowView, { memberIdentities, provider, row }))
   );
   return { cards, events, markup };
 }
@@ -569,7 +600,7 @@ test('routes actual Claude Monad tool_use and matching tool_result records to a 
     },
     timeline: [
       {
-        text: 'Send a private message to CC Claude Code Claude Code Completed Delivered. Please review the patch.',
+        text: 'Send a private message to CC Claude Code Completed Delivered. Please review the patch.',
         visualRole: 'tool'
       }
     ]
@@ -785,7 +816,7 @@ test('routes session member availability through the semantic Monad MCP card', (
     staleIdHidden: true,
     timeline: [
       {
-        text: 'List session members Completed CL Claw OpenClaw online DD Default Dev Agent online',
+        text: 'List session members Completed CL OpenClaw online DD Monad online',
         visualRole: 'tool'
       }
     ]
@@ -912,7 +943,7 @@ test('keeps non-Monad tools generic and renders an in-progress Monad call semant
       semanticView: {
         toolName: 'project_post',
         callId: 'call_running',
-        status: 'inProgress',
+        status: 'running',
         input: { text: 'Still running.' },
         isError: false,
         action: 'project-post',

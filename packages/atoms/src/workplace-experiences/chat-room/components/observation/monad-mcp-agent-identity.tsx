@@ -1,17 +1,16 @@
-import type { Participant } from '../../../experience/types.ts';
-
 import { entityAvatarUrl } from '@monad/protocol';
 import { cn } from '@monad/ui';
-import { AgentIdentity, Avatar, resolveProductIcon } from '@monad/ui/components/AgentAvatar';
+import { AgentIdentity, Avatar } from '@monad/ui/components/AgentAvatar';
 
+import { AgentProviderBadge } from '../../../components/agent-provider-badge.tsx';
 import { avatarForAgent } from '../../../experience/project-projection.ts';
+import { useOptionalWorkplaceExperienceHost } from '../../../host-context.tsx';
 
 export function MonadMcpAgentIdentity({
   av,
   agentName,
   avatarUrl,
   className,
-  icon: iconProp,
   identityClassName,
   name,
   size = 28
@@ -20,29 +19,28 @@ export function MonadMcpAgentIdentity({
   agentName?: string;
   avatarUrl?: string;
   className?: string;
-  icon?: Participant['icon'];
   identityClassName?: string;
   name: string;
   size?: number;
 }) {
-  const icon = iconProp ?? resolveProductIcon({ icon: agentName, name });
+  const identity = useOptionalWorkplaceExperienceHost()?.resolveAgentIdentity({ name: agentName ?? name });
+  const resolvedName = identity?.name ?? name;
   return (
     <span
       className={cn('inline-flex min-w-0 items-center gap-2.5', className)}
       data-slot="monad-mcp-agent-identity"
     >
       <Avatar
-        av={av ?? avatarForAgent(name)}
-        avatarUrl={avatarUrl ?? entityAvatarUrl(`mesh-agent:${agentName ?? name}`)}
+        av={identity?.av ?? av ?? avatarForAgent(resolvedName)}
+        avatarUrl={identity?.avatarUrl ?? avatarUrl ?? entityAvatarUrl(`mesh-agent:${agentName ?? name}`)}
         bordered={false}
-        icon={icon}
         kind="agent"
         size={size}
       />
       <AgentIdentity
+        badge={<AgentProviderBadge icon={identity?.providerIcon} />}
         className={cn('min-w-0 font-medium text-foreground', identityClassName)}
-        icon={icon}
-        name={name}
+        name={resolvedName}
       />
     </span>
   );

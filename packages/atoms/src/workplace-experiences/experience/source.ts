@@ -10,7 +10,7 @@ import type {
   UIMessageItem,
   UIMessageOutlineItem
 } from '@monad/protocol';
-import type { WorkplaceApprovalDecision } from '@monad/sdk-experience';
+import type { WorkplaceApprovalDecision, WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experience';
 import type { MeshAgentExperienceInput } from './mesh-agent-state.ts';
 import type { ProjectMember } from './project-members.ts';
 import type { Message, Participant } from './types.ts';
@@ -25,6 +25,7 @@ export interface ProjectExperienceCanvasSource {
   participants: Participant[];
   projectMembers: ProjectMember[];
   source: {
+    resolveAgentIdentity: WorkplaceExperienceAgentIdentityResolver;
     transcriptItems: readonly UIItem[];
     liveItems: readonly UIItem[];
     liveTools?: readonly Extract<UIItem, { kind: 'tool' }>[];

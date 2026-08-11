@@ -5,6 +5,7 @@ import { PROJECT_MEMBER_ID_MAX_LENGTH } from '../src/ids.ts';
 import {
   attachmentPreviewText,
   attachmentReadResponseSchema,
+  isPdfAttachmentMime,
   managedProjectRuntimePromptInputSchema,
   managedProjectRuntimeSpecSchema,
   meshAgentApprovalResolutionRequestSchema,
@@ -1036,6 +1037,14 @@ test('attachment previews are bounded snippets and never split a surrogate pair'
   const emojiPreview = attachmentPreviewText(emoji);
   const lastBeforeEllipsis = emojiPreview.charCodeAt(emojiPreview.length - 2);
   expect(lastBeforeEllipsis >= 0xd800 && lastBeforeEllipsis <= 0xdbff).toBe(false);
+});
+
+test('PDF attachment MIME detection accepts parameters without widening text previews', () => {
+  expect([
+    isPdfAttachmentMime('application/pdf'),
+    isPdfAttachmentMime('Application/PDF; charset=binary'),
+    isPdfAttachmentMime('application/json')
+  ]).toEqual([true, true, false]);
 });
 
 test('attachment refs and direct messages carry the structured file reference', () => {

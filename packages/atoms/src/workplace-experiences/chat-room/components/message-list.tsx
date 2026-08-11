@@ -10,7 +10,9 @@ import { VirtualList, type VirtualListHandle } from '@monad/ui/components/Virtua
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { isMessageAttachmentRef } from '../../experience/types.ts';
+import { useWorkplaceExperienceHost } from '../../host-context.tsx';
 import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
+import { uniqueImageAttachments } from '../utils/local-file-reference.ts';
 import { AttachmentChip } from './attachment-chip.tsx';
 import { MarkdownWithMentions, MessageRow } from './message-row.tsx';
 import { shouldSuppressReplyPreview } from './reply-preview.tsx';
@@ -163,6 +165,7 @@ export function ChatMessageList({
     timeUnavailable: string;
   };
 }): React.ReactElement {
+  const { resolveAgentIdentity } = useWorkplaceExperienceHost();
   const shellRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<VirtualListHandle>(null);
   const jumpedMessageKeyRef = useRef<string | undefined>(undefined);
@@ -176,11 +179,21 @@ export function ChatMessageList({
   const lastMessage = room.messages.at(-1);
   const uiKey = projectSessionUiKey(room.projectId, room.activeSessionId);
   const openFilePreview = useChatRoomExperienceStore((state) => state.openFilePreview);
+  const sessionAttachments = useMemo(
+    () => room.messages.flatMap((message) => message.attachments ?? []),
+    [room.messages]
+  );
+  const imageGallery = useMemo(() => uniqueImageAttachments(sessionAttachments), [sessionAttachments]);
   const onOpenAttachment = useCallback(
     (attachment: MessageAttachment, line?: number) => {
-      if (isMessageAttachmentRef(attachment)) openFilePreview(uiKey, { attachment, line });
+      if (isMessageAttachmentRef(attachment))
+        openFilePreview(uiKey, {
+          attachment,
+          ...(attachment.mime.startsWith('image/') ? { gallery: imageGallery } : {}),
+          line
+        });
     },
-    [openFilePreview, uiKey]
+    [imageGallery, openFilePreview, uiKey]
   );
   const lastMessageKey = lastMessage ? messageRenderKey(lastMessage) : undefined;
   const messagesById = useMemo(() => new Map(room.messages.map((message) => [message.id, message])), [room.messages]);
@@ -286,6 +299,7 @@ export function ChatMessageList({
             actions={room.actions}
             channelIcons={room.channelIcons}
             labels={labels}
+            linkAttachments={sessionAttachments}
             msg={msg}
             onAgentClick={room.openAgentCard}
             onOpenAttachment={onOpenAttachment}
@@ -294,6 +308,7 @@ export function ChatMessageList({
             }
             onReply={room.onReply}
             replyTarget={showReplyPreview && replyResolutionKnown ? (replyTarget ?? null) : undefined}
+            resolveAgentIdentity={resolveAgentIdentity}
           />
         </div>
       );
@@ -301,6 +316,7 @@ export function ChatMessageList({
     [
       highlightedMessageId,
       labels,
+      sessionAttachments,
       room.channelIcons,
       messagesById,
       onOpenAttachment,
@@ -308,7 +324,8 @@ export function ChatMessageList({
       room.actions,
       room.onReply,
       room.openAgentCard,
-      room.replyTargets
+      room.replyTargets,
+      resolveAgentIdentity
     ]
   );
   useLayoutEffect(() => {

@@ -1,0 +1,79 @@
+.monad-image-gallery {
+  --yarl__button_filter: none;
+  --yarl__navigation_button_padding: 0;
+  --yarl__toolbar_padding: 16px;
+}
+
+.monad-image-gallery .yarl__toolbar {
+  gap: 8px;
+}
+
+.monad-image-gallery .yarl__button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 10px;
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 76%, transparent);
+  border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
+  border-radius: 9999px;
+  box-shadow: 0 8px 24px color-mix(in srgb, black 12%, transparent);
+  opacity: 0.88;
+  -webkit-backdrop-filter: blur(14px) saturate(130%);
+  backdrop-filter: blur(14px) saturate(130%);
+}
+
+.monad-image-gallery .yarl__button:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--background) 92%, var(--accent-blue) 8%);
+  border-color: color-mix(in srgb, var(--accent-blue) 34%, transparent);
+  box-shadow: 0 10px 28px color-mix(in srgb, black 16%, transparent);
+  opacity: 1;
+}
+
+.monad-image-gallery .yarl__button:active:not(:disabled) {
+  background: color-mix(in srgb, var(--background) 84%, var(--accent-blue) 16%);
+  box-shadow: 0 4px 14px color-mix(in srgb, black 12%, transparent);
+}
+
+.monad-image-gallery .yarl__button:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ring) 38%, transparent);
+  outline-offset: 2px;
+}
+
+.monad-image-gallery .yarl__button:disabled {
+  color: var(--muted-foreground);
+  background: color-mix(in srgb, var(--background) 48%, transparent);
+  border-color: color-mix(in srgb, var(--foreground) 7%, transparent);
+  box-shadow: none;
+  opacity: 0.35;
+}
+
+.monad-image-gallery .yarl__button svg {
+  width: 20px;
+  height: 20px;
+}
+
+.monad-image-gallery .yarl__navigation_prev,
+.monad-image-gallery .yarl__navigation_next {
+  width: 44px;
+  height: 44px;
+  padding: 11px;
+  margin-inline: 16px;
+}
+
+@media (max-width: 640px) {
+  .monad-image-gallery {
+    --yarl__toolbar_padding: 10px;
+  }
+
+  .monad-image-gallery .yarl__toolbar {
+    gap: 6px;
+  }
+
+  .monad-image-gallery .yarl__navigation_prev,
+  .monad-image-gallery .yarl__navigation_next {
+    margin-inline: 8px;
+  }
+}

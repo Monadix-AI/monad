@@ -1,8 +1,10 @@
+import type { WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experience';
 import type { Participant, QuestionView } from '../../../experience/types.ts';
 
 import { ComposerAskSheet } from '@monad/ui';
-import { AgentIdentity, AgentInstanceAvatar, resolveProductIcon } from '@monad/ui/components/AgentAvatar';
+import { AgentIdentity, AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
 
+import { AgentProviderBadge } from '../../../components/agent-provider-badge.tsx';
 import { workplaceExperienceT } from '../../../i18n.ts';
 import { buildClarifyAnswer } from '../../utils/clarify-answer.ts';
 
@@ -12,6 +14,7 @@ export function QuestionStack({
   onDismiss,
   position,
   question,
+  resolveAgentIdentity,
   total
 }: {
   asker?: Pick<Participant, 'av' | 'avatarUrl' | 'icon' | 'name'>;
@@ -19,14 +22,21 @@ export function QuestionStack({
   onDismiss: (requestId: string) => void;
   position: number;
   question: QuestionView;
+  resolveAgentIdentity?: WorkplaceExperienceAgentIdentityResolver;
   total: number;
 }): React.ReactElement {
   const t = workplaceExperienceT();
-  const displayAgent = asker ?? {
+  const fallbackAgent: Pick<Participant, 'av' | 'avatarUrl' | 'name'> = asker ?? {
     av: question.askerName.slice(0, 2).toUpperCase(),
     name: question.askerName
   };
-  const productIcon = resolveProductIcon(displayAgent);
+  const identity = resolveAgentIdentity?.({ name: fallbackAgent.name });
+  const displayAgent = {
+    ...fallbackAgent,
+    av: identity?.av ?? fallbackAgent.av,
+    avatarUrl: identity?.avatarUrl ?? fallbackAgent.avatarUrl,
+    name: identity?.name ?? fallbackAgent.name
+  };
 
   return (
     <ComposerAskSheet
@@ -38,9 +48,8 @@ export function QuestionStack({
             size={24}
           />
           <AgentIdentity
+            badge={identity?.providerIcon ? <AgentProviderBadge icon={identity.providerIcon} /> : undefined}
             badgeGap={6}
-            icon={productIcon}
-            iconSize={13}
             name={displayAgent.name}
             nameStyle={{ fontSize: 13, fontWeight: 700 }}
           />

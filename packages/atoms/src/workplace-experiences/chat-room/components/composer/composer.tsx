@@ -244,6 +244,7 @@ export function Composer({
               onDismiss={dismissQuestion}
               position={1}
               question={activeQuestion}
+              resolveAgentIdentity={host.resolveAgentIdentity}
               total={questionQueue.length}
             />
           ) : null

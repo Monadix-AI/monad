@@ -1,6 +1,5 @@
 import type { MessageAttachment } from '../../experience/types.ts';
 
-import { isPreviewableAttachmentMime } from '@monad/protocol';
 import { useDownloadAttachmentMutation } from '@monad/sdk-experience/react';
 import { AttachmentCard } from '@monad/ui';
 
@@ -14,16 +13,22 @@ function formatAttachmentSize(bytes: number): string {
   return `${mb.toFixed(mb < 10 ? 1 : 0)} MB`;
 }
 
+export function isAttachmentPreviewable(attachment: MessageAttachment): boolean {
+  return Boolean(attachment.path);
+}
+
 export function AttachmentChip({
   attachment,
-  onPreview
+  onPreview,
+  tone
 }: {
   attachment: MessageAttachment;
   onPreview?: (attachment: MessageAttachment, line?: number) => void;
+  tone: 'agent' | 'human';
 }): React.ReactElement {
   const t = workplaceExperienceT();
   const available = attachment.path !== undefined;
-  const previewable = available && isPreviewableAttachmentMime(attachment.mime);
+  const previewable = isAttachmentPreviewable(attachment);
   const [downloadAttachment] = useDownloadAttachmentMutation();
   const download = async () => {
     if (!available) return;
@@ -45,11 +50,12 @@ export function AttachmentChip({
       mime={attachment.mime}
       name={attachment.name}
       onDownload={available ? () => void download() : undefined}
-      onPreview={available ? () => onPreview?.(attachment) : undefined}
+      onPreview={available && onPreview ? () => onPreview(attachment) : undefined}
       path={attachment.path}
       previewable={previewable}
       previewLabel={t('web.workplace.attachmentPreview')}
       sizeLabel={formatAttachmentSize(attachment.bytes)}
+      tone={tone}
     />
   );
 }

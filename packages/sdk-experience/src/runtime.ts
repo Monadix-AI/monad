@@ -21,7 +21,7 @@ import type {
  * Bump WORKPLACE_EXPERIENCE_API_VERSION on any breaking change; the host stamps it onto the payload so
  * a component can refuse/degrade against an older major.
  */
-export const WORKPLACE_EXPERIENCE_API_VERSION = 2 as const;
+export const WORKPLACE_EXPERIENCE_API_VERSION = 3 as const;
 export type WorkplaceExperienceApiVersion = typeof WORKPLACE_EXPERIENCE_API_VERSION;
 
 export type WorkplaceApprovalDecision = 'approve' | 'approve-once' | 'approve-session' | 'approve-always' | 'reject';
@@ -37,6 +37,24 @@ export type WorkplaceExperienceProductIconId =
   | 'hermes';
 
 export type WorkplaceExperienceIcon = 'monad' | WorkplaceExperienceProductIconId | 'openai' | 'anthropic' | 'google';
+
+export interface WorkplaceExperienceAgentIdentityReference {
+  id?: string;
+  name?: string;
+}
+
+export interface WorkplaceExperienceAgentIdentity {
+  id: string;
+  name: string;
+  av?: string;
+  avatarUrl?: string;
+  providerIcon?: ChannelIcon;
+  tag?: string;
+}
+
+export type WorkplaceExperienceAgentIdentityResolver = (
+  reference: WorkplaceExperienceAgentIdentityReference
+) => WorkplaceExperienceAgentIdentity | undefined;
 
 export interface WorkplaceExperienceProject {
   id: string;

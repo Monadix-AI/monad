@@ -1,16 +1,6 @@
 import { ComputerIcon, Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  Button,
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuTrigger,
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger
-} from '@monad/ui';
+import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -28,6 +18,12 @@ const THEME_OPTIONS = [
     | 'web.settings.experience.theme.light';
   value: ThemePreference;
 }>;
+
+export function nextThemePreference(preference: ThemePreference): ThemePreference {
+  if (preference === 'auto') return 'dark';
+  if (preference === 'dark') return 'light';
+  return 'auto';
+}
 
 export function ThemeToggle() {
   const t = useT();
@@ -50,49 +46,27 @@ export function ThemeToggle() {
 
   const currentOption = THEME_OPTIONS.find((option) => option.value === preference) ?? THEME_OPTIONS[0];
 
-  const selectTheme = (value: string) => {
-    if (value !== 'auto' && value !== 'dark' && value !== 'light') return;
-    setPreference(value);
-    void transitionThemePreference(value, triggerRef.current);
+  const cycleTheme = () => {
+    const nextPreference = nextThemePreference(preference);
+    setPreference(nextPreference);
+    void transitionThemePreference(nextPreference, triggerRef.current);
   };
 
   return (
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              aria-label={t('web.theme.toggle')}
-              className="size-7"
-              ref={triggerRef}
-              size="icon"
-              variant="ghost"
-            >
-              <HugeiconsIcon icon={currentOption.icon} />
-            </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{t(currentOption.label)}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent
-        align="end"
-        side="top"
-      >
-        <DropdownMenuRadioGroup
-          onValueChange={selectTheme}
-          value={preference}
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          aria-label={t('web.theme.toggle')}
+          className="size-7"
+          onClick={cycleTheme}
+          ref={triggerRef}
+          size="icon"
+          variant="ghost"
         >
-          {THEME_OPTIONS.map((option) => (
-            <DropdownMenuRadioItem
-              key={option.value}
-              value={option.value}
-            >
-              <HugeiconsIcon icon={option.icon} />
-              {t(option.label)}
-            </DropdownMenuRadioItem>
-          ))}
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
+          <HugeiconsIcon icon={currentOption.icon} />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{t(currentOption.label)}</TooltipContent>
+    </Tooltip>
   );
 }

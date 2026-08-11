@@ -196,6 +196,7 @@ import {
 } from './components/FaviconLink';
 import { FileIcon, fileIconName } from './components/FileIcon';
 import { FileReadCard, FileReadCardHeader } from './components/FileReadCard';
+import { ImageGalleryDialog, type ImageGalleryLabels, type ImageGallerySlide } from './components/ImageGallery';
 import { ImageZoom, type ImageZoomProps } from './components/ImageZoom';
 import { Input } from './components/Input';
 import {
@@ -296,6 +297,8 @@ export type {
   FileIconProps,
   FilePreviewKind,
   FileReadCardView,
+  ImageGalleryLabels,
+  ImageGallerySlide,
   ImageZoomProps,
   MessageActionProps,
   MessageActionsProps,
@@ -440,6 +443,7 @@ export {
   fileNameFromHref,
   formatMessageTimestamp,
   hideFailedFavicon,
+  ImageGalleryDialog,
   ImageZoom,
   Input,
   InputGroup,

@@ -112,6 +112,8 @@
   --chat-input-surface: rgb(var(--backgroundColor-surface-container) / 0.5);
   --chat-input-surface-active: rgb(var(--backgroundColor-state-active));
   --chat-input-placeholder: var(--muted-foreground);
+  --message-agent-surface: rgb(var(--backgroundColor-secondary));
+  --message-human-surface: color-mix(in oklab, var(--background) 82%, var(--link));
   --gradient-violet: linear-gradient(140deg, #4416a8 0%, #8b5cf6 52%, #c4b0fb 100%);
   --gradient-magenta: linear-gradient(140deg, #7a0f49 0%, #db2777 52%, #f9a8d4 100%);
   --gradient-orange: linear-gradient(140deg, #7c2d12 0%, #ea580c 52%, #fdba74 100%);
@@ -242,6 +244,8 @@
   --chat-input-surface: rgb(var(--backgroundColor-surface-container) / 0.5);
   --chat-input-surface-active: rgb(var(--backgroundColor-state-active));
   --chat-input-placeholder: var(--muted-foreground);
+  --message-agent-surface: rgb(var(--backgroundColor-state-enabled) / 0.42);
+  --message-human-surface: color-mix(in oklab, var(--background) 76%, var(--link));
 }
 
 @theme inline {

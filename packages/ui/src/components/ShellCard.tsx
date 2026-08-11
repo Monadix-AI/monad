@@ -45,7 +45,7 @@ export function ShellCard({
           $
         </span>
         <CodeBlock
-          className="min-w-0 flex-1 rounded-none border-0 bg-transparent text-[11px] [&_[data-slot=code-block-content]>div]:overflow-auto [&_pre]:p-0"
+          className="min-w-0 flex-1 rounded-none border-0 bg-transparent text-[11px] [&_[data-slot=code-block-content]>div]:overflow-visible [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:p-0"
           code={view.command}
           language="bash"
         />

@@ -78,6 +78,7 @@ export function WebComponentExperience({
       embedded: view.embedded,
       voiceModelState: view.voiceModelState,
       requestProjectDialog: view.onProjectDialogRequest ?? (() => {}),
+      resolveAgentIdentity: view.resolveAgentIdentity,
       openStudio: (section = 'models') => pushShellUrl(studioPath(section)),
       snapshot: view.runtime.snapshot
     }),
@@ -86,6 +87,7 @@ export function WebComponentExperience({
       daemonBaseUrl,
       view.embedded,
       view.onProjectDialogRequest,
+      view.resolveAgentIdentity,
       view.runtime.actions,
       view.runtime.snapshot,
       view.voiceModelState

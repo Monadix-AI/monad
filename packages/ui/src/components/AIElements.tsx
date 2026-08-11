@@ -18,7 +18,7 @@ import { motion } from 'motion/react';
 import { Collapsible as CollapsiblePrimitive } from 'radix-ui';
 import * as React from 'react';
 import { isValidElement, memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ThinkingOrb } from 'thinking-orbs';
+import { type OrbState, ThinkingOrb } from 'thinking-orbs';
 
 import { cn } from '../lib/utils';
 import { Badge } from './Badge';
@@ -341,6 +341,7 @@ export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & 
   iconClassName?: string;
   labels?: ReasoningLabels;
   getThinkingMessage?: (isStreaming: boolean, duration?: number) => ReactNode;
+  orbState?: OrbState;
 };
 
 function defaultThinkingMessage(labels: ReasoningLabels | undefined, isStreaming: boolean, duration?: number) {
@@ -362,6 +363,7 @@ export const ReasoningTrigger = memo(
     iconClassName,
     labels,
     getThinkingMessage,
+    orbState = 'solving',
     ...props
   }: ReasoningTriggerProps) => {
     const { isStreaming, isOpen, duration } = useReasoning();
@@ -380,8 +382,11 @@ export const ReasoningTrigger = memo(
               <ThinkingOrb
                 aria-hidden="true"
                 className={cn('shrink-0', iconClassName)}
+                data-orb-state={orbState}
+                data-slot="reasoning-orb"
                 size={20}
-                state="solving"
+                state={orbState}
+                style={{ height: 16, width: 16 }}
               />
             ) : (
               <HugeiconsIcon

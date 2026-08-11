@@ -904,7 +904,7 @@ test('chatroom experience store isolates rail observations by project session in
   });
 });
 
-test('chatroom file preview is session scoped and replaces observation detail', () => {
+test('chatroom message file preview is session scoped and replaces observation detail', () => {
   const firstKey = 'project:project-file:session:ses_first';
   const secondKey = 'project:project-file:session:ses_second';
   const attachment = {
@@ -934,6 +934,47 @@ test('chatroom file preview is session scoped and replaces observation detail', 
   });
   expect(useChatRoomExperienceStore.getState().filePreviewBySession[firstKey]).toBeUndefined();
   useChatRoomExperienceStore.getState().removeSessionUiState(firstKey);
+});
+
+test('chatroom observation file preview returns to the observation after closing', () => {
+  const uiKey = 'project:project-observation-file:session:ses_observed';
+  const attachment = {
+    id: 'att_200000000000',
+    path: '/workspace/evidence.json',
+    name: 'evidence.json',
+    mime: 'application/json',
+    bytes: 84,
+    createdAt: '2026-08-11T00:00:00.000Z'
+  } as const;
+  const observation = {
+    agentId: 'mesh-agent:codex',
+    agentName: 'codex',
+    projectId: 'project-observation-file'
+  };
+
+  useChatRoomExperienceStore.getState().observeProjectAgent(uiKey, observation.projectId, {
+    agentId: observation.agentId,
+    agentName: observation.agentName
+  });
+  useChatRoomExperienceStore.getState().openFilePreview(uiKey, {
+    attachment,
+    line: 4,
+    returnTo: 'observation'
+  });
+
+  expect(useChatRoomExperienceStore.getState().railObservationBySession[uiKey]).toEqual(observation);
+  expect(useChatRoomExperienceStore.getState().filePreviewBySession[uiKey]).toEqual({
+    attachment,
+    line: 4,
+    returnTo: 'observation'
+  });
+
+  useChatRoomExperienceStore.getState().closeFilePreview(uiKey);
+  expect({
+    observation: useChatRoomExperienceStore.getState().railObservationBySession[uiKey],
+    preview: useChatRoomExperienceStore.getState().filePreviewBySession[uiKey]
+  }).toEqual({ observation, preview: undefined });
+  useChatRoomExperienceStore.getState().removeSessionUiState(uiKey);
 });
 
 test('agent observation selects the currently running MeshAgent stream by instance id', () => {

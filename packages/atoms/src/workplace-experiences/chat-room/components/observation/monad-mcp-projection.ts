@@ -1,5 +1,6 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 
+import { parseStreamingJson } from '../../../../agent-adapters/partial-json.ts';
 import { observationContractRawEvents } from './provenance.ts';
 
 export const MONAD_MCP_TOOL_NAMES = [
@@ -117,8 +118,9 @@ export function monadMcpToolView(
   const toolName = wrappedCall?.toolName ?? monadMcpToolName(call, result, rawEvents);
   if (!toolName) return null;
 
-  const record = inputRecordValue(wrappedCall?.input ?? call.tool?.input);
-  if (!record) return null;
+  const parsedInput = inputRecordValue(wrappedCall?.input ?? call.tool?.input);
+  if (!parsedInput && !call.streaming) return null;
+  const record = parsedInput ?? {};
   const input = record;
   const output = monadMcpOutput(result?.tool?.output ?? result?.text);
   const status = result?.tool?.status ?? call.tool?.status;
@@ -452,11 +454,7 @@ function inputRecordValue(value: unknown): Record<string, unknown> | undefined {
   const record = recordValue(value);
   if (record) return record;
   if (typeof value !== 'string') return undefined;
-  try {
-    return recordValue(JSON.parse(value));
-  } catch {
-    return undefined;
-  }
+  return recordValue(parseStreamingJson(value));
 }
 
 function jsonValue(value: unknown): unknown {

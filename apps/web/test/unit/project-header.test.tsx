@@ -47,6 +47,18 @@ test('project session header opens the existing member flow', async () => {
                 icon: 'claude-code'
               }
             ],
+            resolveAgentIdentity: ({ id }: { id?: string }) =>
+              id === 'pmem_1'
+                ? {
+                    av: 'RL',
+                    name: 'Research lead',
+                    providerIcon: { path: 'M0 0h24v24H0z', title: 'OpenAI Codex' }
+                  }
+                : {
+                    av: 'RV',
+                    name: 'Reviewer',
+                    providerIcon: { path: 'M0 0h24v24H0z', title: 'Claude Code' }
+                  },
             source: { meshAgentIcons: new Map(), meshAgentState: undefined, meshAgentTags: new Map() },
             workdir: { path: undefined }
           } as never
@@ -61,11 +73,17 @@ test('project session header opens the existing member flow', async () => {
 
   await userEvent.hover(screen.getByRole('button', { name: '2 members in this session' }));
   const memberList = await screen.findByRole('list', { name: 'Session members' });
-  expect(
-    within(memberList)
+  expect({
+    members: within(memberList)
       .getAllByRole('listitem')
-      .map((item) => item.textContent)
-  ).toEqual(['RLResearch leadOpenAI Codex', 'RVReviewerClaude Code']);
+      .map((item) => item.textContent),
+    providers: within(memberList)
+      .getAllByRole('img')
+      .map((item) => item.getAttribute('aria-label'))
+  }).toEqual({
+    members: ['RLResearch lead', 'RVReviewer'],
+    providers: ['OpenAI Codex', 'Claude Code']
+  });
 });
 
 test('project session header renames the active session inline', async () => {

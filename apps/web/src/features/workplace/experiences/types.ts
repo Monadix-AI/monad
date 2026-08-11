@@ -1,6 +1,10 @@
 import type { WebMessageIdWithoutParams } from '@monad/i18n/browser';
 import type { WorkplaceExperienceProjectDialogRequest } from '@monad/protocol';
-import type { WorkplaceExperienceActions, WorkplaceExperienceSnapshot } from '@monad/sdk-experience';
+import type {
+  WorkplaceExperienceActions,
+  WorkplaceExperienceAgentIdentityResolver,
+  WorkplaceExperienceSnapshot
+} from '@monad/sdk-experience';
 import type { ReactElement } from 'react';
 
 interface ProjectExperienceHostRuntime {
@@ -11,6 +15,7 @@ interface ProjectExperienceHostRuntime {
 export interface ProjectExperienceView {
   embedded: boolean;
   onProjectDialogRequest?: (request: WorkplaceExperienceProjectDialogRequest) => void;
+  resolveAgentIdentity: WorkplaceExperienceAgentIdentityResolver;
   runtime: ProjectExperienceHostRuntime;
   voiceModelState?: 'checking' | 'configured' | 'missing' | 'failed';
 }

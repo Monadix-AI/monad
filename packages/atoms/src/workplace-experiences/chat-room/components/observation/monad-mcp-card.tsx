@@ -144,7 +144,6 @@ function MonadMcpAgentSendTitle({ action, recipient }: { action: string; recipie
         av={recipient.av}
         avatarUrl={recipient.avatarUrl}
         className="min-w-0 gap-1.5 text-xs normal-case"
-        icon={recipient.icon}
         identityClassName="font-normal"
         name={recipient.name}
         size={18}

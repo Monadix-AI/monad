@@ -424,6 +424,10 @@ export function VirtualList<T>({
     overscan: overscanRowCount(overscan),
     scrollEndThreshold: NATIVE_SCROLL_END_THRESHOLD,
     scrollMargin: headerHeight,
+    // Measurement and prepend reconciliation can notify the virtualizer from this component's
+    // layout effects. React rejects flushSync from inside that commit phase; direct DOM updates
+    // already apply size and position changes immediately, so schedule the React range render.
+    useFlushSync: false,
     // Measurement corrections arrive as absolute writes rebased on the instance's cached offset;
     // mid-gesture that base lags the real scrollTop by a frame of wheel velocity, so each write
     // erases the input applied since — with tall messages measuring thousands of pixels over

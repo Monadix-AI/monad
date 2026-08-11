@@ -2,9 +2,11 @@ import type { MonadMcpMessage } from './monad-mcp-projection.ts';
 
 import { entityAvatarUrl } from '@monad/protocol';
 import { formatMessageTimestamp } from '@monad/ui';
-import { AgentIdentity, Avatar, resolveProductIcon } from '@monad/ui/components/AgentAvatar';
+import { AgentIdentity, Avatar } from '@monad/ui/components/AgentAvatar';
 
+import { AgentProviderBadge } from '../../../components/agent-provider-badge.tsx';
 import { avatarForAgent } from '../../../experience/project-projection.ts';
+import { useOptionalWorkplaceExperienceHost } from '../../../host-context.tsx';
 import { MonadMcpAttachmentList } from './monad-mcp-attachment-card.tsx';
 import { MonadMcpLongText } from './monad-mcp-long-text.tsx';
 
@@ -21,6 +23,7 @@ export function MonadMcpMessageList({
   messages: readonly MonadMcpMessage[];
   userFallback: string;
 }) {
+  const resolveAgentIdentity = useOptionalWorkplaceExperienceHost()?.resolveAgentIdentity;
   if (messages.length === 0) return <span className="text-muted-foreground">{emptyLabel}</span>;
   return (
     <div
@@ -30,7 +33,8 @@ export function MonadMcpMessageList({
       {messages.map((message) => {
         const agent = message.role === 'assistant';
         const name = message.name ?? (message.role === 'user' ? userFallback : agentFallback);
-        const icon = agent ? resolveProductIcon({ icon: message.agentName, name }) : undefined;
+        const identity = agent ? resolveAgentIdentity?.({ name: message.agentName ?? name }) : undefined;
+        const resolvedName = identity?.name ?? name;
         const time = formatMessageTimestamp(message.createdAt, locale);
         return (
           <article
@@ -39,10 +43,9 @@ export function MonadMcpMessageList({
             key={message.id}
           >
             <Avatar
-              av={agent ? avatarForAgent(name) : name.slice(0, 2).toUpperCase()}
-              avatarUrl={entityAvatarUrl(`${agent ? 'mesh-agent' : 'user'}:${name}`)}
+              av={identity?.av ?? (agent ? avatarForAgent(resolvedName) : resolvedName.slice(0, 2).toUpperCase())}
+              avatarUrl={identity?.avatarUrl ?? entityAvatarUrl(`${agent ? 'mesh-agent' : 'user'}:${resolvedName}`)}
               bordered={false}
-              icon={icon}
               kind={agent ? 'agent' : 'human'}
               size={28}
             />
@@ -52,9 +55,9 @@ export function MonadMcpMessageList({
                 data-slot="monad-mcp-message-header"
               >
                 <AgentIdentity
+                  badge={<AgentProviderBadge icon={identity?.providerIcon} />}
                   className="min-w-0 font-medium text-foreground"
-                  icon={icon}
-                  name={name}
+                  name={resolvedName}
                 />
                 {time ? (
                   <time

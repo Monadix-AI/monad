@@ -73,6 +73,12 @@ test('late row reflow above the viewport is absorbed during backward scroll', as
 });
 
 test('cached pages prepending mid-scroll do not jump the content under the reader', async ({ page }) => {
+  const lifecycleFlushErrors: string[] = [];
+  page.on('console', (message) => {
+    if (message.type() === 'error' && message.text().includes('flushSync was called from inside a lifecycle method')) {
+      lifecycleFlushErrors.push(message.text());
+    }
+  });
   await openHarness(page);
 
   const drifts: number[] = [];
@@ -87,5 +93,6 @@ test('cached pages prepending mid-scroll do not jump the content under the reade
 
   const loads = await page.evaluate(() => window.harness.state().topLoadCount);
   expect(loads).toBeGreaterThan(0);
+  expect(lifecycleFlushErrors).toEqual([]);
   expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
 });

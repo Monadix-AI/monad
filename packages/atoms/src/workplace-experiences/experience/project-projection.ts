@@ -178,6 +178,7 @@ export function projectParticipants(args: {
         id: member.id,
         av: initials(displayName),
         icon: productIcon(agent?.productIcon),
+        ...(agent?.icon ? { providerIcon: agent.icon } : {}),
         avatarUrl: entityAvatarUrl(
           args.meshAgentAvatarSeeds.get(displayName) ?? `mesh-agent:${displayName}`,
           args.avatarStyle

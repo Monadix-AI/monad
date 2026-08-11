@@ -98,13 +98,17 @@ export function FileReadCardHeader({ quiet = false, view }: { quiet?: boolean; v
     <ObservationMeta
       compact
       label="tool call"
+      preserveTitle
       quiet={quiet}
       showSource={false}
       source={view.provider}
       title={view.type}
     >
       {quiet ? (
-        <span className="inline-flex min-w-0 items-center gap-1.5 text-muted-foreground">
+        <span
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-muted-foreground"
+          data-slot="file-read-card-title-path-container"
+        >
           <FileIcon
             className="size-3.5 shrink-0"
             fileName={view.path}

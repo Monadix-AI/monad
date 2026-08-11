@@ -1,3 +1,4 @@
+import type { WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experience';
 import type { Message } from '../../experience/types.ts';
 import type { WorkplaceExperienceHostAction } from '../../host-context.tsx';
 import type { MessageRowLabels } from './message-row.tsx';
@@ -8,19 +9,26 @@ import { Tooltip, TooltipContent, TooltipTrigger, WorkspaceSystemEventCard } fro
 import { AgentInstanceAvatar, workspaceMono as mono, TagChip } from '@monad/ui/components/AgentAvatar';
 import { MemberIdentity } from '@monad/ui/components/MemberIdentity';
 
+import { AgentProviderBadge } from '../../components/agent-provider-badge.tsx';
+
 export const TIME_STYLE: React.CSSProperties = { fontFamily: mono, fontSize: 11, color: 'var(--muted-foreground)' };
 
 export function SystemMessageRow({
   actions,
   labels,
   msg,
-  onAgentClick
+  onAgentClick,
+  resolveAgentIdentity
 }: {
   actions?: readonly WorkplaceExperienceHostAction[];
   labels?: MessageRowLabels;
   msg: Message;
   onAgentClick?: (id: string) => void;
+  resolveAgentIdentity?: WorkplaceExperienceAgentIdentityResolver;
 }): React.ReactElement {
+  const actorIdentity = msg.agentChip
+    ? resolveAgentIdentity?.({ id: msg.agentChip.id, name: msg.agentChip.name })
+    : undefined;
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
   const directMessageText = msg.directMessage
     ? (labels?.directMessageSent?.(msg.directMessage.fromAgentName, msg.directMessage.toAgentName) ?? msg.text)
@@ -90,8 +98,14 @@ export function SystemMessageRow({
             type="button"
           >
             <MemberIdentity
-              agent={msg.agentChip}
+              agent={{
+                ...msg.agentChip,
+                av: actorIdentity?.av,
+                avatarUrl: actorIdentity?.avatarUrl ?? msg.agentChip.avatarUrl,
+                name: actorIdentity?.name ?? msg.agentChip.name
+              }}
               avatarSize={22}
+              badge={actorIdentity?.providerIcon ? <AgentProviderBadge icon={actorIdentity.providerIcon} /> : undefined}
               badgeGap={4}
               bordered={false}
               nameStyle={{ maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -167,14 +181,22 @@ export function SystemMessageRow({
       fanout={
         msg.fanoutAgents?.length ? (
           <span className="inline-flex min-w-0 items-center gap-1.5 text-foreground">
-            {msg.fanoutAgents.map((agent) => (
-              <AgentInstanceAvatar
-                agent={agent}
-                bordered={false}
-                key={agent.id}
-                size={20}
-              />
-            ))}
+            {msg.fanoutAgents.map((agent) => {
+              const identity = resolveAgentIdentity?.({ id: agent.id, name: agent.name });
+              return (
+                <AgentInstanceAvatar
+                  agent={{
+                    ...agent,
+                    av: identity?.av,
+                    avatarUrl: identity?.avatarUrl ?? agent.avatarUrl,
+                    name: identity?.name ?? agent.name
+                  }}
+                  bordered={false}
+                  key={agent.id}
+                  size={20}
+                />
+              );
+            })}
           </span>
         ) : undefined
       }

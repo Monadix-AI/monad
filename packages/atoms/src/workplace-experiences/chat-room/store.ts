@@ -13,7 +13,9 @@ export interface ChatRoomRailObservation {
 
 export interface ChatRoomFilePreview {
   attachment: MessageAttachmentRef;
+  gallery?: MessageAttachmentRef[];
   line?: number;
+  returnTo?: 'observation';
 }
 
 interface ChatRoomExperienceState {
@@ -67,6 +69,9 @@ export const useChatRoomExperienceStore = create<ChatRoomExperienceState>((set) 
     }),
   openFilePreview: (uiKey, preview) =>
     set((state) => {
+      if (preview.returnTo === 'observation') {
+        return { filePreviewBySession: { ...state.filePreviewBySession, [uiKey]: preview } };
+      }
       const observations = { ...state.railObservationBySession };
       delete observations[uiKey];
       return {

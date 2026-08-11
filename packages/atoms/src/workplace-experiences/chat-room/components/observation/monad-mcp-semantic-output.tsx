@@ -181,7 +181,6 @@ function MonadMcpMembers({
               av={identity?.av}
               avatarUrl={identity?.avatarUrl}
               className="min-w-0 flex-1"
-              icon={identity?.icon}
               name={identity?.name ?? member.name}
               size={28}
             />

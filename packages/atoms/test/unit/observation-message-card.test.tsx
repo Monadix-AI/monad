@@ -5,6 +5,7 @@ import type { ObservationTimelineRow } from '../../src/workplace-experiences/cha
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
+import { FilePreviewContext } from '../../src/workplace-experiences/chat-room/components/file-preview-context.tsx';
 import { ObservationMessageCard } from '../../src/workplace-experiences/chat-room/components/observation/message-card.tsx';
 import {
   ObservationTimelineRowView,
@@ -122,6 +123,32 @@ test('observation user and agent messages render their content and timestamp wit
   ]);
 });
 
+test('observation message absolute paths resolve to local preview actions without HTTP navigation', () => {
+  const attachment = {
+    bytes: 2048,
+    createdAt: '2026-08-11T00:00:00.000Z',
+    id: 'att_observation_image',
+    mime: 'image/png',
+    name: 'result.png',
+    path: '/workspace/result.png'
+  } as const;
+  const markup = renderToStaticMarkup(
+    <FilePreviewContext.Provider value={{ attachments: [attachment], onOpenAttachment: () => {} }}>
+      <ObservationMessageCard
+        messageRole="agent"
+        streaming={false}
+        text="Generated [result](/workspace/result.png)."
+      />
+    </FilePreviewContext.Provider>
+  );
+
+  expect({
+    localAction: /<button[^>]+data-inline-link="file"[^>]*>/.test(markup),
+    noHttpPath: !markup.includes('href="/workspace/result.png"'),
+    hoverStyle: markup.includes('hover:decoration-dashed')
+  }).toEqual({ localAction: true, noHttpPath: true, hoverStyle: true });
+});
+
 test('observation reasoning uses the shared collapsed reasoning component', () => {
   const timestamp = new Date().toISOString();
   const timestampLabel = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' }).format(
@@ -149,6 +176,43 @@ test('observation reasoning uses the shared collapsed reasoning component', () =
     plain: true,
     timestamp: true
   });
+});
+
+test('streaming observation reasoning uses the working orb', () => {
+  const markup = renderToStaticMarkup(
+    <ObservationMessageCard
+      messageRole="reasoning"
+      reasoning={{ streaming: true, text: 'Inspecting the live event.' }}
+      streaming
+      text="Inspecting the live event."
+    />
+  );
+
+  expect({
+    label: /<canvas[^>]+aria-label="([^"]+)"/.exec(markup)?.[1],
+    state: /<canvas[^>]+data-orb-state="([^"]+)"/.exec(markup)?.[1]
+  }).toEqual({ label: 'Working…', state: 'working' });
+});
+
+test('streaming observation reasoning prefixes the current Codex summary with the thinking state', () => {
+  const markup = renderToStaticMarkup(
+    <ObservationMessageCard
+      messageRole="reasoning"
+      reasoning={{
+        hasContent: false,
+        streaming: true,
+        summary: '**Planning image generation**',
+        text: 'Thinking…'
+      }}
+      streaming
+      text="Thinking…"
+    />
+  );
+
+  expect({
+    oneSummary: markup.match(/Planning image generation/g)?.length,
+    title: markup.includes('Thinking… Planning image generation')
+  }).toEqual({ oneSummary: 1, title: true });
 });
 
 test('observation reasoning uses the Codex summary as its collapsed title', () => {

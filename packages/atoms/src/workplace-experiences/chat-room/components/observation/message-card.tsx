@@ -44,6 +44,8 @@ export function ObservationMessageCard({
   const timestampLabel = formatMessageTimestamp(timestamp, locale);
   const reasoningState = messageRole === 'reasoning' ? { streaming, text, ...reasoning } : reasoning;
   const reasoningTitle = observationReasoningTitle(reasoningState?.summary);
+  const reasoningTriggerTitle =
+    reasoningTitle && reasoningState?.streaming ? `${t('web.reasoning.thinking')} ${reasoningTitle}` : reasoningTitle;
   const hasReasoningContent = reasoningState?.hasContent ?? !!reasoningState?.text.trim();
   const reasoningBody = reasoningState ? (
     <Reasoning
@@ -55,7 +57,9 @@ export function ObservationMessageCard({
       <ReasoningTrigger
         className="min-h-6 min-w-0 overflow-hidden px-0 py-0 font-sans text-muted-foreground text-sm leading-5 disabled:pointer-events-none"
         disabled={!hasReasoningContent}
-        getThinkingMessage={reasoningTitle ? () => <p className="min-w-0 truncate">{reasoningTitle}</p> : undefined}
+        getThinkingMessage={
+          reasoningTriggerTitle ? () => <p className="min-w-0 truncate">{reasoningTriggerTitle}</p> : undefined
+        }
         hideChevron={!hasReasoningContent}
         iconClassName="shrink-0"
         labels={{
@@ -63,6 +67,7 @@ export function ObservationMessageCard({
           thoughtFew: t('web.reasoning.thoughtFew'),
           thoughtSeconds: (seconds) => t('web.reasoning.thoughtSeconds', { count: seconds })
         }}
+        orbState={reasoningState?.streaming ? 'working' : undefined}
       />
       {hasReasoningContent ? (
         <ReasoningContent className="mt-2 max-h-48 overflow-y-auto overscroll-contain text-xs">

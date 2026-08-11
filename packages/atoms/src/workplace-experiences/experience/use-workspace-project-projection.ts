@@ -8,6 +8,7 @@ import type {
   UIItem,
   WorkplaceProject
 } from '@monad/protocol';
+import type { WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experience';
 import type { MeshAgentExperienceInput } from './mesh-agent-state.ts';
 import type { ProjectMember } from './project-members.ts';
 import type { ApprovalView, Participant, Project } from './types.ts';
@@ -44,8 +45,44 @@ export interface WorkspaceProjectProjection {
   participants: Participant[];
   projectParticipants: Participant[];
   projectMembers: ProjectMember[];
+  resolveAgentIdentity: WorkplaceExperienceAgentIdentityResolver;
   experienceProjectMembers: ProjectMember[];
   projects: Project[];
+}
+
+export function createWorkplaceExperienceAgentIdentityResolver(
+  participants: readonly Participant[],
+  availableProjectMembers: ReturnType<typeof projectMemberCandidates>
+): WorkplaceExperienceAgentIdentityResolver {
+  const participantsById = new Map(participants.map((participant) => [participant.id, participant]));
+  const participantsByName = new Map<string, Participant>();
+  for (const participant of participants) {
+    participantsByName.set(participant.name, participant);
+    if (participant.metadata?.agent) participantsByName.set(participant.metadata.agent, participant);
+  }
+  const candidatesByName = new Map(availableProjectMembers.map((candidate) => [candidate.name, candidate]));
+  return (reference) => {
+    const participant =
+      (reference.id ? participantsById.get(reference.id) : undefined) ??
+      (reference.name ? participantsByName.get(reference.name) : undefined);
+    const candidate = participant?.metadata?.agent
+      ? candidatesByName.get(participant.metadata.agent)
+      : reference.name
+        ? candidatesByName.get(reference.name)
+        : undefined;
+    if (!participant && !candidate) return undefined;
+    const name = participant?.name ?? candidate?.label ?? reference.name ?? reference.id ?? 'Agent';
+    const providerIcon = participant?.providerIcon ?? candidate?.providerIcon;
+    const tag = participant?.tag ?? candidate?.tag;
+    return {
+      id: participant?.id ?? candidate?.id ?? reference.id ?? reference.name ?? name,
+      name,
+      ...(participant?.av ? { av: participant.av } : {}),
+      ...(participant?.avatarUrl ? { avatarUrl: participant.avatarUrl } : {}),
+      ...(providerIcon ? { providerIcon } : {}),
+      ...(tag ? { tag } : {})
+    };
+  };
 }
 
 export function useWorkspaceProjectProjection(args: {
@@ -175,6 +212,10 @@ export function useWorkspaceProjectProjection(args: {
       }),
     [args.acpAgents, args.meshAgents, projectMembers]
   );
+  const resolveAgentIdentity = useMemo(
+    () => createWorkplaceExperienceAgentIdentityResolver(participants, availableProjectMembers),
+    [availableProjectMembers, participants]
+  );
 
   return {
     approvals,
@@ -189,6 +230,7 @@ export function useWorkspaceProjectProjection(args: {
     participants,
     projectParticipants: participants.filter((participant) => participant.kind === 'agent'),
     projectMembers,
+    resolveAgentIdentity,
     experienceProjectMembers,
     projects
   };
