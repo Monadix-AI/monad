@@ -29,7 +29,7 @@
     "@opentelemetry/sdk-metrics": "^2.10.0",
     "@opentelemetry/sdk-trace-base": "^2.10.0",
     "@opentelemetry/semantic-conventions": "^1.43.0",
-    "@supabase/supabase-js": "^2.112.2",
+    "@supabase/supabase-js": "^2.112.3",
     "drizzle-orm": "0.45.2",
     "elysia": "^1.4.29",
     "eta": "^4.0.0",
@@ -44,7 +44,7 @@
     "@monad/monad-power-pack": "workspace:*",
     "@monad/tsconfig": "workspace:*",
     "drizzle-kit": "0.31.10",
-    "eventsource-parser": "^3.1.0",
+    "eventsource-parser": "^3.1.1",
     "openai": "^7.4.0"
   },
   "exports": {
