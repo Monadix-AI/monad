@@ -7,7 +7,7 @@ license = "Apache-2.0"
 repository = "https://github.com/Monadix-AI/monad"
 binaries = ["monad"]
 out-dir = "out"
-build-command = ["bun", "../scripts/build-dist.ts"]
+build-command = ["bun", "scripts/build-dist.ts"]
 
 [dist]
 include = ["out/assets", "out/helpers"]

@@ -43,7 +43,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   const localDeploy = await Bun.file(join(root, 'scripts/deploy-local-dist.ts')).text();
   const upgradeE2e = await Bun.file(join(root, 'scripts/test/upgrade-dist-e2e.ts')).text();
   const distWorkspace = await Bun.file(join(root, 'dist-workspace.toml')).text();
-  const distPackage = await Bun.file(join(root, 'distribution/dist.toml')).text();
+  const distPackage = await Bun.file(join(root, 'dist.toml')).text();
   const buildMatrix = jobs.build?.strategy?.matrix?.include ?? [];
   const installMatrix = jobs['install-test']?.strategy?.matrix?.include ?? [];
 
