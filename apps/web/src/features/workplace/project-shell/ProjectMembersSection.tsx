@@ -10,11 +10,11 @@ import {
   AgentInstanceAvatar,
   workspaceBoxRadius as boxR,
   workspaceMono as mono,
-  resolveProductIcon,
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useState } from 'react';
 
+import { BrandIcon } from '#/components/BrandIcon';
 import { useT } from '#/components/I18nProvider';
 import { RefreshButton } from '#/components/RefreshButton';
 import { toast } from '#/components/ToastProvider';
@@ -215,8 +215,6 @@ function ProjectMemberRow({
   const avatarSeed =
     member.type === 'mesh-agent' ? workplaceProjectMemberAvatarSeed(projectId, member) : `acp:${member.name}`;
   const agent = { avatarUrl: entityAvatarUrl(avatarSeed, avatarStyle), name };
-  const productIcon = resolveProductIcon({ icon: candidate?.icon, name });
-
   return (
     <div
       style={{
@@ -236,9 +234,15 @@ function ProjectMemberRow({
       </div>
       <div style={{ minWidth: 0 }}>
         <AgentIdentity
+          badge={
+            candidate?.providerIcon ? (
+              <BrandIcon
+                className="size-3"
+                icon={candidate.providerIcon}
+              />
+            ) : undefined
+          }
           badgeGap={4}
-          icon={productIcon}
-          iconSize={12}
           name={name}
           nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
         />

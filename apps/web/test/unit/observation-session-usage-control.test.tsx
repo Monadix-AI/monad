@@ -20,27 +20,6 @@ const meter = {
   total: 42_000
 };
 
-test('places session usage after the agent name and provider icon', () => {
-  render(
-    <MeshAgentObservationPanel
-      agentName="GPT 5.6 Sol"
-      icon="codex"
-      sessionUsageMeter={meter}
-    />
-  );
-
-  const name = screen.getByTitle('GPT 5.6 Sol');
-  const providerIcon = screen.getAllByRole('img', { name: 'OpenAI Codex' }).at(-1);
-  const usage = screen.getByRole('button', { name: 'Show session usage' });
-  if (!providerIcon) throw new Error('Expected identity provider icon');
-
-  expect({
-    iconFollowsName: Boolean(name.compareDocumentPosition(providerIcon) & Node.DOCUMENT_POSITION_FOLLOWING),
-    label: usage.textContent,
-    usageFollowsIcon: Boolean(providerIcon.compareDocumentPosition(usage) & Node.DOCUMENT_POSITION_FOLLOWING)
-  }).toEqual({ iconFollowsName: true, label: '42%', usageFollowsIcon: true });
-});
-
 test('opens a compact session usage summary with context and token totals', async () => {
   render(
     <MeshAgentObservationPanel

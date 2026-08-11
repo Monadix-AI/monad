@@ -22,6 +22,7 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
+import { BrandIcon } from '#/components/BrandIcon';
 import { useT } from '#/components/I18nProvider';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
 import { MeshAgentMemberDialog } from './MeshAgentMemberDialog';
@@ -35,8 +36,8 @@ type ProjectParticipant = ProjectController['projectParticipants'][number];
 type MemberAvatar = {
   av?: ProjectParticipant['av'];
   avatarUrl?: ProjectParticipant['avatarUrl'];
-  icon?: ProjectParticipant['icon'];
   name: string;
+  providerIcon?: AvailableProjectMember['providerIcon'];
 };
 
 export function directSessionMemberCandidates(candidates: readonly AvailableProjectMember[]): AvailableProjectMember[] {
@@ -55,10 +56,10 @@ export function sessionMemberAvatar(args: {
   projectId: string;
 }): MemberAvatar {
   return {
-    ...args.participant,
+    ...(args.participant?.av ? { av: args.participant.av } : {}),
     avatarUrl: entityAvatarUrl(meshAgentProjectMemberAvatarSeed(args.projectId, args.displayName), args.avatarStyle),
-    icon: args.participant?.icon ?? args.candidate?.icon,
-    name: args.displayName
+    name: args.displayName,
+    ...(args.candidate?.providerIcon ? { providerIcon: args.candidate.providerIcon } : {})
   };
 }
 
@@ -111,7 +112,14 @@ function MemberRow({
       />
       <div style={{ minWidth: 0 }}>
         <AgentIdentity
-          icon={avatar.icon}
+          badge={
+            avatar.providerIcon ? (
+              <BrandIcon
+                className="size-3.5"
+                icon={avatar.providerIcon}
+              />
+            ) : undefined
+          }
           name={name}
           nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
         />
@@ -227,7 +235,9 @@ export function SessionMembersSection({
             {!rosterPending
               ? members.map((member, index) => {
                   const template = templateById.get(member.member.profileId);
-                  const candidate = template ? candidateByName.get(template.templateName ?? template.name) : undefined;
+                  const candidate = candidateByName.get(
+                    template?.templateName ?? template?.name ?? member.member.profileId
+                  );
                   const participant = participantById.get(member.member.id);
                   const displayName = sessionProjectMemberDisplayName({
                     candidate,
@@ -291,7 +301,14 @@ export function SessionMembersSection({
                       />
                       <div style={{ minWidth: 0 }}>
                         <AgentIdentity
-                          icon={avatar.icon}
+                          badge={
+                            avatar.providerIcon ? (
+                              <BrandIcon
+                                className="size-3.5"
+                                icon={avatar.providerIcon}
+                              />
+                            ) : undefined
+                          }
                           name={name}
                           nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
                         />

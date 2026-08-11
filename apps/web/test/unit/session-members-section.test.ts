@@ -31,7 +31,7 @@ test('direct Monad session members persist the configured agent name instead of 
   ).toEqual({ displayName: 'Default Dev Agent' });
 });
 
-test('session project members preserve participant state with the project-scoped avatar', () => {
+test('session project members retain initials with the project-scoped avatar', () => {
   const participant = {
     av: 'RE',
     avatarUrl: '/avatars/researcher.svg',
@@ -49,13 +49,7 @@ test('session project members preserve participant state with the project-scoped
   const expected = {
     av: 'RE',
     avatarUrl: entityAvatarUrl(meshAgentProjectMemberAvatarSeed(projectId, displayName), 'bottts'),
-    icon: 'codex',
-    id: 'pmem_researcher',
-    kind: 'agent',
-    name: displayName,
-    presence: 'online',
-    role: 'CLI',
-    tag: 'Codex'
+    name: displayName
   } as const;
 
   expect(sessionMemberAvatar({ avatarStyle: 'bottts', displayName, participant, projectId })).toEqual(expected);
@@ -64,18 +58,19 @@ test('session project members preserve participant state with the project-scoped
 test('project members derive the same project-scoped avatar outside a session participant', () => {
   const projectId = 'prj_100000000000';
   const displayName = 'Session reviewer';
+  const providerIcon = { path: 'M0 0h24v24H0z', title: 'Codex adapter' };
 
   expect(
     sessionMemberAvatar({
       avatarStyle: 'bottts',
-      candidate: { icon: 'codex' } as never,
+      candidate: { icon: 'incorrect-local-override', providerIcon } as never,
       displayName,
       projectId
     })
   ).toEqual({
     avatarUrl: entityAvatarUrl(meshAgentProjectMemberAvatarSeed(projectId, displayName), 'bottts'),
-    icon: 'codex',
-    name: displayName
+    name: displayName,
+    providerIcon
   });
 });
 
