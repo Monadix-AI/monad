@@ -208,10 +208,11 @@ export function LiveEventReplay(): React.ReactElement {
   const selectedFrame = step > 0 ? frames[step - 1] : undefined;
   const selectedEvent = projection.events.at(-1);
   useEffect(() => {
+    if (step === 0) return;
     finalRenderEndRef.current?.scrollIntoView({ behavior: 'auto', block: 'nearest' });
     selectedNormalizedEventRef.current?.scrollIntoView({ behavior: 'auto', block: 'nearest' });
     selectedRawFrameRef.current?.scrollIntoView({ behavior: 'auto', block: 'nearest' });
-  }, []);
+  }, [step]);
 
   if (developer.isLoading) return <ReplayNotice>{t('web.developerReplay.loading')}</ReplayNotice>;
   if (developer.data?.developerMode !== true) {
