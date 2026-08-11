@@ -3,13 +3,15 @@ import { mkdtemp, readdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { basename, join } from 'node:path';
 
+import { removeDirectory } from '../../test-fs.ts';
+
 const root = join(import.meta.dir, '..', '..', '..');
 const migrationsModule = join(root, 'apps', 'monad', 'src', 'store', 'db', 'migrations.ts');
 const drizzleModule = join(root, 'apps', 'monad', 'node_modules', 'drizzle-orm', 'bun-sqlite', 'index.js');
 const temporaryDirectories: string[] = [];
 
 afterEach(async () => {
-  await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })));
+  await Promise.all(temporaryDirectories.splice(0).map((directory) => removeDirectory(directory)));
 });
 
 test('compiled migration smoke runs from a standalone binary without migration files', async () => {

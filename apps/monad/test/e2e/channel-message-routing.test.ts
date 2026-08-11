@@ -18,7 +18,7 @@ import type { ModelChunk, ModelRequest, ModelRouter } from '#/agent/model/index.
 import { afterEach, beforeEach, describe, expect, setDefaultTimeout, test } from 'bun:test';
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
-import { chmod, mkdir, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, readFile, realpath, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { delimiter, join } from 'node:path';
 import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
@@ -26,6 +26,7 @@ import { parseEventPayload, sessionMemberResponseSchema } from '@monad/protocol'
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
+import { removeDirectory } from '../../../../scripts/test-fs.ts';
 import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
 import {
   buildHandlers,
@@ -83,28 +84,6 @@ function makePaths(base: string): MonadPaths {
 async function comparablePath(path: string): Promise<string> {
   const canonicalPath = await realpath(path);
   return process.platform === 'win32' ? canonicalPath.toLowerCase() : canonicalPath;
-}
-
-async function removeTestDirectory(path: string): Promise<void> {
-  // Windows keeps the directory locked until every child the test spawned has fully exited, which
-  // outlasts a fixed attempt count on a loaded runner; bound the retry by the shared budget instead.
-  const deadline = Date.now() + DAEMON_E2E_TIMEOUT_BUDGET.conditionMs;
-  for (;;) {
-    try {
-      await rm(path, { recursive: true, force: true });
-      return;
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (
-        process.platform !== 'win32' ||
-        !['EACCES', 'EBUSY', 'EFAULT', 'EPERM'].includes(code ?? '') ||
-        Date.now() >= deadline
-      ) {
-        throw error;
-      }
-      await Bun.sleep(20);
-    }
-  }
 }
 
 // Windows terminates a child unconditionally — SIGTERM is never delivered as a catchable signal —
@@ -547,7 +526,7 @@ for (const kind of TRANSPORTS) {
     afterEach(async () => {
       await handlers._stopMeshAgents();
       await t.stop();
-      await removeTestDirectory(dir);
+      await removeDirectory(dir);
     });
 
     test('no-host project message records reply relations through the channel route', async () => {
