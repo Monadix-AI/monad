@@ -11,6 +11,7 @@ const DIST_TARGETS = {
   'x86_64-unknown-linux-gnu': { os: 'linux', arch: 'x64' },
   'aarch64-unknown-linux-musl': { os: 'linux', arch: 'arm64', libc: 'musl' },
   'x86_64-unknown-linux-musl': { os: 'linux', arch: 'x64', libc: 'musl' },
+  'aarch64-pc-windows-msvc': { os: 'windows', arch: 'arm64' },
   'x86_64-pc-windows-msvc': { os: 'windows', arch: 'x64' }
 } as const satisfies Record<string, ReleaseTarget>;
 

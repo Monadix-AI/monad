@@ -108,6 +108,8 @@ jobs:
             runner: ubuntu-latest
           - target: x86_64-unknown-linux-musl
             runner: ubuntu-latest
+          - target: aarch64-pc-windows-msvc
+            runner: ubuntu-latest
           - target: x86_64-pc-windows-msvc
             runner: ubuntu-latest
     steps:
@@ -127,6 +129,19 @@ jobs:
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends binutils binutils-aarch64-linux-gnu gcc gcc-aarch64-linux-gnu libc6-dev-arm64-cross gcc-mingw-w64-x86-64
+      - name: Install LLVM MinGW for Windows ARM64
+        if: matrix.target == 'aarch64-pc-windows-msvc'
+        env:
+          LLVM_MINGW_SHA256: 534b92e067b22a6b4441f48ae9240a3341b17825d04d577eab0cf85c44b4deda
+          LLVM_MINGW_VERSION: "20260616"
+        run: |
+          archive="llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64.tar.xz"
+          curl --proto '=https' --tlsv1.2 -fsSLO "https://github.com/mstorsjo/llvm-mingw/releases/download/${LLVM_MINGW_VERSION}/${archive}"
+          echo "${LLVM_MINGW_SHA256}  ${archive}" | sha256sum --check
+          tar -xJf "${archive}"
+          toolchain_bin="${PWD}/llvm-mingw-${LLVM_MINGW_VERSION}-ucrt-ubuntu-22.04-x86_64/bin"
+          "${toolchain_bin}/aarch64-w64-mingw32-clang" --version
+          echo "${toolchain_bin}" >> "${GITHUB_PATH}"
       - name: Install dependencies
         run: bun install --frozen-lockfile
       - name: Install dist
@@ -198,6 +213,8 @@ jobs:
             runner: macos-14
           - os: windows
             runner: windows-latest
+          - os: windows-arm64
+            runner: windows-11-arm
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:

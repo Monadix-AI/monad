@@ -1,7 +1,7 @@
 import { copyFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const INSTALLERS = new Set(['install.ps1', 'install.sh', 'monad-installer.ps1', 'monad-installer.sh']);
+const INSTALLERS = new Set(['install.ps1', 'install.sh']);
 const POWER_PACK = /^monad-power-pack\.atom-pack\.zip(?:\.sha256)?$/;
 const PLATFORM_ARCHIVE = /^monad-(.+)\.(tar\.gz|zip)$/;
 const PLATFORM_ARCHIVE_CHECKSUM = /^monad-(.+)\.(tar\.gz|zip)\.sha256$/;
