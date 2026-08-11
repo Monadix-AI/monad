@@ -4,6 +4,8 @@ import { copyFile, readdir, readFile, rm, stat, writeFile } from 'node:fs/promis
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { isPublicReleaseAsset } from './lib/public-release-assets.ts';
+
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
   options: { dir: { type: 'string' } },
@@ -30,6 +32,7 @@ async function collectArtifactSizes(dir: string): Promise<Map<string, number>> {
   for (const entry of await readdir(dir, { withFileTypes: true })) {
     if (
       !entry.isFile() ||
+      !isPublicReleaseAsset(entry.name) ||
       entry.name.endsWith('-installer.sh') ||
       entry.name.endsWith('-installer.ps1') ||
       entry.name === 'install.sh' ||

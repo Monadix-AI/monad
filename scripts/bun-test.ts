@@ -88,10 +88,14 @@ const windowsShardConcurrency = 1;
 const inputArgs = process.argv.slice(2);
 const shardArg = inputArgs.find((arg) => arg.startsWith('--monad-shards='));
 const shardValue = shardArg?.slice('--monad-shards='.length);
-// Splitting buys no parallelism on Windows, which runs the shards one at a time, but it still
-// earns its keep there: collapsing to a single shard puts every daemon suite in one process, and
-// the accumulated subprocess trees start resetting each other's local HTTP servers.
-const autoShardCount = Math.max(1, Math.min(autoShardCap, navigator.hardwareConcurrency - 2));
+// Windows runs its shards one at a time, so splitting there buys no parallelism and pays the
+// process startup and module-graph load once per shard for the same files — measured at ~3 extra
+// minutes for two shards. (An ECONNRESET flake was once attributed to the single-shard layout;
+// it reproduced identically under two serial shards, so shard count is not a factor in it.)
+const autoShardCount =
+  process.platform === 'win32'
+    ? windowsShardConcurrency
+    : Math.max(1, Math.min(autoShardCap, navigator.hardwareConcurrency - 2));
 const shardCount = shardValue === 'auto' ? autoShardCount : shardValue ? Number.parseInt(shardValue, 10) : 1;
 if (!Number.isInteger(shardCount) || shardCount < 1) throw new Error(`invalid shard count: ${shardValue}`);
 const rawArgs = inputArgs.filter((arg) => arg !== shardArg);

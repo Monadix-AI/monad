@@ -17,7 +17,7 @@ Monad publishes self-contained releases for these platforms:
 |---|---|
 | macOS | Apple Silicon (`arm64`) and Intel (`x64`) |
 | Linux | `arm64` and `x64`, with glibc and musl variants |
-| Windows | 64-bit Windows 10 1803 or later; Windows on ARM uses `windows-x64` emulation |
+| Windows | Native `arm64` and `x64` builds for 64-bit Windows 10 1803 or later |
 
 You need outbound HTTPS access to your chosen model provider. Monad does not bundle a local inference engine.
 

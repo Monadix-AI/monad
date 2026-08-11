@@ -11,7 +11,7 @@
  * Usage:
  *   bun run scripts/build-release.ts                                   # host platform only (glibc)
  *   bun run scripts/build-release.ts --musl                            # host arch, musl libc (Alpine/embedded)
- *   bun run scripts/build-release.ts --all                             # darwin/linux × arm64/x64, + linux musl, + windows-x64
+ *   bun run scripts/build-release.ts --all                             # darwin/linux/windows × arm64/x64, + linux musl
  *   bun run scripts/build-release.ts --target=aarch64-apple-darwin      # one dist/Rust target triple
  *   bun run scripts/build-release.ts --version=0.2.0-beta.1             # embed an exact release version
  *   bun run scripts/build-release.ts --build=abc1234                   # append build metadata to version (+abc1234)
