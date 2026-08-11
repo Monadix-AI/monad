@@ -9,16 +9,11 @@ import type { MeshAgentStreamView, Participant } from '../../experience/types.ts
 import type { ObservationPanelHooks } from './observation/use-observation-panel.ts';
 
 import {
-  BrainIcon,
-  EyeIcon,
   FootballIcon,
   GameboyIcon,
-  MegaphoneIcon,
-  PencilEdit01Icon,
   PopcornIcon,
   SwimmingIcon,
   TennisBallIcon,
-  Wrench01Icon,
   ZapIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
@@ -32,7 +27,7 @@ import {
   useStreamMeshAgentConvenienceQuery,
   useStreamMeshAgentRawQuery
 } from '@monad/sdk-experience/react';
-import { ProductIcon, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { type OrbState, ProductIcon, ThinkingOrb, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
@@ -152,13 +147,13 @@ function clampRailWidth(width: number): number {
 
 function agentActivityPhaseMeta(phase: NonNullable<Participant['activityPhase']>): {
   label: string;
-  icon: typeof EyeIcon;
+  orbState: OrbState;
 } {
-  if (phase === 'reading') return { label: 'Reading', icon: EyeIcon };
-  if (phase === 'speaking') return { label: 'Speaking', icon: MegaphoneIcon };
-  if (phase === 'tooling') return { label: 'Using tools', icon: Wrench01Icon };
-  if (phase === 'writing') return { label: 'Writing', icon: PencilEdit01Icon };
-  return { label: 'Thinking', icon: BrainIcon };
+  if (phase === 'reading') return { label: 'Reading', orbState: 'searching' };
+  if (phase === 'speaking') return { label: 'Speaking', orbState: 'connecting' };
+  if (phase === 'tooling') return { label: 'Using tools', orbState: 'working' };
+  if (phase === 'writing') return { label: 'Writing', orbState: 'composing' };
+  return { label: 'Thinking', orbState: 'solving' };
 }
 
 function agentPresenceLabel(agent: Participant): string {
@@ -217,25 +212,6 @@ const agentStatusRingCss = `
     opacity: 0;
     transform: scale(1.65);
   }
-}
-
-@keyframes workplace-agent-phase-thinking {
-  to { transform: rotate(360deg); }
-}
-
-@keyframes workplace-agent-phase-reading {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-2px); }
-}
-
-@keyframes workplace-agent-phase-speaking {
-  0%, 100% { transform: scale(1); }
-  45% { transform: scale(1.22); }
-}
-
-@keyframes workplace-agent-phase-writing {
-  0%, 100% { transform: translate(0, 0) rotate(0deg); }
-  45% { transform: translate(1px, 1px) rotate(-9deg); }
 }
 
 @keyframes workplace-agent-phase-bubble-pop {
@@ -461,24 +437,8 @@ const agentStatusRingCss = `
     workplace-agent-phase-bubble-float 2.4s ease-in-out 220ms infinite;
 }
 
-.workplace-agent-status-phase[data-phase='thinking'] svg {
-  animation: workplace-agent-phase-thinking 1.4s linear infinite;
-}
-
-.workplace-agent-status-phase[data-phase='reading'] svg {
-  animation: workplace-agent-phase-reading 1.05s ease-in-out infinite;
-}
-
-.workplace-agent-status-phase[data-phase='speaking'] svg {
-  animation: workplace-agent-phase-speaking 0.8s ease-in-out infinite;
-}
-
-.workplace-agent-status-phase[data-phase='tooling'] svg {
-  animation: workplace-agent-phase-speaking 1s ease-in-out infinite;
-}
-
-.workplace-agent-status-phase[data-phase='writing'] svg {
-  animation: workplace-agent-phase-writing 0.78s ease-in-out infinite;
+.workplace-agent-status-phase canvas {
+  display: block;
 }
 
 	.workplace-agent-status-name {
@@ -613,7 +573,6 @@ const agentStatusRingCss = `
 	  .workplace-agent-status-sleep span,
 	  .workplace-agent-status-wake,
 	  .workplace-agent-status-phase,
-	  .workplace-agent-status-phase svg,
 	  .workplace-agent-status-subtext::after,
 	  .workplace-agent-status-subtext,
 	  .workplace-agent-status-dot,
@@ -916,7 +875,6 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         ? agent
         : { ...agent, presence: observedPresence, activityPhase };
     const phase = activityPhase ? agentActivityPhaseMeta(activityPhase) : undefined;
-    const PhaseIcon = phase?.icon;
     const statusLabel =
       phase?.label ??
       (displayAgent.presence === 'sleeping'
@@ -1020,17 +978,17 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
               ✦
             </span>
           ) : null}
-          {phase && PhaseIcon ? (
+          {phase ? (
             <span
               className="workplace-agent-status-phase"
               data-phase={activityPhase}
               title={phase.label}
             >
-              <HugeiconsIcon
+              <ThinkingOrb
                 aria-hidden="true"
-                icon={PhaseIcon}
-                size={13}
-                strokeWidth={1.8}
+                size={20}
+                state={phase.orbState}
+                theme="light"
               />
             </span>
           ) : null}
