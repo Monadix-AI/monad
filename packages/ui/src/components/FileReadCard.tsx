@@ -82,15 +82,35 @@ export function fileReadDisplayContent(
     parsed.some((line, index) => index > 0 && line.lineNumber !== (parsed[index - 1]?.lineNumber ?? 0) + 1)
   )
     return { code: content };
-  const trailingText = lines
-    .slice(parsed.length)
-    .join('\n')
-    .replace(/(?:\n*<system-reminder\b[^>]*>[\s\S]*?<\/system-reminder>)+\s*$/i, '');
-  const trailing = trailingText ? trailingText.split('\n') : [];
+  const trailingText = lines.slice(parsed.length).join('\n');
+  const visibleTrailingText = stripTrailingSystemReminders(trailingText);
+  const trailing = visibleTrailingText ? visibleTrailingText.split('\n') : [];
   return {
     code: [...parsed.map((line) => line.code), ...trailing].join('\n'),
     lineNumbers: parsed.map((line) => line.lineNumber)
   };
+}
+
+function stripTrailingSystemReminders(value: string): string {
+  const lower = value.toLowerCase();
+  const opening = '<system-reminder';
+  const closing = '</system-reminder>';
+  let end = value.length;
+  while (end > 0 && /\s/u.test(value[end - 1] ?? '')) end -= 1;
+  let removed = false;
+  while (lower.slice(end - closing.length, end) === closing) {
+    const closeStart = end - closing.length;
+    const openStart = lower.lastIndexOf(opening, closeStart);
+    if (openStart < 0) break;
+    const boundary = lower[openStart + opening.length];
+    if (boundary !== undefined && /[\p{L}\p{N}_]/u.test(boundary)) break;
+    const openEnd = lower.indexOf('>', openStart + opening.length);
+    if (openEnd < 0 || openEnd >= closeStart) break;
+    removed = true;
+    end = openStart;
+    while (end > 0 && value[end - 1] === '\n') end -= 1;
+  }
+  return removed ? value.slice(0, end) : value;
 }
 
 export function FileReadCardHeader({ quiet = false, view }: { quiet?: boolean; view: FileReadCardView }) {

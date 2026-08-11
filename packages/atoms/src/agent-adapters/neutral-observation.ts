@@ -120,9 +120,7 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     params?.tool,
     sourcePayload?.tool
   );
-  const projectedName = /^Tool call\s+(.+?)(?=\s+(?:\{|\[|"|-?\d|true\b|false\b|null\b)|$)/.exec(
-    (event.text ?? '').trim()
-  )?.[1];
+  const projectedName = projectedToolName(event.text);
   const name =
     (declaredName?.toLowerCase() === 'tool' ? undefined : declaredName) ??
     textValue(
@@ -245,6 +243,40 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     ...(output === undefined ? {} : { output }),
     ...metadata
   };
+}
+
+function projectedToolName(text: string | undefined): string | undefined {
+  const value = text?.trim();
+  if (!value?.startsWith('Tool call')) return undefined;
+  let cursor = 'Tool call'.length;
+  if (!isWhitespace(value[cursor])) return undefined;
+  while (isWhitespace(value[cursor])) cursor += 1;
+  const start = cursor;
+  while (cursor < value.length) {
+    if (!isWhitespace(value[cursor])) {
+      cursor += 1;
+      continue;
+    }
+    const separator = cursor;
+    while (isWhitespace(value[cursor])) cursor += 1;
+    if (startsToolPayload(value, cursor)) return value.slice(start, separator);
+  }
+  return value.slice(start) || undefined;
+}
+
+function isWhitespace(value: string | undefined): boolean {
+  return value !== undefined && /\s/u.test(value);
+}
+
+function startsToolPayload(value: string, cursor: number): boolean {
+  const first = value[cursor];
+  if (first === '{' || first === '[' || first === '"') return true;
+  if (first !== undefined && /\d/u.test(first)) return true;
+  if (first === '-' && /\d/u.test(value[cursor + 1] ?? '')) return true;
+  for (const literal of ['true', 'false', 'null']) {
+    if (value.startsWith(literal, cursor) && !/[\p{L}\p{N}_]/u.test(value[cursor + literal.length] ?? '')) return true;
+  }
+  return false;
 }
 
 /**

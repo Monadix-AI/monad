@@ -40,6 +40,20 @@ test('a tool call decodes structured name+input from raw, not just the formatted
   expect(neutral).toMatchObject({ kind: 'tool-call', streaming: false, tool: { name: 'bash', input: { cmd: 'ls' } } });
 });
 
+test('a projected tool name preserves words and stops at a structured payload', () => {
+  const projected = (text: string) =>
+    toAgentObservationEvent(
+      event({ role: 'tool', providerEventType: 'function_call', text, provenance: { rawEvents: [{}] } })
+    )?.tool?.name;
+
+  expect([
+    projected('Tool call code graph   helper'),
+    projected('Tool call code graph   {"query":"monad"}'),
+    projected('Tool call Search true'),
+    projected('Tool caller Search {"query":"monad"}')
+  ]).toEqual(['code graph   helper', 'code graph', 'Search', 'tool']);
+});
+
 test('a tool result decodes an output payload', () => {
   const neutral = toAgentObservationEvent(
     event({
