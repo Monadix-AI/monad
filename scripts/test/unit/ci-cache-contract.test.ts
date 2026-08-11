@@ -56,6 +56,20 @@ async function workflows(): Promise<Array<{ file: string; workflow: Workflow }>>
   );
 }
 
+function isOptionalTimingUpload(step: WorkflowStep): boolean {
+  const artifactName = step.with?.name;
+  return (
+    step.name === 'Upload test timings' &&
+    step.if === 'always()' &&
+    step['continue-on-error'] === true &&
+    step.uses?.startsWith('actions/upload-artifact@') === true &&
+    step.with?.path === '$'.concat('{{ runner.temp }}/monad-junit') &&
+    step.with?.['if-no-files-found'] === 'ignore' &&
+    typeof artifactName === 'string' &&
+    artifactName.startsWith('junit-')
+  );
+}
+
 test('every Bun dependency install restores the package cache first', async () => {
   const installs = (await workflows()).flatMap(({ file, workflow }) =>
     Object.entries(workflow.jobs ?? {}).flatMap(([job, definition]) => {
@@ -334,10 +348,8 @@ test('critical daemon and browser E2E jobs cannot be softened or omitted from th
     critical.map((job) => ({
       job,
       continueOnError: workflow.jobs?.[job]?.['continue-on-error'] ?? null,
-      // Uploading diagnostics is allowed to fail — the artifact service going down must not
-      // recolour a suite that already reported its own result.
       softenedSteps: (workflow.jobs?.[job]?.steps ?? [])
-        .filter((step) => step['continue-on-error'] !== undefined && !step.uses?.startsWith('actions/upload-artifact@'))
+        .filter((step) => step['continue-on-error'] !== undefined && !isOptionalTimingUpload(step))
         .map((step) => step.name ?? step.run ?? step.uses)
     }))
   ).toEqual(critical.map((job) => ({ job, continueOnError: null, softenedSteps: [] })));
