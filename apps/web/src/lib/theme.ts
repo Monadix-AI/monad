@@ -12,7 +12,7 @@ export function getThemePreference(): ThemePreference {
   return stored === 'dark' || stored === 'light' || stored === 'auto' ? stored : 'auto';
 }
 
-export function resolveThemePreference(preference: ThemePreference): boolean {
+function resolveThemePreference(preference: ThemePreference): boolean {
   if (preference === 'dark') return true;
   if (preference === 'light') return false;
   if (typeof window === 'undefined') return false;
