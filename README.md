@@ -78,8 +78,9 @@ irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | i
 ```
 
 The dist installer installs `monad` and `monad-update` under
-`~/.monad/bin`, and adds that directory to `PATH`. Then run `monad up` to start the daemon and
-open the Web UI.
+`~/.monad/bin`, adds that directory to `PATH`, then starts the daemon and opens the Web UI in an
+interactive terminal. Automated and quiet installs only install the binaries; run `monad up`
+afterwards when you are ready to start Monad.
 
 ### Manual installation
 

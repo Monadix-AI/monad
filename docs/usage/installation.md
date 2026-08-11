@@ -43,7 +43,9 @@ On Windows PowerShell 5.1 or later:
 irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-Run `monad up` afterwards to start the daemon and open the Web UI.
+In an interactive terminal, a successful install starts the daemon and opens the Web UI automatically.
+Automated, JSON, and quiet installs only install the binaries; run `monad up` afterwards when you are
+ready to start Monad.
 
 The interactive installer shows download size, speed, and ETA when terminal width permits. For
 automation, set `MONAD_OUTPUT=json` to emit newline-delimited stage and summary events instead of

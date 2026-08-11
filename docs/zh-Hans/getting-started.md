@@ -20,8 +20,8 @@ flowchart LR
 ## 1. 安装 Monad
 
 使用[根 README](https://github.com/Monadix-AI/monad/blob/main/README.zh-CN.md#快速开始) 中的一种安装方式。
-macOS 和 Linux 安装器会直接启动守护进程并打开 Web UI；全新安装会进入初始化流程。Windows 安装
-完成后运行 `monad up`，效果相同。
+在交互式终端中，macOS、Linux 和 Windows 安装器都会自动启动守护进程并打开 Web UI；全新安装会进入
+初始化流程。自动化或静默安装完成后运行 `monad up`，效果相同。
 
 ```mermaid
 flowchart LR
