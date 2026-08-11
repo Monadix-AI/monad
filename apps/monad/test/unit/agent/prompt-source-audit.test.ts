@@ -7,11 +7,17 @@ import { renderAgentCredentialManifest, renderAgentSystemPrompt } from '#/agent/
 const rootUrl = new URL('../../../', import.meta.url);
 const root = fileURLToPath(rootUrl);
 
+/** Reads every match at once. Awaiting inside the scan loop serializes ~600 reads, which is
+ *  imperceptible on Linux and takes over 15 seconds on Windows. */
+async function readAll(pattern: string): Promise<Map<string, string>> {
+  const paths: string[] = [];
+  for await (const path of new Bun.Glob(pattern).scan({ cwd: root })) paths.push(path);
+  const sources = await Promise.all(paths.map((path) => Bun.file(new URL(path, rootUrl)).text()));
+  return new Map(paths.map((path, index) => [path, sources[index] as string]));
+}
+
 test('production sources keep behavioral prompts in referenced .prompt.md assets', async () => {
-  const tsSources = new Map<string, string>();
-  for await (const path of new Bun.Glob('src/**/*.ts').scan({ cwd: root })) {
-    tsSources.set(path, await Bun.file(new URL(path, rootUrl)).text());
-  }
+  const [tsSources, promptSources] = await Promise.all([readAll('src/**/*.ts'), readAll('src/**/*.prompt.md')]);
   const allSource = [...tsSources.values()].join('\n');
   const violations: string[] = [];
   const inlineBehavior =
@@ -23,16 +29,13 @@ test('production sources keep behavioral prompts in referenced .prompt.md assets
     if (/await\s+Bun\.file\([^)]*(?:Prompt|PROMPT)/.test(source)) violations.push(`${path}:raw-prompt-file`);
   }
 
-  let promptCount = 0;
-  for await (const path of new Bun.Glob('src/**/*.prompt.md').scan({ cwd: root })) {
-    promptCount++;
-    const source = await Bun.file(new URL(path, rootUrl)).text();
+  for (const [path, source] of promptSources) {
     if (!source.trim()) violations.push(`${path}:empty`);
     if (/\{\{[A-Z][A-Z0-9_]*\}\}/.test(source)) violations.push(`${path}:legacy-slot`);
     if (!allSource.includes(basename(path))) violations.push(`${path}:unreferenced`);
   }
 
-  expect(promptCount).toBeGreaterThan(0);
+  expect(promptSources.size).toBeGreaterThan(0);
   expect(violations).toEqual([]);
 }, 15_000);
 
