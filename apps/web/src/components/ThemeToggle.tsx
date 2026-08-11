@@ -1,51 +1,98 @@
-import type { MouseEvent } from 'react';
-
-import { Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';
+import { ComputerIcon, Moon02Icon, Sun03Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
-import { useEffect, useState } from 'react';
+import {
+  Button,
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger
+} from '@monad/ui';
+import { useEffect, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
-import {
-  applyThemePreference,
-  getThemePreference,
-  resolveThemePreference,
-  transitionThemePreference
-} from '#/lib/theme';
+import { applyThemePreference, getThemePreference, type ThemePreference, transitionThemePreference } from '#/lib/theme';
+
+const THEME_OPTIONS = [
+  { icon: ComputerIcon, label: 'web.settings.experience.theme.auto', value: 'auto' },
+  { icon: Moon02Icon, label: 'web.settings.experience.theme.dark', value: 'dark' },
+  { icon: Sun03Icon, label: 'web.settings.experience.theme.light', value: 'light' }
+] as const satisfies ReadonlyArray<{
+  icon: typeof ComputerIcon;
+  label:
+    | 'web.settings.experience.theme.auto'
+    | 'web.settings.experience.theme.dark'
+    | 'web.settings.experience.theme.light';
+  value: ThemePreference;
+}>;
 
 export function ThemeToggle() {
   const t = useT();
-  const [dark, setDark] = useState(false);
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  const [preference, setPreference] = useState<ThemePreference>('auto');
 
   useEffect(() => {
-    const preference = getThemePreference();
-    setDark(applyThemePreference(preference));
-    if (preference !== 'auto') return;
-    const media = window.matchMedia('(prefers-color-scheme: dark)');
-    const sync = () => setDark(applyThemePreference('auto'));
-    media.addEventListener('change', sync);
-    return () => media.removeEventListener('change', sync);
+    const storedPreference = getThemePreference();
+    setPreference(storedPreference);
+    applyThemePreference(storedPreference);
   }, []);
 
-  const toggle = (event: MouseEvent<HTMLButtonElement>) => {
-    const nextPreference = resolveThemePreference(getThemePreference()) ? 'light' : 'dark';
-    void transitionThemePreference(nextPreference, event.currentTarget).then(setDark);
+  useEffect(() => {
+    if (preference !== 'auto') return;
+    const media = window.matchMedia('(prefers-color-scheme: dark)');
+    const sync = () => applyThemePreference('auto');
+    media.addEventListener('change', sync);
+    return () => media.removeEventListener('change', sync);
+  }, [preference]);
+
+  const currentOption = THEME_OPTIONS.find((option) => option.value === preference) ?? THEME_OPTIONS[0];
+
+  const selectTheme = (value: string) => {
+    if (value !== 'auto' && value !== 'dark' && value !== 'light') return;
+    setPreference(value);
+    void transitionThemePreference(value, triggerRef.current);
   };
 
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          aria-label={t('web.theme.toggle')}
-          className="size-7"
-          onClick={toggle}
-          size="icon"
-          variant="ghost"
+    <DropdownMenu>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <DropdownMenuTrigger asChild>
+            <Button
+              aria-label={t('web.theme.toggle')}
+              className="size-7"
+              ref={triggerRef}
+              size="icon"
+              variant="ghost"
+            >
+              <HugeiconsIcon icon={currentOption.icon} />
+            </Button>
+          </DropdownMenuTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{t(currentOption.label)}</TooltipContent>
+      </Tooltip>
+      <DropdownMenuContent
+        align="end"
+        side="top"
+      >
+        <DropdownMenuRadioGroup
+          onValueChange={selectTheme}
+          value={preference}
         >
-          {dark ? <HugeiconsIcon icon={Sun03Icon} /> : <HugeiconsIcon icon={Moon02Icon} />}
-        </Button>
-      </TooltipTrigger>
-      <TooltipContent>{dark ? t('web.theme.light') : t('web.theme.dark')}</TooltipContent>
-    </Tooltip>
+          {THEME_OPTIONS.map((option) => (
+            <DropdownMenuRadioItem
+              key={option.value}
+              value={option.value}
+            >
+              <HugeiconsIcon icon={option.icon} />
+              {t(option.label)}
+            </DropdownMenuRadioItem>
+          ))}
+        </DropdownMenuRadioGroup>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
