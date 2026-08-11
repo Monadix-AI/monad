@@ -1,9 +1,8 @@
 import type { CSSProperties, ReactElement, ReactNode } from 'react';
-import type { AgentAvatarIcon } from './AgentAvatar';
 
 import { createElement } from 'react';
 
-import { AgentIdentity, AgentInstanceAvatar, TagChip } from './AgentAvatar';
+import { AgentIdentity, AgentInstanceAvatar } from './AgentAvatar';
 
 export function agentProviderTag(provider: string | undefined): string {
   if (provider === 'codex') return 'Codex';
@@ -20,7 +19,6 @@ export interface MemberIdentityProps {
   agent: {
     av?: string;
     avatarUrl?: string;
-    icon?: AgentAvatarIcon;
     name: string;
   };
   avatarSize?: number;
@@ -29,7 +27,6 @@ export interface MemberIdentityProps {
   bordered?: boolean;
   className?: string;
   nameStyle?: CSSProperties;
-  tag?: string;
 }
 
 export function MemberIdentity({
@@ -39,8 +36,7 @@ export function MemberIdentity({
   badgeGap,
   bordered = false,
   className,
-  nameStyle,
-  tag
+  nameStyle
 }: MemberIdentityProps): ReactElement {
   return createElement(
     'span',
@@ -50,9 +46,8 @@ export function MemberIdentity({
     },
     createElement(AgentInstanceAvatar, { agent, bordered, size: avatarSize }),
     createElement(AgentIdentity, {
-      badge: badge ?? (!agent.icon && tag ? createElement(TagChip, { tag }) : undefined),
+      badge,
       badgeGap,
-      icon: agent.icon,
       name: agent.name,
       nameStyle
     })

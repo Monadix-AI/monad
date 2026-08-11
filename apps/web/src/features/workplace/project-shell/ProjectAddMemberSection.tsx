@@ -4,7 +4,7 @@ import { PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { meshAgentProductDisplayName } from '@monad/protocol';
 import { Button } from '@monad/ui';
-import { AgentInstanceAvatar, workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
 import { BrandIcon } from '#/components/BrandIcon';
@@ -118,13 +118,7 @@ function ProviderRow({
           className="size-7"
           icon={group.providerIcon}
         />
-      ) : (
-        <AgentInstanceAvatar
-          agent={{ name: group.label }}
-          bare
-          size={34}
-        />
-      )}
+      ) : null}
       <div style={{ minWidth: 0 }}>
         <div
           style={{
@@ -325,11 +319,12 @@ export function ProjectAddMemberSection({
                   }}
                   title={candidate.enabled ? undefined : t('web.workplace.enableAgentFirst')}
                 >
-                  <AgentInstanceAvatar
-                    agent={{ icon: candidate.icon, name: candidate.label }}
-                    bare
-                    size={32}
-                  />
+                  {candidate.providerIcon ? (
+                    <BrandIcon
+                      className="size-8"
+                      icon={candidate.providerIcon}
+                    />
+                  ) : null}
                   <span style={{ minWidth: 0, flex: 1 }}>
                     <span
                       style={{

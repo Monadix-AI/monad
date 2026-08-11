@@ -19,7 +19,6 @@ import {
   AgentInstanceAvatar,
   workspaceMono as mono,
   agentPresenceColor as presenceColor,
-  resolveProductIcon,
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
@@ -434,7 +433,6 @@ export function MeshAgentObservationPanel({
             <AgentIdentity
               badge={identity?.providerIcon ? <AgentProviderBadge icon={identity.providerIcon} /> : undefined}
               badgeGap={7}
-              icon={identity?.providerIcon ? undefined : resolveProductIcon(displayAgent)}
               name={displayAgent.name}
               nameStyle={{
                 overflow: 'hidden',

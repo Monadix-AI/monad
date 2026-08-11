@@ -183,36 +183,19 @@ export function MiniTag({ tag }: { tag: string }): React.ReactElement {
   );
 }
 
-export function resolveProductIcon(agent: { icon?: string; tag?: string; name: string }): ProductIconId | undefined {
-  if (isProductIconId(agent.icon)) return agent.icon;
-  const haystack = `${agent.tag ?? ''} ${agent.name}`.toLowerCase();
-  if (haystack.includes('codex')) return 'codex';
-  if (haystack.includes('claude')) return 'claude-code';
-  if (haystack.includes('gemini')) return 'gemini';
-  if (haystack.includes('qwen')) return 'qwen';
-  return undefined;
-}
-
 export function AgentIdentity({
   name,
   badge,
   badgeGap = 8,
   className,
-  icon,
-  iconSize = 14,
   nameStyle
 }: {
   name: string;
   badge?: ReactNode;
   badgeGap?: number;
   className?: string;
-  icon?: AgentAvatarIcon;
-  iconSize?: number | string;
   nameStyle?: CSSProperties;
 }): React.ReactElement {
-  const trailing =
-    badge ??
-    (icon && isProductIconId(icon) ? createElement(ProductIcon, { product: icon, size: iconSize }) : undefined);
   return createElement(
     'span',
     { className, style: { display: 'inline-flex', alignItems: 'center', minWidth: 0 } },
@@ -230,11 +213,11 @@ export function AgentIdentity({
       },
       name
     ),
-    trailing
+    badge
       ? createElement(
           'span',
           { style: { flex: 'none', marginLeft: badgeGap, display: 'inline-flex', alignItems: 'center' } },
-          trailing
+          badge
         )
       : null
   );
