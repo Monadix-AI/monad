@@ -23,13 +23,16 @@ test('staging publishes install and update assets but excludes dist intermediate
     'monad-aarch64-apple-darwin-update',
     'monad-aarch64-apple-darwin.tar.gz',
     'monad-aarch64-apple-darwin.tar.gz.sha256',
-    'monad-installer.ps1',
-    'monad-installer.sh',
+    'monad-aarch64-pc-windows-msvc-update',
+    'monad-aarch64-pc-windows-msvc.zip',
+    'monad-aarch64-pc-windows-msvc.zip.sha256',
     'monad-power-pack.atom-pack.zip',
     'monad-power-pack.atom-pack.zip.sha256'
   ];
   const internalNames = [
     'aarch64-apple-darwin-dist-manifest.json',
+    'monad-installer.ps1',
+    'monad-installer.sh',
     'sha256.sum',
     'source.tar.gz',
     'source.tar.gz.sha256'
@@ -50,8 +53,6 @@ test('staging fails closed when an updater has no matching archive', async () =>
     'install.ps1',
     'install.sh',
     'monad-aarch64-apple-darwin-update',
-    'monad-installer.ps1',
-    'monad-installer.sh',
     'monad-power-pack.atom-pack.zip',
     'monad-power-pack.atom-pack.zip.sha256'
   ];

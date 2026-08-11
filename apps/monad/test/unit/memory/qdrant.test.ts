@@ -41,11 +41,13 @@ test('resolves official qdrant release asset names by platform and architecture'
     resolveQdrantReleaseAssetName('darwin', 'x64'),
     resolveQdrantReleaseAssetName('linux', 'x64'),
     resolveQdrantReleaseAssetName('win32', 'x64'),
+    resolveQdrantReleaseAssetName('win32', 'arm64'),
     resolveQdrantReleaseAssetName('linux', 'arm64')
   ]).toEqual([
     'qdrant-aarch64-apple-darwin.tar.gz',
     'qdrant-x86_64-apple-darwin.tar.gz',
     'qdrant-x86_64-unknown-linux-gnu.tar.gz',
+    'qdrant-x86_64-pc-windows-msvc.zip',
     'qdrant-x86_64-pc-windows-msvc.zip',
     null
   ]);

@@ -15,7 +15,7 @@ Monad 为以下平台发布自包含版本：
 |---|---|
 | macOS | Apple Silicon（`arm64`）和 Intel（`x64`） |
 | Linux | `arm64` 和 `x64`，包含 glibc 与 musl 变体 |
-| Windows | 64 位 Windows 10 1803 或更高版本；Windows on ARM 使用 `windows-x64` 模拟 |
+| Windows | 面向 64 位 Windows 10 1803 或更高版本的原生 `arm64` 和 `x64` 构建 |
 
 你需要能通过 HTTPS 访问所选模型服务商。Monad 不内置本地推理引擎。
 
