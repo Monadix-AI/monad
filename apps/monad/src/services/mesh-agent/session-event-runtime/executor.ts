@@ -395,9 +395,16 @@ export class SessionEventRuntimeExecutor {
 
   private ensureResidentActive(): Promise<void> {
     if (this.activation) return Promise.resolve();
-    this.residentActivationPromise ??= this.activateResident().finally(() => {
-      this.residentActivationPromise = undefined;
-    });
+    if (!this.residentActivationPromise) {
+      const activation = this.activateResident().finally(() => {
+        if (this.residentActivationPromise === activation) this.residentActivationPromise = undefined;
+      });
+      // Clearing the field above runs before anything can join it, so a failed activation that
+      // nobody is awaiting — a stop that killed the child mid-attach, on Windows the common case —
+      // would otherwise surface as an unhandled rejection and take the process down.
+      activation.catch(() => {});
+      this.residentActivationPromise = activation;
+    }
     return this.residentActivationPromise;
   }
 
