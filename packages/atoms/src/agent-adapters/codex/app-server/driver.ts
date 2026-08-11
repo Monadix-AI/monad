@@ -312,7 +312,18 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
       this.pendingRequests.set(id, { method, resolve, reject });
       this.handle.pendingRequests?.set(id, kind);
     });
-    return Promise.all([this.send(jsonRpcRequest(method, id, params)), response]).then(([, result]) => result);
+    // A write that fails settles the caller through Promise.all, which then stops observing
+    // `response`. Leaving the entry parked means the next rejectPending — disposal, or another
+    // failed write — rejects a promise nobody awaits any more, and that stray rejection is fatal.
+    // Windows reaches this order routinely: the child dies the instant it is killed, so a stop
+    // mid-attach fails the write while its response is still parked.
+    response.catch(() => {});
+    const written = this.send(jsonRpcRequest(method, id, params)).catch((error: unknown) => {
+      this.pendingRequests.delete(id);
+      this.handle.pendingRequests?.delete(id);
+      throw error;
+    });
+    return Promise.all([written, response]).then(([, result]) => result);
   }
 
   private async requireThreadId(): Promise<string> {
