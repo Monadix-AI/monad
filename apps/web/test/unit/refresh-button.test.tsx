@@ -37,7 +37,6 @@ test('refresh button disables while loading and preserves its variant', () => {
 test('icon-only refresh keeps its label as the accessible name', () => {
   const action = RefreshButtonView({
     'aria-label': 'Reload catalog',
-    className: 'size-5',
     disabled: true,
     iconOnly: true,
     label: 'Refresh',

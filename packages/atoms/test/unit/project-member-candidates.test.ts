@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { projectMemberCandidates } from '../../src/workplace-experiences/experience/project-projection.ts';
+import { createWorkplaceExperienceAgentIdentityResolver } from '../../src/workplace-experiences/experience/use-workspace-project-projection.ts';
 
 test('project member candidates expose one configurable candidate per MeshAgent provider', () => {
   const candidates = projectMemberCandidates({
@@ -48,6 +49,47 @@ test('project member candidates expose one configurable candidate per MeshAgent 
       providerIcon: { title: 'Adapter Codex', path: 'M2 2h20v20H2z' }
     })
   );
+});
+
+test('the experience host resolves a session member name with its provider adapter icon', () => {
+  const providerIcon = { title: 'Adapter Codex', path: 'M2 2h20v20H2z' };
+  const candidates = projectMemberCandidates({
+    acpAgents: [],
+    projectMembers: [],
+    meshAgents: [
+      {
+        name: 'codex',
+        provider: 'codex',
+        productIcon: 'codex',
+        icon: providerIcon,
+        enabled: true,
+        allowAutopilot: false,
+        source: 'configured-mesh-agent'
+      }
+    ]
+  });
+  const resolveIdentity = createWorkplaceExperienceAgentIdentityResolver(
+    [
+      {
+        id: 'pmem_reviewer',
+        av: 'RV',
+        kind: 'agent',
+        metadata: { agent: 'codex' },
+        name: 'Reviewer',
+        presence: 'online',
+        tag: 'Codex'
+      }
+    ],
+    candidates
+  );
+
+  expect(resolveIdentity({ id: 'pmem_reviewer' })).toEqual({
+    id: 'pmem_reviewer',
+    av: 'RV',
+    name: 'Reviewer',
+    providerIcon,
+    tag: 'Codex'
+  });
 });
 
 test('discovered provider agents keep raw display names and provider identity', () => {

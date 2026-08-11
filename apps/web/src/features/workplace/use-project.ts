@@ -219,7 +219,8 @@ export function useProject(
     projectParticipants,
     projectMembers,
     experienceProjectMembers,
-    projects
+    projects,
+    resolveAgentIdentity
   } = projection;
   const showDevSystemMessagesInStream = useProjectDebugStore((state) => state.showDevSystemMessagesInStream);
   const chatExperienceReady = isChatExperienceReady({
@@ -271,6 +272,7 @@ export function useProject(
       participants,
       projectParticipants,
       projectMembers,
+      resolveAgentIdentity,
       sessionMembers,
       membersLoading,
       membersRefreshing,
@@ -299,6 +301,7 @@ export function useProject(
         meshAgentDisplayNames,
         meshAgentIcons,
         channelIcons,
+        resolveAgentIdentity,
         showDeveloperOnlyMessages: DEV_SYSTEM_MESSAGES_IN_STREAM_ENABLED && showDevSystemMessagesInStream
       },
       workdir: { path: currentProject?.cwd },
@@ -360,6 +363,7 @@ export function useProject(
       meshAgentDisplayNames,
       meshAgentIcons,
       channelIcons,
+      resolveAgentIdentity,
       showDevSystemMessagesInStream,
       currentProject?.cwd,
       sendDirective,

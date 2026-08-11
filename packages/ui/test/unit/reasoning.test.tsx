@@ -18,9 +18,19 @@ function renderReasoning(isStreaming: boolean): string {
 test('streaming reasoning uses a solving orb as its live status indicator', () => {
   const markup = renderReasoning(true);
 
-  expect(markup.match(/<canvas/g) ?? []).toHaveLength(1);
-  expect(markup).toContain('aria-hidden="true"');
-  expect(markup).toContain('Thinking...');
+  expect({
+    hidden: markup.includes('aria-hidden="true"'),
+    label: /<canvas[^>]+aria-label="([^"]+)"/.exec(markup)?.[1],
+    orbCount: markup.match(/<canvas/g)?.length ?? 0,
+    state: /<canvas[^>]+data-orb-state="([^"]+)"/.exec(markup)?.[1],
+    text: markup.includes('Thinking...')
+  }).toEqual({
+    hidden: true,
+    label: 'Solving…',
+    orbCount: 1,
+    state: 'solving',
+    text: true
+  });
 });
 
 test('completed reasoning returns to the static status icon', () => {

@@ -20,8 +20,8 @@ import {
   DropdownMenuTrigger
 } from '@monad/ui';
 import { AgentIdentity, AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
-import { ProductIcon } from '@monad/ui/components/ProductIcon';
 
+import { BrandIcon } from '#/components/BrandIcon';
 import { useT } from '#/components/I18nProvider';
 import { HoverCard, HoverCardContent, HoverCardTrigger } from '#/components/ui/hover-card';
 import { PanelShellBreadcrumbHeader } from '#/components/ui/panel-shell';
@@ -32,7 +32,6 @@ import { fileManagerLabel, terminalLabel, workdirLabel } from './project-header-
 function SessionMemberRoster({ room }: { room: ProjectController }): React.ReactElement {
   const t = useT();
   const countLabel = t('web.workplace.sessionMemberCount', { count: room.sessionMembers.length });
-  const participantsById = new Map(room.projectParticipants.map((participant) => [participant.id, participant]));
 
   return (
     <HoverCard
@@ -71,12 +70,8 @@ function SessionMemberRoster({ room }: { room: ProjectController }): React.React
             className="m-0 max-h-72 list-none overflow-y-auto overscroll-contain p-1.5"
           >
             {room.sessionMembers.map(({ member }) => {
-              const participant = participantsById.get(member.id);
-              const name = participant?.name ?? member.displayName;
-              const icon =
-                participant?.icon ??
-                room.source.meshAgentIcons.get(member.id) ??
-                room.source.meshAgentIcons.get(member.profileId);
+              const identity = room.resolveAgentIdentity({ id: member.id, name: member.profileId });
+              const name = identity?.name ?? member.displayName;
               return (
                 <li
                   className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5 rounded-md px-2 py-2"
@@ -84,8 +79,8 @@ function SessionMemberRoster({ room }: { room: ProjectController }): React.React
                 >
                   <AgentInstanceAvatar
                     agent={{
-                      av: participant?.av,
-                      avatarUrl: participant?.avatarUrl,
+                      av: identity?.av,
+                      avatarUrl: identity?.avatarUrl,
                       name
                     }}
                     bare
@@ -93,12 +88,18 @@ function SessionMemberRoster({ room }: { room: ProjectController }): React.React
                   />
                   <AgentIdentity
                     badge={
-                      icon ? (
-                        <ProductIcon
-                          background="none"
-                          product={icon}
-                          size={13}
-                        />
+                      identity?.providerIcon ? (
+                        <span
+                          aria-label={identity.providerIcon.title}
+                          className="size-3.5"
+                          role="img"
+                          title={identity.providerIcon.title}
+                        >
+                          <BrandIcon
+                            className="size-full"
+                            icon={identity.providerIcon}
+                          />
+                        </span>
                       ) : undefined
                     }
                     className="min-w-0"

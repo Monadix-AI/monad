@@ -43,7 +43,7 @@ export function FaviconLink({ children, className, href, ...props }: ComponentPr
     <a
       {...props}
       className={cn(
-        'inline-flex max-w-full cursor-pointer items-baseline gap-1 align-baseline leading-[inherit]',
+        'inline-flex max-w-full cursor-pointer items-baseline gap-1 align-baseline leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2',
         className
       )}
       data-inline-link="web"
@@ -99,7 +99,7 @@ export const faviconMarkdownComponents: Components = {
     title === 'monad:file' ? (
       <a
         className={cn(
-          'inline-flex max-w-full cursor-pointer items-baseline gap-1 align-baseline leading-[inherit]',
+          'inline-flex max-w-full cursor-pointer items-baseline gap-1 align-baseline leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2',
           className
         )}
         data-inline-link="file"

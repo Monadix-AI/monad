@@ -522,6 +522,58 @@ for (const kind of TRANSPORTS) {
       }
     });
 
+    test('PDF attachments stream inline for the web preview without widening inline access', async () => {
+      const handlers = buildHandlers(mockModel());
+      t = serveTransport(kind, createHttpTransport(handlers));
+      const sessionId = await createSession(t);
+      const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-pdf-attachment-')));
+      createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
+      try {
+        const pdfBody = '%PDF-1.7\n1 0 obj<</Type/Catalog>>endobj\n%%EOF';
+        const pdfPath = join(dir, 'evidence.pdf');
+        const textPath = join(dir, 'notes.txt');
+        await writeFile(pdfPath, pdfBody);
+        await writeFile(textPath, 'notes');
+        const posted = await t.fetch(
+          '/v1/internal/native-agent/project/post',
+          projectPostJson(
+            {
+              sessionId,
+              attachments: [
+                { path: pdfPath, mime: 'application/pdf' },
+                { path: textPath, mime: 'text/plain' }
+              ]
+            },
+            bindingHeaders(sessionId)
+          )
+        );
+        expect(posted.status).toBe(200);
+        const body = (await posted.json()) as { message: { attachments?: Array<{ id: string }> } };
+        const [pdfAttachment, textAttachment] = body.message.attachments ?? [];
+        if (!pdfAttachment || !textAttachment) throw new Error('expected PDF and text attachment refs');
+
+        const inline = await t.fetch(`/v1/attachments/${pdfAttachment.id}?inline=1`);
+        expect({
+          body: await inline.text(),
+          cacheControl: inline.headers.get('cache-control'),
+          contentDisposition: inline.headers.get('content-disposition'),
+          contentType: inline.headers.get('content-type'),
+          nosniff: inline.headers.get('x-content-type-options'),
+          status: inline.status
+        }).toEqual({
+          body: pdfBody,
+          cacheControl: 'private, no-store',
+          contentDisposition: expect.stringContaining('inline; filename="evidence.pdf"'),
+          contentType: 'application/pdf',
+          nosniff: 'nosniff',
+          status: 200
+        });
+        expect((await t.fetch(`/v1/attachments/${textAttachment.id}?inline=1`)).status).toBe(400);
+      } finally {
+        await rm(dir, { recursive: true, force: true });
+      }
+    });
+
     test('attachment endpoint serves registered references from outside the agent workspace', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));

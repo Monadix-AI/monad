@@ -5,7 +5,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   PointerEvent as ReactPointerEvent
 } from 'react';
-import type { MeshAgentStreamView, Participant } from '../../experience/types.ts';
+import type { MeshAgentStreamView, Message, MessageAttachment, Participant } from '../../experience/types.ts';
 import type { ObservationPanelHooks } from './observation/use-observation-panel.ts';
 
 import {
@@ -27,17 +27,19 @@ import {
   useStreamMeshAgentConvenienceQuery,
   useStreamMeshAgentRawQuery
 } from '@monad/sdk-experience/react';
-import { type OrbState, ProductIcon, ThinkingOrb, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
+import { type OrbState, ThinkingOrb, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
   agentPresenceColor as presenceColor,
-  resolveProductIcon,
   workspaceSans as sans
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { agentObservationCards } from '../../../agent-adapters/observation-cards.ts';
+import { AgentProviderBadge } from '../../components/agent-provider-badge.tsx';
+import { isMessageAttachmentRef } from '../../experience/types.ts';
+import { useOptionalWorkplaceExperienceHost } from '../../host-context.tsx';
 import { workplaceExperienceT } from '../../i18n.ts';
 import { projectSessionUiKey, useChatRoomExperienceStore } from '../store.ts';
 import {
@@ -49,6 +51,7 @@ import {
   shouldAnimateRailAgent,
   sortedProjectRailAgents
 } from '../utils/agent-rail-model.ts';
+import { uniqueImageAttachments } from '../utils/local-file-reference.ts';
 import {
   beginObservationEventLoad,
   completeObservationEventLoad,
@@ -61,6 +64,7 @@ import {
   observationEventPresentation,
   prependObservationEvents
 } from '../utils/observation-events.ts';
+import { FilePreviewContext } from './file-preview-context.tsx';
 import { FilePreviewPanel } from './file-preview-panel.tsx';
 import { DualObservationPanel } from './observation/dual-observation-panel.tsx';
 import { MeshAgentObservationPanel } from './observation/panel.tsx';
@@ -594,6 +598,7 @@ type AgentTasksRailRoom = {
   meshAgentStreams: MeshAgentStreamView[];
   projectId: string;
   activeSessionId: string | null;
+  messages: Message[];
   railAgents: Participant[];
   stopMeshAgent: (id: string) => void;
   // The experience runtime can inject the RTK hooks; otherwise the standard Mesh event hooks apply.
@@ -602,6 +607,7 @@ type AgentTasksRailRoom = {
 
 export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.ReactElement {
   const t = workplaceExperienceT();
+  const resolveAgentIdentity = useOptionalWorkplaceExperienceHost()?.resolveAgentIdentity;
   const [triggerMeshAgentEvents] = useLazyGetMeshAgentConvenienceEventsQuery();
   const [triggerMeshAgentUsage] = useLazyGetMeshAgentUsageQuery();
   const [railWidth, setRailWidth] = useState(DEFAULT_RAIL_WIDTH);
@@ -611,6 +617,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   const effectiveRailWidth = railWidth;
   const uiKey = projectSessionUiKey(room.projectId, room.activeSessionId);
   const filePreview = useChatRoomExperienceStore((state) => state.filePreviewBySession[uiKey] ?? null);
+  const openFilePreview = useChatRoomExperienceStore((state) => state.openFilePreview);
   const closeFilePreviewForSession = useChatRoomExperienceStore((state) => state.closeFilePreview);
   const observation = useChatRoomExperienceStore((state) => state.railObservationBySession[uiKey] ?? null);
   const observeProjectAgent = useChatRoomExperienceStore((state) => state.observeProjectAgent);
@@ -620,6 +627,28 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     [closeRailObservationForSession, uiKey]
   );
   const closeFilePreview = useCallback(() => closeFilePreviewForSession(uiKey), [closeFilePreviewForSession, uiKey]);
+  const previewAttachments = useMemo(
+    () =>
+      room.messages.flatMap((message) =>
+        (message.attachments ?? []).filter((attachment): attachment is MessageAttachment & { path: string } =>
+          isMessageAttachmentRef(attachment)
+        )
+      ),
+    [room.messages]
+  );
+  const previewImageGallery = useMemo(() => uniqueImageAttachments(previewAttachments), [previewAttachments]);
+  const onOpenObservationAttachment = useCallback(
+    (attachment: MessageAttachment, line?: number) => {
+      if (!isMessageAttachmentRef(attachment)) return;
+      openFilePreview(uiKey, {
+        attachment,
+        ...(attachment.mime.startsWith('image/') ? { gallery: previewImageGallery } : {}),
+        line,
+        returnTo: 'observation'
+      });
+    },
+    [openFilePreview, previewImageGallery, uiKey]
+  );
   const agents = sortedProjectRailAgents(room.railAgents);
   const memberIdentities = useMemo(() => {
     const identities = new Map<string, Participant>();
@@ -855,7 +884,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
   );
 
   const renderAgent = (agent: Participant, observationEvents?: readonly AgentObservationEvent[]) => {
-    const productIcon = resolveProductIcon(agent);
+    const identity = resolveAgentIdentity?.({ id: agent.id, name: agent.name });
     const active = isActiveRailAgent(agent, observationEvents);
     const shouldAnimate = shouldAnimateRailAgent(agent, observationEvents);
     const activityPhase = railAgentActivityPhase(agent, observationEvents);
@@ -870,10 +899,16 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           ? agent.presence
           : 'idle'
       : agent.presence;
-    const displayAgent =
+    const presenceAgent =
       observedPresence === agent.presence && activityPhase === agent.activityPhase
         ? agent
         : { ...agent, presence: observedPresence, activityPhase };
+    const displayAgent = {
+      ...presenceAgent,
+      av: identity?.av ?? presenceAgent.av,
+      avatarUrl: identity?.avatarUrl ?? presenceAgent.avatarUrl,
+      name: identity?.name ?? presenceAgent.name
+    };
     const phase = activityPhase ? agentActivityPhaseMeta(activityPhase) : undefined;
     const statusLabel =
       phase?.label ??
@@ -891,13 +926,13 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     const IdleStatusIcon = idleStatusIcon?.icon;
     const fastMode = agent.metadata?.speed === 'fast';
     const metadataRows = agentMetadataRows(agent);
-    const productBadge = productIcon ? (
+    const providerBadge = identity?.providerIcon ? (
       <Tooltip>
         <TooltipTrigger asChild>
           <span className="workplace-agent-status-product">
-            <ProductIcon
-              product={productIcon}
-              size={12}
+            <AgentProviderBadge
+              className="size-3"
+              icon={identity.providerIcon}
             />
           </span>
         </TooltipTrigger>
@@ -995,10 +1030,10 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
         </span>
         <span className="workplace-agent-status-name">
           <AgentIdentity
-            badge={productBadge}
+            badge={providerBadge}
             badgeGap={0}
             className="workplace-agent-status-title"
-            name={agent.name}
+            name={displayAgent.name}
           />
           <span
             className="workplace-agent-status-subtext"
@@ -1039,121 +1074,158 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     );
   };
 
+  const previewReturnsToObservation = Boolean(observation && filePreview?.returnTo === 'observation');
+  const observationImagePreview =
+    previewReturnsToObservation && Boolean(filePreview?.attachment.mime.startsWith('image/'));
+
   return (
-    <div
-      className="scwf-scroll workplace-agent-rail"
-      data-resizing={resizing}
-      style={{
-        width: effectiveRailWidth,
-        flex: 'none',
-        borderLeft: `1px solid ${'var(--sidebar-border)'}`,
-        background: 'var(--sidebar)',
-        minHeight: 0,
-        overflow: 'visible',
-        display: 'flex',
-        flexDirection: 'column',
-        position: 'relative'
-      }}
+    <FilePreviewContext.Provider
+      value={{ attachments: previewAttachments, onOpenAttachment: onOpenObservationAttachment }}
     >
-      <style>{agentStatusRingCss}</style>
-      <hr
-        aria-label={t('web.workplace.resizeProjectSidebar')}
-        aria-orientation="vertical"
-        aria-valuemax={MAX_RAIL_WIDTH}
-        aria-valuemin={MIN_RAIL_WIDTH}
-        aria-valuenow={effectiveRailWidth}
-        className="workplace-agent-rail-resize-handle"
-        data-preserve-cursor="true"
-        onKeyDown={onResizeKeyDown}
-        onMouseDown={onResizeMouseDown}
-        onPointerDown={onResizePointerDown}
-        tabIndex={0}
-      />
-      {filePreview ? (
-        <FilePreviewPanel
-          onBack={closeFilePreview}
-          preview={filePreview}
+      <div
+        className="scwf-scroll workplace-agent-rail"
+        data-resizing={resizing}
+        style={{
+          width: effectiveRailWidth,
+          flex: 'none',
+          borderLeft: `1px solid ${'var(--sidebar-border)'}`,
+          background: 'var(--sidebar)',
+          minHeight: 0,
+          overflow: 'visible',
+          display: 'flex',
+          flexDirection: 'column',
+          position: 'relative'
+        }}
+      >
+        <style>{agentStatusRingCss}</style>
+        <hr
+          aria-label={t('web.workplace.resizeProjectSidebar')}
+          aria-orientation="vertical"
+          aria-valuemax={MAX_RAIL_WIDTH}
+          aria-valuemin={MIN_RAIL_WIDTH}
+          aria-valuenow={effectiveRailWidth}
+          className="workplace-agent-rail-resize-handle"
+          data-preserve-cursor="true"
+          onKeyDown={onResizeKeyDown}
+          onMouseDown={onResizeMouseDown}
+          onPointerDown={onResizePointerDown}
+          tabIndex={0}
         />
-      ) : observation && observedMeshSessionId && observedTranscriptTargetId ? (
-        <DualObservationPanel
-          agent={observedAgent}
-          agentName={observedAgent?.name ?? observation.agentName ?? 'Agent'}
-          connectionSignal={observedStream?.status}
-          hooks={observationHooks}
-          icon={observedAgent?.icon ?? observedEventsStream?.icon}
-          key={observedMeshSessionId}
-          memberIdentities={memberIdentities}
-          meshSessionId={observedMeshSessionId}
-          onBack={closeRailObservation}
-          provider={observedAccessStream?.provider ?? observedStream?.provider ?? 'mesh-agent'}
-          transcriptTargetId={observedTranscriptTargetId as SessionId}
-        />
-      ) : observation ? (
-        <MeshAgentObservationPanel
-          agent={observedAgent}
-          agentName={observedAgent?.name ?? observation.agentName}
-          canLoadOlderEvents={
-            eventsPresentation.active &&
-            Boolean(eventsPages?.nextCursor) &&
-            !eventsPages?.loading &&
-            !eventsPages?.exhausted
-          }
-          eventsActive={eventsPresentation.active}
-          eventsLoadError={eventsPresentation.active && Boolean(eventsPages?.error)}
-          focusTurnId={observation.turnId}
-          icon={observedAgent?.icon ?? observedEventsStream?.icon}
-          loadingOlderEvents={eventsPresentation.active && Boolean(eventsPages?.loading)}
-          memberIdentities={memberIdentities}
-          observationLoading={observationLoading}
-          observationUnavailable={observationUnavailable}
-          onBack={closeRailObservation}
-          onLoadOlderEvents={() => loadEventPage(eventsPages?.nextCursor)}
-          onRetryOlderEvents={() => loadEventPage(eventsPages?.nextCursor)}
-          onShowEvents={showEvents}
-          showEventsButton={eventsPresentation.showButton}
-          stream={observedEventsStream}
-          usageMeter={usageMeter}
-        />
-      ) : (
-        <div
-          className="scwf-scroll"
-          style={{
-            padding: '14px',
-            display: agents.length === 0 ? 'flex' : 'grid',
-            flexDirection: agents.length === 0 ? 'column' : undefined,
-            gridTemplateColumns: agents.length === 0 ? undefined : 'repeat(auto-fit, minmax(156px, 1fr))',
-            alignContent: agents.length === 0 ? undefined : 'start',
-            gap: 10,
-            flex: 1,
-            minHeight: 0,
-            overflowY: 'auto'
-          }}
-        >
-          {agents.length === 0 ? (
+        {observation ? (
+          <>
             <div
-              style={{
-                fontFamily: sans,
-                fontSize: 13,
-                color: 'var(--sidebar-foreground)',
-                padding: '2px 0',
-                lineHeight: 1.5,
-                opacity: 0.6
-              }}
+              aria-hidden={previewReturnsToObservation ? 'true' : undefined}
+              className="flex min-h-0 flex-1 flex-col"
+              data-observation-surface="true"
+              inert={previewReturnsToObservation || undefined}
             >
-              {t('web.workplace.noStandByAgents')}
+              {observedMeshSessionId && observedTranscriptTargetId ? (
+                <DualObservationPanel
+                  agent={observedAgent}
+                  agentName={observedAgent?.name ?? observation.agentName ?? 'Agent'}
+                  connectionSignal={observedStream?.status}
+                  hooks={observationHooks}
+                  icon={observedAgent?.icon ?? observedEventsStream?.icon}
+                  key={observedMeshSessionId}
+                  memberIdentities={memberIdentities}
+                  meshSessionId={observedMeshSessionId}
+                  onBack={closeRailObservation}
+                  provider={observedAccessStream?.provider ?? observedStream?.provider ?? 'mesh-agent'}
+                  transcriptTargetId={observedTranscriptTargetId as SessionId}
+                />
+              ) : (
+                <MeshAgentObservationPanel
+                  agent={observedAgent}
+                  agentName={observedAgent?.name ?? observation.agentName}
+                  canLoadOlderEvents={
+                    eventsPresentation.active &&
+                    Boolean(eventsPages?.nextCursor) &&
+                    !eventsPages?.loading &&
+                    !eventsPages?.exhausted
+                  }
+                  eventsActive={eventsPresentation.active}
+                  eventsLoadError={eventsPresentation.active && Boolean(eventsPages?.error)}
+                  focusTurnId={observation.turnId}
+                  icon={observedAgent?.icon ?? observedEventsStream?.icon}
+                  loadingOlderEvents={eventsPresentation.active && Boolean(eventsPages?.loading)}
+                  memberIdentities={memberIdentities}
+                  observationLoading={observationLoading}
+                  observationUnavailable={observationUnavailable}
+                  onBack={closeRailObservation}
+                  onLoadOlderEvents={() => loadEventPage(eventsPages?.nextCursor)}
+                  onRetryOlderEvents={() => loadEventPage(eventsPages?.nextCursor)}
+                  onShowEvents={showEvents}
+                  showEventsButton={eventsPresentation.showButton}
+                  stream={observedEventsStream}
+                  usageMeter={usageMeter}
+                />
+              )}
             </div>
-          ) : null}
-          {agents.map((agent) => (
-            <RailAgentActivity
-              agent={agent}
-              hooks={observationHooks}
-              key={agent.id}
-              render={renderAgent}
-              stream={agentObservationStream({ agentId: agent.id, agentName: agent.name }, room.meshAgentStreams)}
-            />
-          ))}
-        </div>
-      )}
-    </div>
+            {previewReturnsToObservation && filePreview ? (
+              observationImagePreview ? (
+                <FilePreviewPanel
+                  onBack={closeFilePreview}
+                  preview={filePreview}
+                />
+              ) : (
+                <div
+                  className="absolute inset-0 z-10 flex min-h-0 flex-col bg-sidebar"
+                  data-file-preview-overlay="true"
+                >
+                  <FilePreviewPanel
+                    onBack={closeFilePreview}
+                    preview={filePreview}
+                  />
+                </div>
+              )
+            ) : null}
+          </>
+        ) : filePreview ? (
+          <FilePreviewPanel
+            onBack={closeFilePreview}
+            preview={filePreview}
+          />
+        ) : (
+          <div
+            className="scwf-scroll"
+            style={{
+              padding: '14px',
+              display: agents.length === 0 ? 'flex' : 'grid',
+              flexDirection: agents.length === 0 ? 'column' : undefined,
+              gridTemplateColumns: agents.length === 0 ? undefined : 'repeat(auto-fit, minmax(156px, 1fr))',
+              alignContent: agents.length === 0 ? undefined : 'start',
+              gap: 10,
+              flex: 1,
+              minHeight: 0,
+              overflowY: 'auto'
+            }}
+          >
+            {agents.length === 0 ? (
+              <div
+                style={{
+                  fontFamily: sans,
+                  fontSize: 13,
+                  color: 'var(--sidebar-foreground)',
+                  padding: '2px 0',
+                  lineHeight: 1.5,
+                  opacity: 0.6
+                }}
+              >
+                {t('web.workplace.noStandByAgents')}
+              </div>
+            ) : null}
+            {agents.map((agent) => (
+              <RailAgentActivity
+                agent={agent}
+                hooks={observationHooks}
+                key={agent.id}
+                render={renderAgent}
+                stream={agentObservationStream({ agentId: agent.id, agentName: agent.name }, room.meshAgentStreams)}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    </FilePreviewContext.Provider>
   );
 }

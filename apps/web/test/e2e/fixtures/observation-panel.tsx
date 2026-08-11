@@ -428,6 +428,7 @@ function FixtureObservationRail({
           items: []
         }
       ],
+      messages: [],
       projectId: runtime.projectId,
       railAgents: [
         {

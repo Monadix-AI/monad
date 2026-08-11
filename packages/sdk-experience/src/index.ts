@@ -3,7 +3,11 @@ import type {
   WorkplaceExperienceEntry,
   WorkplaceExperienceHostApi
 } from '@monad/protocol';
-import type { WorkplaceExperienceActions, WorkplaceExperienceSnapshot } from './runtime.ts';
+import type {
+  WorkplaceExperienceActions,
+  WorkplaceExperienceAgentIdentityResolver,
+  WorkplaceExperienceSnapshot
+} from './runtime.ts';
 
 import { WORKPLACE_EXPERIENCE_API_VERSION } from './runtime.ts';
 
@@ -11,6 +15,9 @@ export type {
   WorkplaceApprovalDecision,
   WorkplaceExperienceActions,
   WorkplaceExperienceAddMemberOptions,
+  WorkplaceExperienceAgentIdentity,
+  WorkplaceExperienceAgentIdentityReference,
+  WorkplaceExperienceAgentIdentityResolver,
   WorkplaceExperienceApiVersion,
   WorkplaceExperienceGraphActivityRow,
   WorkplaceExperienceGraphCanvas,
@@ -42,7 +49,9 @@ export { WORKPLACE_EXPERIENCE_API_VERSION };
 export type WorkplaceExperienceHostApiV1 = WorkplaceExperienceHostApi<
   WorkplaceExperienceSnapshot,
   WorkplaceExperienceActions
->;
+> & {
+  resolveAgentIdentity: WorkplaceExperienceAgentIdentityResolver;
+};
 
 export const WORKPLACE_EXPERIENCE_UPDATE_EVENT = 'monad-workplace-experience:update';
 

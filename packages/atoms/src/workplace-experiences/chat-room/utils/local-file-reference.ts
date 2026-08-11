@@ -31,6 +31,13 @@ export function normalizeLocalFileTarget(target: string): string {
   return decodePath(trimmed);
 }
 
+export function isLocalFileTarget(target: string): boolean {
+  const trimmed = target.trim();
+  return (
+    /^file:/i.test(trimmed) || /^\/(?!\/)/.test(trimmed) || /^~[\\/]/.test(trimmed) || /^[A-Za-z]:[\\/]/.test(trimmed)
+  );
+}
+
 export function resolveLocalFileReference(href: string, attachments: readonly MessageAttachment[]): LocalFileReference {
   const fragmentIndex = href.indexOf('#');
   const target = fragmentIndex === -1 ? href : href.slice(0, fragmentIndex);
@@ -45,4 +52,15 @@ export function resolveLocalFileReference(href: string, attachments: readonly Me
     ...(lineMatch ? { line: Number.parseInt(lineMatch[1] ?? '1', 10) } : {}),
     path
   };
+}
+
+export function uniqueImageAttachments(attachments: readonly MessageAttachment[]): MessageAttachmentRef[] {
+  const paths = new Set<string>();
+  return attachments.filter((attachment): attachment is MessageAttachmentRef => {
+    if (!isMessageAttachmentRef(attachment) || !attachment.mime.startsWith('image/')) return false;
+    const path = normalizeLocalFileTarget(attachment.path);
+    if (paths.has(path)) return false;
+    paths.add(path);
+    return true;
+  });
 }

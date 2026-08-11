@@ -50,9 +50,10 @@ export function BuiltinWorkplaceExperienceHost({
       voiceModelState: view.voiceModelState,
       actions,
       openStudio: (section = 'models') => pushShellUrl(studioPath(section)),
+      resolveAgentIdentity: view.resolveAgentIdentity,
       requestProjectDialog: view.onProjectDialogRequest ?? (() => {})
     }),
-    [view.voiceModelState, actions, view.onProjectDialogRequest]
+    [view.voiceModelState, actions, view.onProjectDialogRequest, view.resolveAgentIdentity]
   );
   const rendered = renderBuiltinWorkplaceExperience({ component, view: { runtime: view.runtime } });
   if (!rendered) {

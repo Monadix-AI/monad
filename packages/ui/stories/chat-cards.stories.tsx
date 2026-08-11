@@ -55,6 +55,23 @@ export const AgentMessage: Story = {
   )
 };
 
+export const MessageThemes: Story = {
+  render: () => (
+    <div className="grid gap-6 lg:grid-cols-2">
+      <section className="rounded-xl bg-background p-6 text-foreground">
+        <div className="mb-4 font-mono text-muted-foreground text-xs">Light</div>
+        <HumanMessageExample />
+        <AgentMessageExample />
+      </section>
+      <section className="dark rounded-xl bg-background p-6 text-foreground">
+        <div className="mb-4 font-mono text-muted-foreground text-xs">Dark</div>
+        <HumanMessageExample />
+        <AgentMessageExample />
+      </section>
+    </div>
+  )
+};
+
 export const SystemEvent: Story = {
   render: () => (
     <StoryCase>

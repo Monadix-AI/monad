@@ -1,9 +1,19 @@
 import type { Message } from '../../src/workplace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
-import { markdownTextWithMentionCapsules } from '../../src/workplace-experiences/chat-room/components/message-row.tsx';
-import { resolveLocalFileReference } from '../../src/workplace-experiences/chat-room/utils/local-file-reference.ts';
+import { FilePreviewContext } from '../../src/workplace-experiences/chat-room/components/file-preview-context.tsx';
+import {
+  MarkdownWithMentions,
+  markdownTextWithMentionCapsules
+} from '../../src/workplace-experiences/chat-room/components/message-row.tsx';
+import {
+  isLocalFileTarget,
+  resolveLocalFileReference,
+  uniqueImageAttachments
+} from '../../src/workplace-experiences/chat-room/utils/local-file-reference.ts';
 
 const attachment = {
   id: 'att_100000000000',
@@ -24,6 +34,16 @@ const message = (text: string, overrides: Partial<Message> = {}): Message => ({
   time: '',
   text,
   ...overrides
+});
+
+test('image preview galleries collapse repeated attachments that point to the same local path', () => {
+  expect(
+    uniqueImageAttachments([
+      { ...attachment, id: 'att_image_a', mime: 'image/png', name: 'report.png', path: '/workspace/report.png' },
+      { ...attachment, id: 'att_image_b', mime: 'image/png', name: 'report.png', path: '/workspace/report.png' },
+      { ...attachment, id: 'att_text', mime: 'text/plain' }
+    ]).map((item) => item.id)
+  ).toEqual(['att_image_a']);
 });
 
 test('agent message bubbles pass markdown source through unchanged when no strict mentions are present', () => {
@@ -50,5 +70,36 @@ test('local file references resolve absolute paths, file URLs, encoding, and lin
   expect(resolveLocalFileReference('file:///workspace/report%2Ets#not-a-line', [attachment])).toEqual({
     attachment,
     path: '/workspace/report.ts'
+  });
+});
+
+test('absolute message and observation paths stay local preview buttons instead of HTTP links', () => {
+  const markup = renderToStaticMarkup(
+    createElement(
+      FilePreviewContext.Provider,
+      { value: { attachments: [attachment], onOpenAttachment: () => {} } },
+      createElement(MarkdownWithMentions, {
+        text: 'Open [the report](/workspace/report.ts) and [the web](https://example.com).'
+      })
+    )
+  );
+
+  expect({
+    absoluteTargets: [
+      isLocalFileTarget('/workspace/report.ts'),
+      isLocalFileTarget('file:///workspace/report.ts'),
+      isLocalFileTarget('C:\\workspace\\report.ts'),
+      isLocalFileTarget('https://example.com')
+    ],
+    fileButton: /<button[^>]+data-inline-link="file"[^>]*>/.test(markup),
+    noHttpPath: !markup.includes('href="/workspace/report.ts"'),
+    webLink: markup.includes('href="https://example.com/"'),
+    hoverStyle: markup.includes('hover:decoration-dashed')
+  }).toEqual({
+    absoluteTargets: [true, true, true, false],
+    fileButton: true,
+    noHttpPath: true,
+    webLink: true,
+    hoverStyle: true
   });
 });

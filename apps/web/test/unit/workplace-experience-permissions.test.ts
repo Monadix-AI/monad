@@ -8,6 +8,7 @@ import { restrictProjectExperienceView } from '#/features/workplace/experiences/
 function hostView(calls: string[]): ProjectExperienceView {
   return {
     embedded: false,
+    resolveAgentIdentity: () => undefined,
     runtime: {
       actions: {
         addProjectMember: async () => {

@@ -35,7 +35,6 @@ const loginMessage: Message = {
 
 type ButtonElement = ReactElement<{
   'aria-label'?: string;
-  className?: string;
   onClick?: () => void;
   style?: CSSProperties;
   title?: string;

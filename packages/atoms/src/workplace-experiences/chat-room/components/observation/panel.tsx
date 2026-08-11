@@ -25,6 +25,8 @@ import {
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import { AgentProviderBadge } from '../../../components/agent-provider-badge.tsx';
+import { useOptionalWorkplaceExperienceHost } from '../../../host-context.tsx';
 import { workplaceExperienceT } from '../../../i18n.ts';
 import {
   createObservationDisclosureStore,
@@ -150,15 +152,23 @@ export function MeshAgentObservationPanel({
   usageMeter?: MeshAgentUsageLimitMeter | null;
 }): React.ReactElement {
   const t = workplaceExperienceT();
-  const displayAgent = agent ?? {
+  const resolveAgentIdentity = useOptionalWorkplaceExperienceHost()?.resolveAgentIdentity;
+  const fallbackAgent: Participant = agent ?? {
     av: (stream?.agentName ?? agentName ?? 'Agent').slice(0, 2).toUpperCase(),
+    id: stream?.id ?? stream?.agentName ?? agentName ?? 'agent',
     icon: stream?.icon ?? icon,
     kind: 'agent' as const,
     name: stream?.agentName ?? agentName ?? 'Agent',
     presence: stream?.status === 'running' ? ('working' as const) : ('online' as const),
     tag: stream?.tag ?? 'Agent'
   };
-  const productIcon = resolveProductIcon(displayAgent);
+  const identity = resolveAgentIdentity?.({ id: stream?.id, name: fallbackAgent.name });
+  const displayAgent = {
+    ...fallbackAgent,
+    av: identity?.av ?? fallbackAgent.av,
+    avatarUrl: identity?.avatarUrl ?? fallbackAgent.avatarUrl,
+    name: identity?.name ?? fallbackAgent.name
+  };
   const active = stream?.status === 'running';
   const hasItems = !observationLoading && (stream?.items.length ?? 0) > 0;
   const hasScrollableItems = content !== undefined ? contentHasItems : hasItems;
@@ -422,8 +432,9 @@ export function MeshAgentObservationPanel({
             }}
           >
             <AgentIdentity
+              badge={identity?.providerIcon ? <AgentProviderBadge icon={identity.providerIcon} /> : undefined}
               badgeGap={7}
-              icon={productIcon}
+              icon={identity?.providerIcon ? undefined : resolveProductIcon(displayAgent)}
               name={displayAgent.name}
               nameStyle={{
                 overflow: 'hidden',

@@ -10,6 +10,7 @@ export { ShellCard as ShellToolCard } from '@monad/ui';
 
 export function ShellToolHeader({ view }: { view: ShellCardView }) {
   const t = workplaceExperienceT();
+  const headerView = view.provider === 'codex' ? { ...view, title: t('web.tools.shell') } : view;
   return (
     <ShellCardHeader
       labels={{
@@ -18,7 +19,7 @@ export function ShellToolHeader({ view }: { view: ShellCardView }) {
         running: t('web.plan.statusInProgress'),
         toolCall: t('web.workplace.shell.toolCall')
       }}
-      view={view}
+      view={headerView}
     />
   );
 }

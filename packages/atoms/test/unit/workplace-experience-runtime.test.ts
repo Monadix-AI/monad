@@ -45,6 +45,7 @@ function runtimeSource(overrides: RuntimeSourceOverrides = {}): ProjectExperienc
       meshAgentAvatarSeeds: new Map(),
       meshAgentTags: new Map(),
       meshAgentDisplayNames: new Map(),
+      resolveAgentIdentity: () => undefined,
       showDeveloperOnlyMessages: false
     },
     modelProfiles: [],

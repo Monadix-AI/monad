@@ -10,6 +10,7 @@ import { realpath, stat } from 'node:fs/promises';
 import { basename, isAbsolute, resolve } from 'node:path';
 import {
   attachmentPreviewText,
+  isPdfAttachmentMime,
   isPreviewableAttachmentMime,
   NATIVE_AGENT_ATTACHMENT_PREVIEW_MAX,
   NATIVE_AGENT_ATTACHMENTS_MAX,
@@ -33,9 +34,9 @@ function attachmentNoticeText(text: string, refs: readonly MessageAttachmentRef[
   return [text, markers.join('\n')].filter(Boolean).join('\n\n');
 }
 
-function attachmentContentDisposition(name: string): string {
+function attachmentContentDisposition(name: string, disposition: 'attachment' | 'inline' = 'attachment'): string {
   const asciiFallback = name.replace(/[^\x20-\x7e]+/g, '_').replace(/["\\]/g, '_');
-  return `attachment; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(name)}`;
+  return `${disposition}; filename="${asciiFallback}"; filename*=UTF-8''${encodeURIComponent(name)}`;
 }
 
 async function snapshotAttachmentInput(
@@ -142,13 +143,29 @@ export function createNativeAgentAttachmentReader(store: ReturnType<typeof creat
   }
 
   return {
-    async read(id: string, download: boolean): Promise<Response | AttachmentReadResponse> {
+    async read(
+      id: string,
+      options: { download: boolean; inline: boolean }
+    ): Promise<Response | AttachmentReadResponse> {
       const attachment = store.getMessageAttachment(id);
       if (!attachment) throw new HandlerError('not_found', `attachment not found: ${id}`);
       const { sessionId: _sessionId, preview: _preview, createdBy: _createdBy, ...ref } = attachment;
       const path = await currentAttachmentPath(attachment);
       const file = Bun.file(path);
-      if (download) {
+      if (options.inline) {
+        if (!isPdfAttachmentMime(attachment.mime)) {
+          throw new HandlerError('invalid', `inline preview is not supported for attachment: ${id}`);
+        }
+        return new Response(file, {
+          headers: {
+            'cache-control': 'private, no-store',
+            'content-disposition': attachmentContentDisposition(attachment.name, 'inline'),
+            'content-type': 'application/pdf',
+            'x-content-type-options': 'nosniff'
+          }
+        });
+      }
+      if (options.download) {
         return new Response(file, {
           headers: {
             'content-type': attachment.mime,

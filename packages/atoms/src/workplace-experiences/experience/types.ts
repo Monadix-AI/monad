@@ -1,5 +1,6 @@
 import type {
   ApprovalScope,
+  ChannelIcon,
   MessageAttachmentRef,
   MessageOrigin,
   NativeAgentDeliveryId,
@@ -24,6 +25,7 @@ export interface Participant {
   id: string;
   av: string;
   icon?: WorkplaceExperienceIcon;
+  providerIcon?: ChannelIcon;
   avatarUrl?: string;
   name: string;
   kind: ParticipantKind;

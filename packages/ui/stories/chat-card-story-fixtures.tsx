@@ -121,7 +121,7 @@ export function AttachmentExample({ state = 'previewable' }: { state?: Attachmen
       onPreview={() => {}}
       path="/workspace/verification.log"
       previewable={state === 'previewable'}
-      previewLabel="Preview"
+      previewLabel="View"
       sizeLabel="2.4 KB"
     />
   );

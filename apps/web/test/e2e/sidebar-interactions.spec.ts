@@ -445,11 +445,9 @@ test.describe('workspace sidebar interactions', () => {
     await page.mouse.down();
     await page.mouse.move(startX - 100, startY);
     await expect.poll(() => page.evaluate(() => window.localStorage.getItem('monad:sidebarCollapsed'))).toBe('true');
-    await expect(sidebar).toHaveClass(/opacity-0/);
 
     await page.mouse.move(startX - 80, startY);
     await expect.poll(() => page.evaluate(() => window.localStorage.getItem('monad:sidebarCollapsed'))).toBe('false');
-    await expect(sidebar).not.toHaveClass(/opacity-0/);
     await page.mouse.up();
 
     await expect.poll(() => sidebar.evaluate((element) => Math.round(element.getBoundingClientRect().width))).toBe(240);

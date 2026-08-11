@@ -57,6 +57,7 @@ export interface ObservationMetaProps {
   className?: string;
   compact?: boolean;
   label?: string;
+  preserveTitle?: boolean;
   quiet?: boolean;
   showSource?: boolean;
   source: string;
@@ -69,6 +70,7 @@ export function ObservationMeta({
   className,
   compact = false,
   label,
+  preserveTitle = false,
   quiet = false,
   showSource = false,
   source,
@@ -106,7 +108,10 @@ export function ObservationMeta({
         <span
           className={cn(
             'font-semibold text-foreground normal-case',
-            quiet && 'min-w-0 shrink font-normal text-muted-foreground'
+            quiet &&
+              (preserveTitle
+                ? 'shrink-0 whitespace-nowrap font-normal text-muted-foreground'
+                : 'min-w-0 shrink truncate whitespace-nowrap font-normal text-muted-foreground')
           )}
           data-slot="observation-meta-title"
         >

@@ -5,13 +5,16 @@ import type { CSSProperties } from 'react';
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from 'shiki';
 import type { ChatRoomFilePreview } from '../store.ts';
 
-import { ArrowLeft01Icon, Download04Icon } from '@hugeicons/core-free-icons';
+import { ArrowLeft01Icon, CollapseIcon, Download04Icon, ExpandIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { isPreviewableAttachmentMime } from '@monad/protocol';
+import { isPdfAttachmentMime, isPreviewableAttachmentMime } from '@monad/protocol';
 import { useDownloadAttachmentMutation, useGetAttachmentQuery } from '@monad/sdk-experience/react';
+import { Button, ImageGalleryDialog } from '@monad/ui';
 import { FileIcon } from '@monad/ui/components/FileIcon';
+import { Markdown } from '@monad/ui/components/Markdown';
 import { SHIKI_THEME_NAMES, SHIKI_THEMES } from '@monad/ui/lib/shiki';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { createHighlighter } from 'shiki';
 
 import { workplaceExperienceT } from '../../i18n.ts';
@@ -48,6 +51,7 @@ const EXTENSION_LANGUAGES: Record<string, BundledLanguage> = {
 
 type HighlightedFile = { background: string; foreground: string; lines: ThemedToken[][] };
 export type FilePreviewLanguage = BundledLanguage | 'text';
+export type RenderedFilePreviewKind = 'html' | 'markdown';
 
 const highlighterCache = new Map<string, Promise<HighlighterGeneric<BundledLanguage, BundledTheme>>>();
 const highlightCache = new Map<string, HighlightedFile>();
@@ -58,6 +62,58 @@ export function inferPreviewLanguage(path: string): FilePreviewLanguage {
   if (filename === 'makefile') return 'makefile';
   const extension = filename.includes('.') ? filename.slice(filename.lastIndexOf('.') + 1) : '';
   return EXTENSION_LANGUAGES[extension] ?? 'text';
+}
+
+export function renderedFilePreviewKind(attachment: MessageAttachmentRef): RenderedFilePreviewKind | null {
+  const mime = attachment.mime.split(';', 1)[0]?.trim().toLowerCase();
+  if (mime === 'text/html') return 'html';
+  if (mime === 'text/markdown') return 'markdown';
+  const extension = attachment.path
+    .split(/[?#]/, 1)[0]
+    ?.toLowerCase()
+    .match(/\.([^.\\/]+)$/)?.[1];
+  if (extension === 'html' || extension === 'htm') return 'html';
+  if (extension === 'md' || extension === 'markdown') return 'markdown';
+  return null;
+}
+
+export function sandboxedHtml(content: string): string {
+  const policy =
+    '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'; img-src data: blob:; media-src data: blob:; font-src data:; style-src \'unsafe-inline\';">';
+  return `<!doctype html><html><head>${policy}</head><body>${content}</body></html>`;
+}
+
+function RenderedFilePreview({
+  attachment,
+  content,
+  kind,
+  title
+}: {
+  attachment: MessageAttachmentRef;
+  content: string;
+  kind: RenderedFilePreviewKind;
+  title: string;
+}): React.ReactElement {
+  if (kind === 'html') {
+    return (
+      <iframe
+        className="min-h-0 flex-1 border-0 bg-background"
+        data-rendered-file-preview="html"
+        referrerPolicy="no-referrer"
+        sandbox=""
+        srcDoc={sandboxedHtml(content)}
+        title={`${attachment.name} · ${title}`}
+      />
+    );
+  }
+  return (
+    <div
+      className="min-h-0 flex-1 overflow-auto bg-background p-5"
+      data-rendered-file-preview="markdown"
+    >
+      <Markdown text={content} />
+    </div>
+  );
 }
 
 function rawHighlight(content: string): HighlightedFile {
@@ -219,11 +275,38 @@ export function FilePreviewPanel({
   preview: ChatRoomFilePreview;
 }): React.ReactElement {
   const t = workplaceExperienceT();
-  const attachment = preview.attachment;
-  const previewable = isPreviewableAttachmentMime(attachment.mime);
-  const query = useGetAttachmentQuery({ id: attachment.id }, { skip: !previewable });
+  const gallery = useMemo(() => {
+    const images = (preview.gallery ?? []).filter((item) => item.mime.startsWith('image/'));
+    return images.some((item) => item.id === preview.attachment.id) ? images : [preview.attachment, ...images];
+  }, [preview.attachment, preview.gallery]);
+  const initialIndex = Math.max(
+    0,
+    gallery.findIndex((item) => item.id === preview.attachment.id)
+  );
+  const [galleryIndex, setGalleryIndex] = useState(initialIndex);
+  useEffect(() => setGalleryIndex(initialIndex), [initialIndex]);
+  const attachment = gallery[galleryIndex] ?? preview.attachment;
+  const image = attachment.mime.startsWith('image/');
+  const pdf = isPdfAttachmentMime(attachment.mime);
+  const previewable = image || pdf || isPreviewableAttachmentMime(attachment.mime);
+  const query = useGetAttachmentQuery({ id: attachment.id }, { skip: !previewable || image || pdf });
   const [downloadAttachment] = useDownloadAttachmentMutation();
   const [downloadError, setDownloadError] = useState(false);
+  const [fullscreen, setFullscreen] = useState(false);
+  const [viewState, setViewState] = useState<{ attachmentId: string; mode: 'preview' | 'source' }>({
+    attachmentId: attachment.id,
+    mode: 'source'
+  });
+  const viewMode = viewState.attachmentId === attachment.id ? viewState.mode : 'source';
+  const renderedKind = renderedFilePreviewKind(attachment);
+  useEffect(() => {
+    if (!fullscreen) return;
+    const exitFullscreen = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setFullscreen(false);
+    };
+    window.addEventListener('keydown', exitFullscreen);
+    return () => window.removeEventListener('keydown', exitFullscreen);
+  }, [fullscreen]);
   const download = async () => {
     setDownloadError(false);
     try {
@@ -238,10 +321,34 @@ export function FilePreviewPanel({
       setDownloadError(true);
     }
   };
-  return (
+  if (image) {
+    return (
+      <ImageGalleryDialog
+        index={galleryIndex}
+        labels={{
+          close: t('web.workplace.imagePreviewClose'),
+          next: t('web.workplace.imagePreviewNext'),
+          previous: t('web.workplace.imagePreviewPrevious'),
+          zoomIn: t('web.workplace.imagePreviewZoomIn'),
+          zoomOut: t('web.workplace.imagePreviewZoomOut')
+        }}
+        onClose={onBack}
+        onIndexChange={setGalleryIndex}
+        open
+        slides={gallery.map((item) => ({
+          alt: item.name,
+          src: `/v1/attachments/${encodeURIComponent(item.id)}?download=1`
+        }))}
+      />
+    );
+  }
+  const panel = (
     <section
-      className="flex min-h-0 flex-1 flex-col bg-sidebar"
+      className={
+        fullscreen ? 'fixed inset-0 z-50 flex min-h-0 flex-col bg-sidebar' : 'flex min-h-0 flex-1 flex-col bg-sidebar'
+      }
       data-file-preview-panel="true"
+      data-fullscreen={fullscreen ? 'true' : 'false'}
     >
       <header className="flex items-center gap-2 border-sidebar-border border-b px-3 py-3">
         <button
@@ -274,6 +381,38 @@ export function FilePreviewPanel({
             {attachment.path}
           </div>
         </div>
+        {renderedKind ? (
+          <Button
+            aria-label={t(
+              viewMode === 'source' ? 'web.workplace.attachmentRenderPreview' : 'web.workplace.attachmentViewSource'
+            )}
+            data-file-view-mode={viewMode}
+            onClick={() =>
+              setViewState({
+                attachmentId: attachment.id,
+                mode: viewMode === 'source' ? 'preview' : 'source'
+              })
+            }
+            size="xs"
+            type="button"
+            variant="ghost"
+          >
+            {t(viewMode === 'source' ? 'web.workplace.attachmentRenderPreview' : 'web.workplace.attachmentViewSource')}
+          </Button>
+        ) : null}
+        <button
+          aria-label={t(
+            fullscreen ? 'web.workplace.attachmentExitFullscreen' : 'web.workplace.attachmentEnterFullscreen'
+          )}
+          className="workplace-action inline-flex size-8 items-center justify-center rounded-md border-0 bg-transparent"
+          onClick={() => setFullscreen((current) => !current)}
+          type="button"
+        >
+          <HugeiconsIcon
+            icon={fullscreen ? CollapseIcon : ExpandIcon}
+            size={17}
+          />
+        </button>
         <button
           aria-label={t('web.workplace.attachmentDownload')}
           className="workplace-action inline-flex size-8 items-center justify-center rounded-md border-0 bg-transparent"
@@ -286,12 +425,34 @@ export function FilePreviewPanel({
           />
         </button>
       </header>
-      {downloadError || query.isError ? (
+      {downloadError || (!pdf && query.isError) ? (
         <div className="p-4 text-destructive text-sm">{t('web.workplace.attachmentLoadError')}</div>
+      ) : pdf ? (
+        <iframe
+          className="min-h-0 flex-1 border-0 bg-background"
+          data-pdf-preview="true"
+          referrerPolicy="no-referrer"
+          src={`/v1/attachments/${encodeURIComponent(attachment.id)}?inline=1`}
+          title={`${attachment.name} · ${t('web.workplace.attachmentPreview')}`}
+        />
       ) : !previewable ? (
         <div className="p-4 text-muted-foreground text-sm">{t('web.workplace.attachmentPreviewUnsupported')}</div>
       ) : query.isLoading || !query.data ? (
         <div className="p-4 text-muted-foreground text-sm">...</div>
+      ) : renderedKind && viewMode === 'preview' ? (
+        <>
+          <RenderedFilePreview
+            attachment={attachment}
+            content={query.data.text}
+            kind={renderedKind}
+            title={t('web.workplace.attachmentRenderPreview')}
+          />
+          {query.data.truncated ? (
+            <div className="border-border border-t px-3 py-2 text-muted-foreground text-xs">
+              {t('web.workplace.attachmentPreviewTruncated')}
+            </div>
+          ) : null}
+        </>
       ) : (
         <FilePreviewContent
           attachment={attachment}
@@ -303,4 +464,5 @@ export function FilePreviewPanel({
       )}
     </section>
   );
+  return fullscreen && typeof document !== 'undefined' ? createPortal(panel, document.body) : panel;
 }

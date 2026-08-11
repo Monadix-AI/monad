@@ -1,4 +1,5 @@
 import type { ChannelIcon } from '@monad/protocol';
+import type { WorkplaceExperienceAgentIdentity, WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experience';
 import type { ChannelOriginDetail, ChannelOriginLabels } from '@monad/ui';
 import type { ComponentType } from 'react';
 import type { Message, MessageAttachment } from '../../experience/types.ts';
@@ -18,7 +19,6 @@ import {
   AgentInstanceAvatar,
   Avatar,
   workspaceMono as mono,
-  resolveProductIcon,
   workspaceSans as sans,
   TagChip
 } from '@monad/ui/components/AgentAvatar';
@@ -27,7 +27,9 @@ import { type Components, Markdown } from '@monad/ui/components/Markdown';
 import { MentionCapsule, MentionText, parseMentionTokens } from '@monad/ui/components/MentionText';
 import { memo, useMemo } from 'react';
 
-import { resolveLocalFileReference } from '../utils/local-file-reference.ts';
+import { AgentProviderBadge } from '../../components/agent-provider-badge.tsx';
+import { isLocalFileTarget, resolveLocalFileReference } from '../utils/local-file-reference.ts';
+import { useFilePreviewContext } from './file-preview-context.tsx';
 import { ProjectQuestionMessage } from './project-question-message.tsx';
 import { ReplyPreview } from './reply-preview.tsx';
 import { SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
@@ -57,6 +59,7 @@ export type MessageRowLabels = {
 export type MessageAttachmentComponent = ComponentType<{
   attachment: MessageAttachment;
   onPreview?: (attachment: MessageAttachment, line?: number) => void;
+  tone: 'agent' | 'human';
 }>;
 
 const NAME_STYLE: React.CSSProperties = { fontFamily: sans, fontSize: 14, fontWeight: 600 };
@@ -191,7 +194,7 @@ function createMessageMarkdownComponents({
           />
         );
       }
-      if (title === 'monad:file' && typeof href === 'string') {
+      if (typeof href === 'string' && (title === 'monad:file' || isLocalFileTarget(href))) {
         const reference = resolveLocalFileReference(href, attachments);
         const content = (
           <>
@@ -207,7 +210,7 @@ function createMessageMarkdownComponents({
           return (
             <button
               aria-disabled="true"
-              className="inline-flex max-w-full items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-muted-foreground leading-[inherit]"
+              className="inline-flex max-w-full items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-muted-foreground leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
               data-inline-link="file"
               disabled
               title="File unavailable"
@@ -220,7 +223,7 @@ function createMessageMarkdownComponents({
         const attachment = reference.attachment;
         return (
           <button
-            className="inline-flex max-w-full cursor-pointer items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-accent-blue leading-[inherit]"
+            className="inline-flex max-w-full cursor-pointer items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-accent-blue leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
             data-inline-link="file"
             onClick={() => onOpenAttachment?.(attachment, reference.line)}
             title={attachment.path}
@@ -297,14 +300,15 @@ function originLabels(labels?: MessageRowLabels): ChannelOriginLabels {
 
 function MessageHeader({
   align,
+  identity,
   msg
 }: {
   align: 'left' | 'right';
+  identity?: WorkplaceExperienceAgentIdentity;
   labels?: MessageRowLabels;
   msg: Message;
 }): React.ReactElement {
   const showTag = msg.kind === 'agent' || msg.tag !== 'User';
-  const productIcon = resolveProductIcon({ icon: msg.icon, tag: msg.tag, name: msg.authorName });
   return (
     <div
       style={{
@@ -318,9 +322,14 @@ function MessageHeader({
       }}
     >
       <AgentIdentity
-        badge={showTag && !productIcon ? messageAgentBadge(msg) : undefined}
-        icon={productIcon}
-        name={msg.authorName}
+        badge={
+          identity?.providerIcon ? (
+            <AgentProviderBadge icon={identity.providerIcon} />
+          ) : showTag ? (
+            messageAgentBadge(msg)
+          ) : undefined
+        }
+        name={identity?.name ?? msg.authorName}
         nameStyle={NAME_STYLE}
       />
     </div>
@@ -338,9 +347,16 @@ export function MarkdownWithMentions({
   text: string;
   streaming?: boolean;
 }): React.ReactElement {
+  const previewContext = useFilePreviewContext();
+  const resolvedAttachments = attachments ?? previewContext.attachments;
+  const resolvedOnOpenAttachment = onOpenAttachment ?? previewContext.onOpenAttachment;
   const components = useMemo(
-    () => createMessageMarkdownComponents({ attachments, onOpenAttachment }),
-    [attachments, onOpenAttachment]
+    () =>
+      createMessageMarkdownComponents({
+        attachments: resolvedAttachments,
+        onOpenAttachment: resolvedOnOpenAttachment
+      }),
+    [resolvedAttachments, resolvedOnOpenAttachment]
   );
   const markdownText = useMemo(() => markdownTextWithMentionCapsules(text), [text]);
   return (
@@ -358,12 +374,14 @@ export function MarkdownWithMentions({
 
 function MessageBubbleContent({
   agent,
+  attachments,
   hasText,
   labels,
   msg,
   onOpenAttachment
 }: {
   agent: boolean;
+  attachments?: readonly MessageAttachment[];
   hasText: boolean;
   labels?: MessageRowLabels;
   msg: Message;
@@ -378,7 +396,7 @@ function MessageBubbleContent({
       />
     ) : (
       <MarkdownWithMentions
-        attachments={msg.attachments}
+        attachments={attachments ?? msg.attachments}
         onOpenAttachment={onOpenAttachment}
         streaming={msg.streaming}
         text={msg.text}
@@ -425,10 +443,12 @@ export const MessageRow = memo(function MessageRow({
   msg,
   Attachment,
   labels,
+  linkAttachments,
   onAgentClick,
   onOpenAttachment,
   onOpenReplyTarget,
   onReply,
+  resolveAgentIdentity,
   replyTarget
 }: {
   actions?: readonly WorkplaceExperienceHostAction[];
@@ -436,12 +456,15 @@ export const MessageRow = memo(function MessageRow({
   msg: Message;
   Attachment?: MessageAttachmentComponent;
   labels?: MessageRowLabels;
+  linkAttachments?: readonly MessageAttachment[];
   onAgentClick?: (id: string) => void;
   onOpenAttachment?: (attachment: MessageAttachment, line?: number) => void;
   onOpenReplyTarget?: () => void;
   onReply?: (message: Message) => void;
+  resolveAgentIdentity?: WorkplaceExperienceAgentIdentityResolver;
   replyTarget?: Message | null;
 }): React.ReactElement {
+  const identity = resolveAgentIdentity?.({ id: msg.authorId, name: msg.authorName });
   if (msg.kind === 'system' || msg.kind === 'developer') {
     return (
       <SystemMessageRow
@@ -449,6 +472,7 @@ export const MessageRow = memo(function MessageRow({
         labels={labels}
         msg={msg}
         onAgentClick={onAgentClick}
+        resolveAgentIdentity={resolveAgentIdentity}
       />
     );
   }
@@ -460,7 +484,11 @@ export const MessageRow = memo(function MessageRow({
   const sentFrom = messageSentFrom(msg, channelIcons, labels);
   const avatar = agent ? (
     <AgentInstanceAvatar
-      agent={{ av: msg.av, avatarUrl: msg.avatarUrl, icon: msg.icon, name: msg.authorName }}
+      agent={{
+        av: identity?.av ?? msg.av,
+        avatarUrl: identity?.avatarUrl ?? msg.avatarUrl,
+        name: identity?.name ?? msg.authorName
+      }}
       bordered={false}
       size={34}
     />
@@ -484,6 +512,7 @@ export const MessageRow = memo(function MessageRow({
                   attachment={attachment}
                   key={attachment.id}
                   onPreview={onOpenAttachment}
+                  tone={agent ? 'agent' : 'human'}
                 />
               ))
             : undefined
@@ -500,6 +529,7 @@ export const MessageRow = memo(function MessageRow({
             ) : null}
             <MessageBubbleContent
               agent={agent}
+              attachments={linkAttachments}
               hasText={hasText}
               labels={labels}
               msg={msg}
@@ -511,6 +541,7 @@ export const MessageRow = memo(function MessageRow({
         header={
           <MessageHeader
             align={agent ? 'left' : 'right'}
+            identity={identity}
             labels={labels}
             msg={msg}
           />

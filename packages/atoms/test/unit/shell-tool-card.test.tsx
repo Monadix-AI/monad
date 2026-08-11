@@ -10,6 +10,7 @@ import { hermesObservationProjection } from '../../src/agent-adapters/hermes/obs
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { openClawObservationProjection } from '../../src/agent-adapters/openclaw/observation.ts';
 import { qwenObservationProjection } from '../../src/agent-adapters/qwen/observation.ts';
+import { ObservationToolCardShell } from '../../src/workplace-experiences/chat-room/components/observation/card-shell.tsx';
 import {
   ShellToolHeader,
   shellToolView
@@ -120,6 +121,26 @@ test('the Claude shell card uses the Bash description as its title', () => {
   });
 });
 
+test('the Codex shell header uses the shared Shell title', () => {
+  const call = {
+    id: 'codex-shell-call',
+    kind: 'tool-call',
+    streaming: false,
+    tool: {
+      name: 'commandExecution',
+      category: 'shell',
+      callId: 'codex-shell-1',
+      input: { command: 'rg -n "HANDOFF|Screen|Collecting|Evidence|Publish" packages/atoms' }
+    },
+    provenance: { contractEvents: [{}] }
+  } satisfies AgentObservationEvent;
+  const view = shellToolView(call, undefined, 'codex');
+  if (!view) throw new Error('Expected Codex shell card view');
+  const header = renderToStaticMarkup(<ShellToolHeader view={view} />);
+
+  expect(visibleText(header)).toBe('Tool call Shell In progress');
+});
+
 test('shell and generic tool timeline cards render with distinct icon kinds', () => {
   const toolKind = (category: 'shell' | undefined, name: string) => {
     const callId = `${name}-call`;
@@ -157,10 +178,37 @@ test('shell and generic tool timeline cards render with distinct icon kinds', ()
   expect([toolKind('shell', 'Bash'), toolKind(undefined, 'ToolSearch')]).toEqual(['command', 'tool']);
 });
 
+test('running tool kinds replace their 16px static icon and status dot with the shaping orb', () => {
+  const rendered = (kind: 'command' | 'file' | 'mcp' | 'tool') => {
+    const markup = renderToStaticMarkup(
+      <ObservationToolCardShell
+        header={<span>Running</span>}
+        kind={kind}
+        status="running"
+      >
+        <span>Body</span>
+      </ObservationToolCardShell>
+    );
+    return {
+      orb: /data-orb-state="([^"]+)"/.exec(markup)?.[1],
+      statusDot: markup.includes('data-slot="observation-tool-status"'),
+      toolKind: /data-tool-kind="([^"]+)"/.exec(markup)?.[1]
+    };
+  };
+
+  expect([rendered('file'), rendered('command'), rendered('mcp'), rendered('tool')]).toEqual([
+    { orb: 'shaping', statusDot: false, toolKind: 'file' },
+    { orb: 'shaping', statusDot: false, toolKind: 'command' },
+    { orb: 'shaping', statusDot: false, toolKind: 'mcp' },
+    { orb: 'shaping', statusDot: false, toolKind: 'tool' }
+  ]);
+});
+
 function visibleText(markup: string): string {
   return markup
     .replace(/<[^>]+>/g, ' ')
     .replace(/&amp;/g, '&')
+    .replace(/&quot;/g, '"')
     .replace(/\s+/g, ' ')
     .trim();
 }

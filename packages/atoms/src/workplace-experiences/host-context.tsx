@@ -1,4 +1,5 @@
 import type { WorkplaceExperienceProjectDialogRequest, WorkplaceExperienceStudioSection } from '@monad/protocol';
+import type { WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experience';
 import type { ReactNode } from 'react';
 
 import { createContext, useContext } from 'react';
@@ -24,6 +25,7 @@ export interface WorkplaceExperienceHostAction {
 export interface WorkplaceExperienceHost {
   voiceModelState?: VoiceModelState;
   actions?: readonly WorkplaceExperienceHostAction[];
+  resolveAgentIdentity: WorkplaceExperienceAgentIdentityResolver;
   /** Imperative Studio navigation (replaces the old meshAgentsHref link + openModelSettings). */
   openStudio: (section?: WorkplaceExperienceStudioSection) => void;
   requestProjectDialog: (request: WorkplaceExperienceProjectDialogRequest) => void;
@@ -45,6 +47,10 @@ export function useWorkplaceExperienceHost(): WorkplaceExperienceHost {
   const value = useContext(WorkplaceExperienceHostContext);
   if (!value) throw new Error('useWorkplaceExperienceHost must be used inside WorkplaceExperienceHostProvider');
   return value;
+}
+
+export function useOptionalWorkplaceExperienceHost(): WorkplaceExperienceHost | null {
+  return useContext(WorkplaceExperienceHostContext);
 }
 
 export const spawnAgentMemberDialogRequest = {

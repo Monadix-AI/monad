@@ -14,7 +14,14 @@ import { CodexMcpStartupProgressCard, type CodexMcpStartupUpdate } from './codex
 import { CommandToolCard, CommandToolHeader, commandToolView } from './command-card.tsx';
 import { ContextCompactionCard } from './context-compaction-card.tsx';
 import { ObservationDisclosureScope } from './disclosure.tsx';
-import { FileReadToolCard, FileReadToolHeader, fileReadToolView } from './file-read-card.tsx';
+import {
+  FileReadToolCard,
+  FileReadToolHeader,
+  fileReadToolPath,
+  fileReadToolView,
+  isFileReadToolCall
+} from './file-read-card.tsx';
+import { ImageToolCard, imageToolView } from './image-tool-card.tsx';
 import { ObservationMessageCard } from './message-card.tsx';
 import { MonadMcpToolCard, MonadMcpToolHeader } from './monad-mcp-card.tsx';
 import { monadMcpToolView } from './monad-mcp-projection.ts';
@@ -164,7 +171,13 @@ export function observationToolVisualStatus({
 }): 'error' | 'running' | 'success' | undefined {
   const normalized = status?.trim().toLowerCase();
   if (error || normalized === 'error' || normalized === 'failed') return 'error';
-  if (normalized === 'running' || normalized === 'pending' || normalized === 'in_progress') return 'running';
+  if (
+    normalized === 'running' ||
+    normalized === 'pending' ||
+    normalized === 'in_progress' ||
+    normalized === 'inprogress'
+  )
+    return 'running';
   if (completed || normalized === 'completed' || normalized === 'success' || normalized === 'succeeded')
     return 'success';
   return undefined;
@@ -221,6 +234,32 @@ function ObservationTimelineCard({
     const result = toolResult;
     const toolEvent = call ?? result;
 
+    const image = imageToolView(call, result, entry.contractEvents);
+    if (image) {
+      return (
+        <ObservationToolCardShell
+          header={
+            <ObservationMeta
+              compact
+              label="tool call"
+              quiet
+              showSource={false}
+              source={provider}
+              title="Image generation"
+            />
+          }
+          kind="tool"
+          status={observationToolVisualStatus({
+            completed: !!result,
+            status: result?.tool?.status ?? call?.tool?.status
+          })}
+          timestamp={entry.timestamp}
+        >
+          <ImageToolCard view={image} />
+        </ObservationToolCardShell>
+      );
+    }
+
     if (call) {
       const monadMcp = monadMcpToolView(call, result, entry.contractEvents);
       if (monadMcp) {
@@ -235,10 +274,11 @@ function ObservationTimelineCard({
               />
             }
             kind="mcp"
+            runningOrbState="connecting"
             status={observationToolVisualStatus({
               completed: !!result,
               error: monadMcp.isError,
-              status: monadMcp.status
+              status: monadMcp.status ?? (result ? undefined : 'running')
             })}
             timestamp={entry.timestamp}
           >
@@ -250,8 +290,13 @@ function ObservationTimelineCard({
         );
       }
     }
-    if (call && result) {
-      const fileRead = fileReadToolView(call, result, provider);
+    if (call && isFileReadToolCall(call)) {
+      const fileRead = result ? fileReadToolView(call, result, provider) : null;
+      const pendingPath = fileReadToolPath(call);
+      const pendingFileRead =
+        !fileRead && pendingPath && call.tool?.name
+          ? { type: call.tool.name, provider, path: pendingPath, content: '' }
+          : null;
       if (fileRead) {
         return (
           <ObservationToolCardShell
@@ -273,6 +318,50 @@ function ObservationTimelineCard({
           </ObservationToolCardShell>
         );
       }
+      return (
+        <ObservationToolCardShell
+          header={
+            pendingFileRead ? (
+              <FileReadToolHeader
+                quiet
+                view={pendingFileRead}
+              />
+            ) : (
+              <ObservationMeta
+                compact
+                label="tool call"
+                preserveTitle
+                quiet
+                showSource={false}
+                source={provider}
+                title={call.tool?.name}
+              />
+            )
+          }
+          kind="file"
+          status={observationToolVisualStatus({
+            completed: !!result,
+            status: result?.tool?.status ?? (result ? undefined : 'running')
+          })}
+          timestamp={entry.timestamp}
+        >
+          {pendingFileRead ? (
+            <FileReadToolCard
+              copyCodeLabel={t('web.copyCode')}
+              copyPathLabel={t('web.copyPath')}
+              view={pendingFileRead}
+            />
+          ) : result ? (
+            <DefaultObservationToolPair
+              callText={toolCallSummary(call.text ?? '')}
+              callTool={call.tool?.name}
+              provider={provider}
+              resultText={result.text ?? ''}
+              resultTool={result.tool?.name}
+            />
+          ) : null}
+        </ObservationToolCardShell>
+      );
     }
     if (call) {
       const shell = shellToolView(call, result, provider);

@@ -211,6 +211,7 @@ export { invitableMeshAgentSchema, listInvitableMeshAgentsResponseSchema } from 
 export {
   attachmentPreviewText,
   attachmentReadResponseSchema,
+  isPdfAttachmentMime,
   isPreviewableAttachmentMime,
   messageAttachmentRefSchema,
   messageAttachmentSchema,

@@ -27,6 +27,10 @@ export function isPreviewableAttachmentMime(mime: string): boolean {
   return PREVIEWABLE_ATTACHMENT_MIME_RE.test(mime);
 }
 
+export function isPdfAttachmentMime(mime: string): boolean {
+  return mime.split(';', 1)[0]?.trim().toLowerCase() === 'application/pdf';
+}
+
 /** A message attachment is a STRUCTURED REFERENCE to a file on the daemon host — for humans to
  *  read (wall preview/download), never an execution input. The daemon registers the reference and
  *  snapshots metadata at post time; content stays in the file and is read on demand, so a later

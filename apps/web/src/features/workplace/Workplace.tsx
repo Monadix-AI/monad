@@ -221,6 +221,7 @@ export const Workplace = memo(function Workplace({
             experience.render({
               embedded,
               onProjectDialogRequest: requestProjectDialog,
+              resolveAgentIdentity: project.resolveAgentIdentity,
               runtime: project.experienceRuntime,
               voiceModelState
             })

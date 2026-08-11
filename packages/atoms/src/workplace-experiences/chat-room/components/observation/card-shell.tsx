@@ -1,5 +1,5 @@
 import type { IconSvgElement } from '@hugeicons/react';
-import type { ObservationVisualRole } from '@monad/ui';
+import type { ObservationVisualRole, OrbState } from '@monad/ui';
 
 import {
   ArrowDown01Icon,
@@ -9,7 +9,7 @@ import {
   Wrench01Icon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { ObservationCard } from '@monad/ui';
+import { ObservationCard, ThinkingOrb } from '@monad/ui';
 import { requestVirtualListRowMeasurement } from '@monad/ui/components/VirtualList';
 
 import { useObservationDisclosure } from './disclosure.tsx';
@@ -67,6 +67,7 @@ export function ObservationToolCardShell({
   error = false,
   header,
   kind,
+  runningOrbState = 'shaping',
   status,
   timestamp
 }: {
@@ -75,6 +76,7 @@ export function ObservationToolCardShell({
   error?: boolean;
   header: React.ReactNode;
   kind: ObservationToolKind;
+  runningOrbState?: OrbState;
   status?: ObservationToolStatus;
   timestamp?: string;
 }): React.ReactElement {
@@ -93,16 +95,28 @@ export function ObservationToolCardShell({
       open={open}
     >
       <summary className="group/tool-trigger flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-0 py-0 text-left font-sans text-muted-foreground text-sm leading-5 transition-colors hover:bg-secondary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
-        <HugeiconsIcon
-          aria-hidden="true"
-          className="shrink-0 text-muted-foreground/80 transition-colors group-hover/tool-trigger:text-foreground"
-          icon={observationToolIcon(kind)}
-          size={16}
-        />
+        {resolvedStatus === 'running' ? (
+          <ThinkingOrb
+            aria-hidden="true"
+            className="shrink-0"
+            data-orb-state={runningOrbState}
+            data-slot="observation-tool-orb"
+            size={20}
+            state={runningOrbState}
+            style={{ height: 16, width: 16 }}
+          />
+        ) : (
+          <HugeiconsIcon
+            aria-hidden="true"
+            className="shrink-0 text-muted-foreground/80 transition-colors group-hover/tool-trigger:text-foreground"
+            icon={observationToolIcon(kind)}
+            size={16}
+          />
+        )}
         <div className="min-w-0 flex-[0_1_auto] [&_span]:transition-colors group-hover/tool-trigger:[&_span]:text-foreground">
           {header}
         </div>
-        <ObservationToolStatusIndicator status={resolvedStatus} />
+        <ObservationToolStatusIndicator status={resolvedStatus === 'running' ? undefined : resolvedStatus} />
         <HugeiconsIcon
           aria-hidden="true"
           className="shrink-0 -rotate-90 transition-transform duration-150 group-open/tool:rotate-0"

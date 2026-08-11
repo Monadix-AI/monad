@@ -25,6 +25,14 @@ export function WorkspaceMessageCard({
   sending = false,
   tone
 }: WorkspaceMessageCardProps) {
+  const attachmentStack = attachments ? (
+    <div
+      className={cn('flex max-w-full flex-col', tone === 'agent' ? 'items-start' : 'mb-2.5 items-end')}
+      data-message-attachments={tone}
+    >
+      {attachments}
+    </div>
+  ) : null;
   const messageStack = (
     <div
       className={cn(
@@ -33,19 +41,20 @@ export function WorkspaceMessageCard({
       )}
     >
       {header}
+      {tone === 'human' ? attachmentStack : null}
       <div
         className={cn(
-          'overflow-wrap-anywhere max-w-full break-words border px-3.5 py-2.5 font-sans text-[15px] leading-[1.55]',
+          'overflow-wrap-anywhere max-w-full break-words px-3.5 py-2.5 font-sans text-[15px] leading-[1.55]',
           tone === 'agent'
-            ? 'rounded-md border-border bg-secondary text-foreground'
-            : 'rounded-[12px_12px_4px_12px] border-foreground bg-foreground text-background',
+            ? 'rounded-md bg-(--message-agent-surface) text-foreground'
+            : 'rounded-[12px_12px_4px_12px] bg-(--message-human-surface) text-foreground',
           sending && 'opacity-70',
           bodyClassName
         )}
       >
         {body}
-        {attachments}
       </div>
+      {tone === 'agent' ? attachmentStack : null}
     </div>
   );
 

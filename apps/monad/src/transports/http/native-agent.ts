@@ -108,7 +108,10 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
     )
     .get('/attachments/:id', async ({ params, request }) => {
       const url = new URL(request.url);
-      return attachmentReader.read(params.id, url.searchParams.get('download') === '1');
+      return attachmentReader.read(params.id, {
+        download: url.searchParams.get('download') === '1',
+        inline: url.searchParams.get('inline') === '1'
+      });
     })
     .get(
       '/internal/native-agent/session/members',
