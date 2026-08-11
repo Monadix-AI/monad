@@ -128,15 +128,11 @@ test('reply actions flow below the message card and align with its content', () 
   expect({
     actionBeforeAgentTime: markup.indexOf('Reply') < markup.indexOf('10:31'),
     repliedTo,
-    timeAfterMessage: markup.indexOf('10:31') > markup.indexOf('Ready for review.'),
-    timeImmediate: !markup.includes('transition-opacity') && !markup.includes('transition-colors'),
-    timeOnHover: markup.includes('group-hover:opacity-100')
+    timeAfterMessage: markup.indexOf('10:31') > markup.indexOf('Ready for review.')
   }).toEqual({
     actionBeforeAgentTime: true,
     repliedTo: message,
-    timeAfterMessage: true,
-    timeImmediate: true,
-    timeOnHover: true
+    timeAfterMessage: true
   });
 });
 

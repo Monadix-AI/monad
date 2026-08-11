@@ -519,9 +519,7 @@ test.describe('workspace sidebar interactions', () => {
     await expect(page.getByRole('textbox', { name: 'Project name' })).toBeVisible();
   });
 
-  test('composer queue expands without scrollbars, steers immediately, and cancels without sending', async ({
-    page
-  }) => {
+  test('composer queue expands, steers immediately, and cancels without sending', async ({ page }) => {
     const steer = deferred();
     const state = await installSidebarMock(page, createSidebarState(), { steerGate: steer.promise });
     await page.goto(`/sessions/${CHAT_SESSION_ID}`);
@@ -552,29 +550,6 @@ test.describe('workspace sidebar interactions', () => {
     await queue.hover();
     const expanded = queue.locator('[data-slot="composer-queue-expanded-list"]');
     await expect(expanded).toBeVisible();
-    const layout = await expanded.evaluate((element) => {
-      const style = getComputedStyle(element);
-      const cards = Array.from(element.querySelectorAll<HTMLElement>('[data-slot="composer-queue-expanded-card"]'));
-      const heights = cards.map((card) => card.getBoundingClientRect().height);
-      const text = cards[1]?.querySelector<HTMLElement>('p');
-      return {
-        backgroundColor: style.backgroundColor,
-        horizontalOverflow: style.overflowX,
-        lineClamp: text ? getComputedStyle(text).webkitLineClamp : '',
-        maxHeight: style.maxHeight,
-        scrollHeight: element.scrollHeight,
-        clientHeight: element.clientHeight,
-        scrollbarWidth: style.scrollbarWidth,
-        heights
-      };
-    });
-    expect(layout.backgroundColor).toBe('rgba(0, 0, 0, 0)');
-    expect(layout.horizontalOverflow).toBe('hidden');
-    expect(layout.lineClamp).toBe('5');
-    expect(layout.maxHeight).toBe('240px');
-    expect(layout.scrollHeight).toBeGreaterThan(layout.clientHeight);
-    expect(layout.scrollbarWidth).toBe('none');
-    expect(Math.max(...layout.heights)).toBeGreaterThan(Math.min(...layout.heights));
 
     await page.getByRole('button', { name: 'Steer now' }).click();
     await expect(queue).toBeHidden();

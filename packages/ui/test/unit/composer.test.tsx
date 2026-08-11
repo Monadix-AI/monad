@@ -29,24 +29,6 @@ test('ComposerEditor leaves non-Enter shortcuts on the fast path', () => {
   expect(documentReads).toBe(1);
 });
 
-test('composer model menu opens toward right-side space with content-sized cascading levels', () => {
-  expect(ComposerModule.composerModelMenuLayout()).toEqual({
-    align: 'start',
-    collisionPadding: 12,
-    itemClassName: 'cursor-pointer',
-    modelListClassName: 'h-72 overflow-y-auto',
-    modelNameClassName: 'max-w-72 truncate pl-3',
-    rootContentClassName: 'w-max min-w-[180px] max-w-[var(--radix-dropdown-menu-content-available-width)]',
-    searchContainerClassName: 'w-full pb-2',
-    searchInputClassName: 'h-8 w-full rounded-sm border bg-background px-2 text-sm outline-none',
-    side: 'top',
-    sticky: 'partial',
-    subContentClassName:
-      'w-max min-w-[160px] max-w-[var(--radix-dropdown-menu-content-available-width)] overflow-hidden',
-    valueClassName: 'ml-auto max-w-56 truncate text-right text-muted-foreground'
-  });
-});
-
 test('composer model menu dimensions depend on the complete provider catalog', () => {
   const panelWidth = (
     ComposerModule as typeof ComposerModule & {

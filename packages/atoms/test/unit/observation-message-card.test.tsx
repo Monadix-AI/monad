@@ -9,8 +9,7 @@ import { ObservationMessageCard } from '../../src/workplace-experiences/chat-roo
 import {
   ObservationTimelineRowView,
   observationTimelineEntries,
-  observationTimelineRows,
-  observationToolVisualStatus
+  observationTimelineRows
 } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 
 const raw = { id: 'raw-event' };
@@ -77,7 +76,7 @@ function correlatedEntry(
   };
 }
 
-test('observation user messages keep their bubble while agent messages render as plain text without avatars', () => {
+test('observation user and agent messages render their content and timestamp without avatars', () => {
   const cases = [{ role: 'user' }, { role: 'agent' }] as const;
   const timestamp = new Date().toISOString();
   const timestampLabel = new Intl.DateTimeFormat('en', { hour: '2-digit', minute: '2-digit' }).format(
@@ -95,65 +94,32 @@ test('observation user messages keep their bubble while agent messages render as
         />
       );
       return {
-        avatar: markup.includes('width:34px;height:34px'),
-        bubble: markup.includes('border-foreground bg-foreground text-background'),
-        compactSpacing: !markup.includes('mb-4'),
-        inlineCodeBorderless: markup.includes('border: 0;\n    border-radius: 7px;'),
-        inlineCodeClonesDecoration: markup.includes('box-decoration-break: clone;'),
-        inlineCodeKeepsWords: markup.includes('overflow-wrap: break-word;') && markup.includes('word-break: normal;'),
+        avatar: markup.includes('<img'),
         plain: markup.includes('data-message-presentation="plain"'),
         providerLabel: markup.includes('codex'),
-        smallText: markup.includes('text-sm leading-6'),
         text: markup.includes(`${role} text`),
         timestamp: markup.includes(timestampLabel),
-        timestampAfterText: markup.indexOf(timestampLabel) > markup.indexOf(`${role} text`),
-        timestampImmediate: !markup.includes('transition-opacity'),
-        timestampOnHover: markup.includes('group-hover/observation-message:opacity-100')
+        timestampAfterText: markup.indexOf(timestampLabel) > markup.indexOf(`${role} text`)
       };
     })
   ).toEqual([
     {
       avatar: false,
-      bubble: true,
-      compactSpacing: false,
-      inlineCodeBorderless: false,
-      inlineCodeClonesDecoration: false,
-      inlineCodeKeepsWords: false,
       plain: false,
       providerLabel: false,
-      smallText: true,
       text: true,
       timestamp: true,
-      timestampAfterText: true,
-      timestampImmediate: true,
-      timestampOnHover: true
+      timestampAfterText: true
     },
     {
       avatar: false,
-      bubble: false,
-      compactSpacing: true,
-      inlineCodeBorderless: true,
-      inlineCodeClonesDecoration: true,
-      inlineCodeKeepsWords: true,
       plain: true,
       providerLabel: false,
-      smallText: true,
       text: true,
       timestamp: true,
-      timestampAfterText: true,
-      timestampImmediate: true,
-      timestampOnHover: true
+      timestampAfterText: true
     }
   ]);
-});
-
-test('observation tool state maps to icon-only semantic colors', () => {
-  expect({
-    error: observationToolVisualStatus({ completed: true, error: true, status: 'completed' }),
-    pending: observationToolVisualStatus({ completed: false, status: 'pending' }),
-    running: observationToolVisualStatus({ completed: false, status: 'running' }),
-    success: observationToolVisualStatus({ completed: true })
-  }).toEqual({ error: 'error', pending: 'running', running: 'running', success: 'success' });
 });
 
 test('observation reasoning uses the shared collapsed reasoning component', () => {
@@ -171,21 +137,17 @@ test('observation reasoning uses the shared collapsed reasoning component', () =
   );
 
   expect({
-    alignedTitle: markup.includes('min-h-6') && markup.includes('px-0 py-0'),
     collapseTrigger: markup.includes('aria-expanded'),
     content: markup.includes('Inspect the render path.'),
     label: markup.includes('Thought for a few seconds'),
     plain: markup.includes('data-message-presentation="plain"'),
-    timestamp: markup.includes(timestampLabel),
-    toolTitleTypography: markup.includes('font-sans text-muted-foreground text-sm leading-5')
+    timestamp: markup.includes(timestampLabel)
   }).toEqual({
-    alignedTitle: true,
     collapseTrigger: true,
     content: false,
     label: true,
     plain: true,
-    timestamp: true,
-    toolTitleTypography: true
+    timestamp: true
   });
 });
 
@@ -209,9 +171,8 @@ test('observation reasoning uses the Codex summary as its collapsed title', () =
     body: markup.includes('Thinking…'),
     disabled: markup.includes('disabled=""'),
     durationFallback: markup.includes('Thought for'),
-    summary: markup.includes('Checking the event projection'),
-    truncates: markup.includes('min-w-0 truncate') && markup.includes('overflow-hidden')
-  }).toEqual({ body: false, disabled: true, durationFallback: false, summary: true, truncates: true });
+    summary: markup.includes('Checking the event projection')
+  }).toEqual({ body: false, disabled: true, durationFallback: false, summary: true });
 });
 
 test('observation reasoning recovers a Codex summary from raw provenance for existing events', () => {

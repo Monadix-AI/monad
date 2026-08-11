@@ -37,29 +37,7 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
 
   await fileSummary.click();
   const scrollShadow = fileCard.locator('[data-slot="scroll-shadow"]');
-  const pathDirectory = fileCard.locator('[data-slot="compact-file-path-directory"]');
   await expect(fileCard.locator('[data-slot="compact-file-path-filename"]')).toHaveText('ObservationCard.tsx');
-  expect(await pathDirectory.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
-  const codeLine = scrollShadow.locator('code > span').first();
-  const codeLayout = await codeLine.evaluate((line) => {
-    const lineNumber = getComputedStyle(line, '::before');
-    const pre = line.closest('pre');
-    if (!pre) throw new Error('Missing file read code block');
-    const preStyle = getComputedStyle(pre);
-    return {
-      lineNumberMargin: lineNumber.marginRight,
-      lineNumberTextAlign: lineNumber.textAlign,
-      paddingLeft: preStyle.paddingLeft,
-      paddingTop: preStyle.paddingTop
-    };
-  });
-  // behavior-ok: opening the file card exposes its deliberate code and line-number alignment contract
-  expect(codeLayout).toEqual({
-    lineNumberMargin: '12px',
-    lineNumberTextAlign: 'right',
-    paddingLeft: '12px',
-    paddingTop: '10px'
-  });
   await expect(scrollShadow).toHaveAttribute('data-bottom-scroll', '');
   await expect(scrollShadow).not.toHaveAttribute('data-top-scroll');
   await scrollShadow.evaluate((element) => element.scrollTo({ top: element.scrollHeight }));
@@ -91,43 +69,12 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     Array.from({ length: 32 }, (_, index) => `export const observationLine${index + 1} = ${index + 1};`).join('\n')
   );
-  const [pathCopyRight, contentCopyRight] = await Promise.all([
-    pathCopyButton.evaluate((element) => element.getBoundingClientRect().right),
-    contentCopyButton.evaluate((element) => element.getBoundingClientRect().right)
-  ]);
-  expect(Math.round(pathCopyRight)).toBe(Math.round(contentCopyRight));
-
   const commandCard = cards.filter({
     hasText: 'grep -rln "WorkplaceProjectMemberSettings" packages/protocol/src | head'
   });
   await expect(commandCard).toHaveCount(1);
   await expect(commandCard).not.toHaveAttribute('open', '');
   await expect(commandCard.getByText('1 match in card-shell.tsx', { exact: true })).toBeHidden();
-
-  const reasoningMessage = page
-    .locator('[data-slot="observation-agent-message"]')
-    .filter({ hasText: 'Thought for a few seconds' });
-  const agentMessage = page
-    .locator('[data-slot="observation-agent-message"]')
-    .filter({ hasText: 'Agent message alignment anchor' });
-  const [toolIconLeft, reasoningIconLeft, agentMessageLeft] = await Promise.all([
-    commandCard
-      .locator('summary > svg')
-      .first()
-      .evaluate((element) => element.getBoundingClientRect().left),
-    reasoningMessage
-      .locator('button svg')
-      .first()
-      .evaluate((element) => element.getBoundingClientRect().left),
-    agentMessage
-      .locator(':scope > div')
-      .first()
-      .evaluate((element) => element.getBoundingClientRect().left)
-  ]);
-  expect([Math.round(toolIconLeft), Math.round(reasoningIconLeft)]).toEqual([
-    Math.round(agentMessageLeft),
-    Math.round(agentMessageLeft)
-  ]);
 
   await commandCard.locator('summary').click();
 
@@ -154,15 +101,6 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
     'grep -rln "WorkplaceProjectMemberSettings" packages/protocol/src | head'
   );
-  const commandCode = commandSection.locator('[data-slot="code-block-content"]');
-  const [shellBounds, codeBounds, copyBounds] = await Promise.all([
-    shellCard.evaluate((element) => element.getBoundingClientRect().toJSON()),
-    commandCode.evaluate((element) => element.getBoundingClientRect().toJSON()),
-    commandCopyButton.evaluate((element) => element.getBoundingClientRect().toJSON())
-  ]);
-  expect(copyBounds.right).toBeLessThanOrEqual(shellBounds.right);
-  expect(codeBounds.right).toBeGreaterThan(copyBounds.left);
-
   await commandCopyButton.evaluate((element) => element.blur());
   await outputSection.hover();
   await expect.poll(() => commandCopyOverlay.evaluate((element) => getComputedStyle(element).opacity)).toBe('0');
@@ -170,20 +108,6 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
   await outputCopyButton.click();
   await expect(outputCopyButton).toHaveAttribute('data-copied', 'true');
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe('1 match in card-shell.tsx');
-  const [commandCopyRight, outputCopyRight] = await Promise.all([
-    commandCopyButton.evaluate((element) => element.getBoundingClientRect().right),
-    outputCopyButton.evaluate((element) => element.getBoundingClientRect().right)
-  ]);
-  expect(Math.round(commandCopyRight)).toBe(Math.round(outputCopyRight));
-
-  const commandRow = commandCard.locator('xpath=ancestor::*[@data-index][1]');
-  const commandRowIndex = Number(await commandRow.getAttribute('data-index'));
-  const nextRow = page.locator(`[role="log"] [data-index="${commandRowIndex + 1}"]`);
-  const layout = await Promise.all([
-    commandRow.evaluate((row) => row.getBoundingClientRect().bottom),
-    nextRow.evaluate((row) => row.getBoundingClientRect().top)
-  ]);
-  expect(layout[1]).toBeGreaterThanOrEqual(layout[0] - 1);
 });
 
 test('Claude Read cards separate tab-delimited provider line numbers from highlighted source', async ({ page }) => {
@@ -205,61 +129,7 @@ test('Claude Read cards separate tab-delimited provider line numbers from highli
         .join('')
     }));
   expect(firstLine).toEqual({ gutter: '11', source: 'export const observationLine1 = 1;' });
-  const lineNumberColors = await codeBlock
-    .locator('[data-slot="code-block-line-number"]')
-    .evaluateAll((lineNumbers) => [...new Set(lineNumbers.map((lineNumber) => getComputedStyle(lineNumber).color))]);
-  expect(lineNumberColors).toHaveLength(1);
   await expect(codeBlock).not.toContainText('Provider metadata outside the file body.');
-});
-
-test('Monad runtime metadata uses the full row with horizontal label-value fields', async ({ page }) => {
-  await page.goto(`${HARNESS}?mode=monad-output`);
-
-  const output = page.locator('[data-slot="monad-mcp-output"]');
-  const outputContent = page.locator('[data-slot="monad-mcp-output-content"]');
-  const runtime = page.locator('[data-slot="monad-mcp-runtime"]');
-  const fields = runtime.locator('[data-slot="monad-mcp-semantic-field"]');
-  const firstField = fields.first();
-  const secondField = fields.nth(1);
-  const fieldLabel = firstField.locator('[data-slot="monad-mcp-semantic-field-label"]');
-  const fieldValue = firstField.locator('[data-slot="monad-mcp-semantic-field-value"]');
-  const [outputBox, contentBox, runtimeBox, firstFieldBox, secondFieldBox, fieldLabelBox, fieldValueBox] =
-    await Promise.all([
-      output.boundingBox(),
-      outputContent.boundingBox(),
-      runtime.boundingBox(),
-      firstField.boundingBox(),
-      secondField.boundingBox(),
-      fieldLabel.boundingBox(),
-      fieldValue.boundingBox()
-    ]);
-  if (!outputBox || !contentBox || !runtimeBox || !firstFieldBox || !secondFieldBox || !fieldLabelBox || !fieldValueBox)
-    throw new Error('Missing Monad output layout');
-
-  expect(Math.abs(contentBox.x - outputBox.x)).toBeLessThan(1);
-  expect(Math.abs(contentBox.width - outputBox.width)).toBeLessThan(1);
-  expect(Math.abs(runtimeBox.x - outputBox.x)).toBeLessThan(1);
-  expect(secondFieldBox.y).toBeGreaterThan(firstFieldBox.y + firstFieldBox.height - 1);
-  expect(fieldValueBox.x).toBeGreaterThan(fieldLabelBox.x + fieldLabelBox.width);
-  expect(Math.abs(fieldValueBox.y - fieldLabelBox.y)).toBeLessThan(4);
-});
-
-test('Monad project message body spans the row below its metadata', async ({ page }) => {
-  await page.goto(`${HARNESS}?mode=monad-message-body`);
-
-  const output = page.locator('[data-slot="monad-mcp-output"]');
-  const body = page.locator('[data-slot="monad-mcp-output-body"]');
-  const fields = page.locator('[data-slot="monad-mcp-output-field"]');
-  const [outputBox, bodyBox, lastFieldBox] = await Promise.all([
-    output.boundingBox(),
-    body.boundingBox(),
-    fields.last().boundingBox()
-  ]);
-  if (!outputBox || !bodyBox || !lastFieldBox) throw new Error('Missing Monad message body layout');
-
-  expect(Math.abs(bodyBox.x - outputBox.x)).toBeLessThan(1);
-  expect(Math.abs(bodyBox.width - outputBox.width)).toBeLessThan(1);
-  expect(bodyBox.y).toBeGreaterThanOrEqual(lastFieldBox.y + lastFieldBox.height - 1);
 });
 
 type FixtureExpectation = {

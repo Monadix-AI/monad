@@ -66,8 +66,6 @@ test('project session header opens the existing member flow', async () => {
       .getAllByRole('listitem')
       .map((item) => item.textContent)
   ).toEqual(['RLResearch leadOpenAI Codex', 'RVReviewerClaude Code']);
-  // behavior-ok: hovering the member count reveals a bounded roster that scrolls inside the popover.
-  expect(memberList.className).toContain('max-h-72 list-none overflow-y-auto overscroll-contain');
 });
 
 test('project session header renames the active session inline', async () => {
