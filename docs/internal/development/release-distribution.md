@@ -1,4 +1,9 @@
-# Monad distribution
+---
+title: "Release Distribution"
+audience: "internal-developer"
+description: "Build, package, and locally verify Monad release artifacts with dist."
+---
+# Release distribution
 
 Monad releases are built and packaged by `dist` 0.32.0. The generic package adapter calls the existing Bun compiler for one target and stages its executable for `dist`.
 
@@ -7,7 +12,7 @@ dist plan --allow-dirty
 MONAD_DIST_VERSION=0.1.3 dist build --target=aarch64-apple-darwin --allow-dirty
 ```
 
-`scripts/build-dist.ts` receives `CARGO_DIST_TARGET`, builds the exact requested version, and copies `monad` into `distribution/out/`. `install-updater = true` makes the shell and PowerShell installers install the sibling `monad-update` executable and write the dist receipt used by axoupdater.
+`scripts/build-dist.ts` receives `CARGO_DIST_TARGET`, builds the exact requested version, and copies `monad` into the root `out/` staging directory. `install-updater = true` makes the shell and PowerShell installers install the sibling `monad-update` executable and write the dist receipt used by axoupdater.
 
 The release workflow builds each configured target, smoke-tests both installer families on native runners, then publishes the archives, updaters, and installers together. Release tags are the source of truth for stable, beta, and nightly builds.
 

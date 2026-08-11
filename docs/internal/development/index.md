@@ -34,6 +34,7 @@ flowchart LR
 | UI or copy | [Internal design rules](design/) |
 | Several agents working in parallel | [Parallel agent development](../agents/parallel-agents.md) |
 | A slow edit-to-verify loop | [Developer experience](dx.md) |
+| Release packaging or installers | [Release distribution](release-distribution.md) |
 | An unfamiliar tool or library in the repository | [Technology stack](../../engineering/tech-stack.md) |
 
 ## Reference

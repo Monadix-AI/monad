@@ -8,13 +8,13 @@ import rootPkg from '../package.json' with { type: 'json' };
 import { releaseTargetFromDistTarget, releaseTargetSuffix } from './lib/release-target.ts';
 
 const root = resolve(import.meta.dir, '..');
-const distPackage = Bun.TOML.parse(await Bun.file(join(root, 'distribution/dist.toml')).text()) as {
+const distPackage = Bun.TOML.parse(await Bun.file(join(root, 'dist.toml')).text()) as {
   package?: { version?: string };
 };
 const version = (Bun.env.MONAD_DIST_VERSION ?? rootPkg.version).replace(/^v/, '');
 if (!Bun.env.MONAD_DIST_VERSION && distPackage.package?.version !== rootPkg.version) {
   throw new Error(
-    `distribution/dist.toml version ${distPackage.package?.version ?? '(missing)'} does not match package.json ${rootPkg.version}`
+    `dist.toml version ${distPackage.package?.version ?? '(missing)'} does not match package.json ${rootPkg.version}`
   );
 }
 
@@ -25,7 +25,7 @@ const target = releaseTargetFromDistTarget(distTarget);
 await $`bun run scripts/build-release.ts --target=${distTarget} --version=${version} --no-archive`.cwd(root);
 
 const builtPackage = join(root, 'dist', `monad-${version}-${releaseTargetSuffix(target)}`);
-const outDir = join(root, 'distribution', 'out');
+const outDir = join(root, 'out');
 rmSync(outDir, { recursive: true, force: true });
 mkdirSync(outDir, { recursive: true });
 mkdirSync(join(outDir, 'assets'), { recursive: true });
