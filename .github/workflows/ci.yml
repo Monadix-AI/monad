@@ -180,6 +180,9 @@ jobs:
 
       - name: Upload test timings
         if: always()
+        # Timing data is diagnostic; the artifact service being unreachable must not fail a suite
+        # that already reported its own result.
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: junit-unit-${{ matrix.os }}
@@ -294,6 +297,9 @@ jobs:
       # cached results and no tests actually ran.
       - name: Upload test timings
         if: always()
+        # Timing data is diagnostic; the artifact service being unreachable must not fail a suite
+        # that already reported its own result.
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: junit-hermetic-e2e-${{ matrix.os }}
