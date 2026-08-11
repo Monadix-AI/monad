@@ -294,6 +294,29 @@ function monadEventObservations(id: string, record: Record<string, unknown>): Me
   return [];
 }
 
+function isCanonicalToolObservation(event: MeshAgentObservationEvent): boolean {
+  return event.provenance.rawEvents.some((raw) => {
+    const record = recordValue(raw);
+    return record ? toolMessageFromRecord(record) !== undefined : false;
+  });
+}
+
+function reconcileToolObservations(events: MeshAgentObservationEvent[]): MeshAgentObservationEvent[] {
+  const canonicalKeys = new Set(
+    events
+      .filter((event) => event.role === 'tool' && event.dedupeKey && isCanonicalToolObservation(event))
+      .map((event) => event.dedupeKey as string)
+  );
+  const seen = new Set<string>();
+  return events.filter((event) => {
+    if (event.role !== 'tool' || !event.dedupeKey) return true;
+    if (canonicalKeys.has(event.dedupeKey) && !isCanonicalToolObservation(event)) return false;
+    if (seen.has(event.dedupeKey)) return false;
+    seen.add(event.dedupeKey);
+    return true;
+  });
+}
+
 export const monadObservationProjection = {
   identity: (event: MeshAgentObservationEvent) => event.id,
   checkpoint: (event: MeshAgentObservationEvent) => event.id,
@@ -369,6 +392,7 @@ export const monadObservationProjection = {
       isStreamingObservationFragment(event)
     );
   },
+  reconcileEvents: reconcileToolObservations,
   messageGroup: {
     create: messageGroupSeed,
     append(group, entry) {

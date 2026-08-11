@@ -82,6 +82,8 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
   const params = recordValue(raw?.params);
   const sourceEvent = recordValue(params?.event);
   const sourcePayload = recordValue(sourceEvent?.payload);
+  const sourceMessage = recordValue(sourcePayload?.message);
+  const sourceMessageData = recordValue(sourceMessage?.data);
   const item = recordValue(params?.item) ?? recordValue(raw?.item) ?? rawRecords.find(isBareProviderItem);
   const itemResult = recordValue(item?.result);
   const content = rawRecords.flatMap((record) => {
@@ -118,7 +120,8 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     raw?.tool_name,
     params?.name,
     params?.tool,
-    sourcePayload?.tool
+    sourcePayload?.tool,
+    sourceMessageData?.toolName
   );
   const projectedName = projectedToolName(event.text);
   const name =
@@ -148,7 +151,8 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     params?.callId,
     params?.call_id,
     params?.itemId,
-    sourcePayload?.toolCallId
+    sourcePayload?.toolCallId,
+    sourceMessageData?.toolCallId
   );
   const sourceStatus =
     sourceEvent?.type === 'tool.called'
@@ -159,7 +163,13 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
           ? sourcePayload?.ok === false
             ? 'failed'
             : 'completed'
-          : undefined;
+          : sourceEvent?.type === 'session.message.created' && sourceMessage?.type === 'tool_call'
+            ? 'running'
+            : sourceEvent?.type === 'session.message.created' && sourceMessage?.type === 'tool_result'
+              ? sourceMessageData?.ok === false
+                ? 'failed'
+                : 'completed'
+              : undefined;
   const lifecycleMethod = rawRecords.map((record) => textValue(record.method)).find((method) => method !== undefined);
   const lifecycleStatus =
     lifecycleMethod === 'item/started' ? 'running' : lifecycleMethod === 'item/completed' ? 'completed' : undefined;
@@ -214,7 +224,8 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     raw?.args ??
     raw?.arguments ??
     params?.input ??
-    sourcePayload?.input;
+    sourcePayload?.input ??
+    sourceMessageData?.input;
   if (kind === 'tool-call') {
     return input === undefined ? { name, ...metadata } : { name, input, ...metadata };
   }
@@ -236,6 +247,8 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     sourcePayload?.displayResult ??
     sourcePayload?.result ??
     sourcePayload?.output ??
+    sourceMessageData?.output ??
+    sourceMessageData?.result ??
     event.text;
   return {
     name,
