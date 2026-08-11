@@ -132,7 +132,19 @@ export const DEVELOPMENT_ROUTES = [
   { method: 'GET', template: '/v1/settings/developer', owner: 'development', capability: 'development' },
   { method: 'PUT', template: '/v1/settings/developer', owner: 'development', capability: 'development' },
   { method: 'DELETE', template: '/v1/settings/developer/logs', owner: 'development', capability: 'development' },
-  { method: 'POST', template: '/v1/settings/developer/logs/preview', owner: 'development', capability: 'development' }
+  { method: 'POST', template: '/v1/settings/developer/logs/preview', owner: 'development', capability: 'development' },
+  {
+    method: 'GET',
+    template: '/v1/settings/developer/live-events',
+    owner: 'development',
+    capability: 'development'
+  },
+  {
+    method: 'GET',
+    template: '/v1/settings/developer/live-events/:meshSessionId/:observationEpoch',
+    owner: 'development',
+    capability: 'development'
+  }
 ] as const satisfies readonly RuntimeBindingDef<'development'>[];
 
 export const RESOURCE_ROUTES = [
