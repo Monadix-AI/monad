@@ -8,6 +8,7 @@ import { createMonadEventSource } from '../../src/agent-adapters/monad/event-pag
 import { monadMeshAgentAdapter } from '../../src/agent-adapters/monad/index.ts';
 import { monadObservationProjection } from '../../src/agent-adapters/monad/observation.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
+import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 
 const agent = {
   name: 'monad',
@@ -788,6 +789,109 @@ test('Monad provider history restores tool events before later assistant message
       at: '2026-08-09T13:21:39.987Z',
       providerEventType: 'session.message.completed',
       dedupeKey: 'monad:evt_100000000003:agent:session.message.completed'
+    }
+  ]);
+});
+
+test('Monad live projection reconciles canonical tool messages with delayed lifecycle events', () => {
+  const toolCallId = 'call_project_post';
+  const records = [
+    eventRecord({
+      id: 'evt_300000000001',
+      type: 'session.message.created',
+      at: '2026-08-09T13:21:07.642Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'agent-loop' },
+        message: {
+          id: 'msg_300000000001',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'assistant',
+          text: '{"tool":"monad__project_post","input":{"text":"Joined"}}',
+          type: 'tool_call',
+          data: { toolCallId, toolName: 'monad__project_post', input: { text: 'Joined' } },
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T13:21:07.642Z'
+        },
+        messageRevision: 1
+      }
+    }),
+    eventRecord({
+      id: 'evt_300000000002',
+      type: 'session.message.created',
+      at: '2026-08-09T13:21:08.000Z',
+      payload: {
+        transcriptTargetId: 'ses_MsSXceRDb7hX',
+        producer: { kind: 'system', subsystem: 'agent-loop' },
+        message: {
+          id: 'msg_300000000002',
+          sessionId: 'ses_MsSXceRDb7hX',
+          role: 'tool',
+          text: '{"ok":true}',
+          type: 'tool_result',
+          data: { toolCallId, toolName: 'monad__project_post', output: '{"ok":true}', ok: true },
+          stream: { status: 'settled' },
+          active: true,
+          createdAt: '2026-08-09T13:21:08.000Z'
+        },
+        messageRevision: 2
+      }
+    }),
+    eventRecord({
+      id: 'evt_300000000003',
+      type: 'tool.called',
+      at: '2026-08-09T13:21:07.641Z',
+      payload: { toolCallId, tool: 'monad__project_post', input: { text: 'Joined' } }
+    }),
+    eventRecord({
+      id: 'evt_300000000004',
+      type: 'tool.result',
+      at: '2026-08-09T13:21:07.999Z',
+      payload: { toolCallId, tool: 'monad__project_post', ok: true, result: '{"ok":true}' }
+    })
+  ];
+  const projector = monadMeshAgentAdapter.events.createLiveProjector?.({
+    id: 'mesh_monad_live_tool',
+    providerSessionRef: 'ses_MsSXceRDb7hX'
+  });
+  let projected = projector?.advance('').events ?? [];
+  for (const record of records) projected = projector?.advance(`${record}\n`).events ?? [];
+  const neutral = projected
+    .map((event) => toAgentObservationEvent(event, monadObservationProjection))
+    .filter((event) => event !== null);
+
+  expect(
+    agentObservationCards(neutral, 'monad').map((card) => {
+      const call = card.payload.call as (typeof neutral)[number] | undefined;
+      const result = card.payload.result as (typeof neutral)[number] | undefined;
+      return {
+        id: card.id,
+        kind: card.kind,
+        streaming: card.streaming,
+        call: call?.tool,
+        result: result?.tool,
+        at: card.at
+      };
+    })
+  ).toEqual([
+    {
+      id: 'mesh_monad_live_tool:tool:call_project_post:call',
+      kind: 'tool',
+      streaming: false,
+      call: {
+        name: 'monad__project_post',
+        input: { text: 'Joined' },
+        callId: toolCallId,
+        status: 'running'
+      },
+      result: {
+        name: 'monad__project_post',
+        output: '{"ok":true}',
+        callId: toolCallId,
+        status: 'completed'
+      },
+      at: '2026-08-09T13:21:08.000Z'
     }
   ]);
 });
