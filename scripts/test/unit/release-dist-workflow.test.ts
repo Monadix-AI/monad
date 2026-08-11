@@ -33,6 +33,9 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   const shellTest = namedStep('install-test', 'Test shell installer and updater receipt')?.run;
   const powerShellTest = namedStep('install-test', 'Test PowerShell installer and updater receipt')?.run;
   const attest = namedStep('publish', 'Attest release assets');
+  const stageAssets = namedStep('publish', 'Stage public release assets')?.run;
+  const changelog = namedStep('publish', 'Generate complete release changelog')?.run;
+  const releaseUpload = namedStep('publish', 'Upload release assets');
   const localDeploy = await Bun.file(join(root, 'scripts/deploy-local-dist.ts')).text();
   const upgradeE2e = await Bun.file(join(root, 'scripts/test/upgrade-dist-e2e.ts')).text();
 
@@ -62,11 +65,17 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   );
   expect(namedStep('upgrade-test', 'Install dependencies')?.run).toBe('bun install --frozen-lockfile');
   expect(namedStep('publish', 'Publish release')?.run).toContain(`--repo "\${GITHUB_REPOSITORY}"`);
+  expect(changelog).toContain('scripts/generate-release-changelog.ts');
+  expect(changelog).toContain(`--target "\${RELEASE_REF}"`);
+  expect(releaseUpload?.with?.body_path).toBe('release-notes.md');
+  expect(releaseUpload?.with?.generate_release_notes).toBeUndefined();
+  expect(stageAssets).toBe('bun scripts/stage-public-release-assets.ts --from artifacts --to release-assets');
   expect(upgradeE2e).toContain('readdirSync(newDir');
   expect(upgradeE2e).toContain('browser_download_url: assetUrl');
   expect(upgradeE2e).toContain("await run([monad, 'up'], env)");
   expect(attest?.uses).toMatch(/^actions\/attest@[0-9a-f]{40}$/);
-  expect(attest?.with?.['subject-path']).toBe('artifacts/*');
+  expect(attest?.with?.['subject-path']).toBe('release-assets/*');
+  expect(releaseUpload?.with?.files).toBe('release-assets/*');
   expect(jobs.publish?.permissions).toMatchObject({ attestations: 'write', 'id-token': 'write' });
   expect(releasePlease.jobs?.['release-assets']?.permissions).toMatchObject({
     attestations: 'write',
