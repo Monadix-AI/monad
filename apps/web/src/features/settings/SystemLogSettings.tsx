@@ -268,6 +268,28 @@ function LoadedSystemLogSettings({ developer }: { developer: DeveloperSettings }
       {developer.developerMode === true ? (
         <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
           <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="text-sm">{t('web.settings.system.liveEventReplay')}</span>
+            <span className="text-muted-foreground text-xs">{t('web.settings.system.liveEventReplayDesc')}</span>
+          </div>
+          <Button
+            asChild
+            size="sm"
+            variant="outline"
+          >
+            <a
+              href="/developer/live-event-replay"
+              rel="noopener noreferrer"
+              target="_blank"
+            >
+              {t('web.settings.system.openLiveEventReplay')}
+            </a>
+          </Button>
+        </div>
+      ) : null}
+
+      {developer.developerMode === true ? (
+        <div className="flex items-center justify-between gap-4 rounded-md border px-3 py-2.5">
+          <div className="flex min-w-0 flex-col gap-0.5">
             <span className="text-sm">{t('web.settings.system.clearLogs')}</span>
             <span className="text-muted-foreground text-xs">{t('web.settings.system.clearLogsDesc')}</span>
           </div>

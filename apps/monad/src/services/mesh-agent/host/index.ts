@@ -1,8 +1,11 @@
 import type {
   Event,
+  GetLiveEventReplayFramesQuery,
   ListMeshAgentRuntimesQuery,
   ListMeshAgentRuntimesResponse,
   ListMeshSessionsResponse,
+  LiveEventReplayCapture,
+  LiveEventReplayFramePage,
   MeshAgentApprovalResolutionRequest,
   MeshAgentAuthSessionView,
   MeshAgentAuthStatusResponse,
@@ -18,6 +21,7 @@ import type {
   MeshEventPageRequest,
   MeshRawEvent,
   MeshRawEventPage,
+  MeshSessionId,
   MeshSessionView,
   MeshUsageOverviewResponse,
   ProjectId,
@@ -59,6 +63,7 @@ import { disposeLiveCapture } from '#/services/mesh-agent/host/runtime-teardown.
 import { MeshSessionEventRuntimeLauncher } from '#/services/mesh-agent/host/session-event-runtime-launcher.ts';
 import { MeshAgentSessionUsageHub } from '#/services/mesh-agent/host/session-usage-hub.ts';
 import { getMeshAgentProviderAdapter, resolveMeshAgentExecutable } from '#/services/mesh-agent/index.ts';
+import { MeshLiveEventLog } from '#/services/mesh-agent/live-event-log.ts';
 import { cleanupStaleLiveRawStores, LiveRawStore } from '#/services/mesh-agent/live-raw-store.ts';
 import { MeshAgentLoginNudge } from '#/services/mesh-agent/login-nudge.ts';
 import {
@@ -119,12 +124,15 @@ export class MeshAgentHost {
   private readonly liveRawStoreDirectory: string;
   private readonly liveRawStoreCleanup: Promise<Error | undefined>;
   private readonly fixtureTap?: MeshFixtureTap;
+  private readonly liveEventLog?: MeshLiveEventLog;
 
   constructor(private readonly deps: MeshAgentHostDeps) {
     if (deps.developerMode) {
       if (!deps.meshFixtureCaptureDirectory)
         throw new Error('meshFixtureCaptureDirectory is required in developer mode');
       this.fixtureTap = new MeshFixtureTap(deps.meshFixtureCaptureDirectory, this.log);
+      if (!deps.meshLiveEventLogsDirectory) throw new Error('meshLiveEventLogsDirectory is required in developer mode');
+      this.liveEventLog = new MeshLiveEventLog(deps.meshLiveEventLogsDirectory, this.log);
     }
     this.liveRawStoreDirectory =
       deps.meshAgentLiveStoreDirectory ?? join(tmpdir(), `monad-mesh-agent-live-${process.pid}`);
@@ -180,7 +188,8 @@ export class MeshAgentHost {
       untrackProcess: (pid) => this.processLifecycle.untrack(pid),
       openLiveRawStore: (id, epoch) => this.openLiveRawStore(id, epoch),
       publishSessionUsage: (id, usage) => this.publishSessionUsage(id, usage),
-      ...(this.fixtureTap ? { fixtureTap: this.fixtureTap } : {})
+      ...(this.fixtureTap ? { fixtureTap: this.fixtureTap } : {}),
+      ...(this.liveEventLog ? { liveEventLog: this.liveEventLog } : {})
     });
     this.observationResolver = new MeshAgentObservationResolver({
       live: this.live,
@@ -206,6 +215,28 @@ export class MeshAgentHost {
 
   private openLiveRawStore(id: string, epoch: string): LiveRawStore {
     return LiveRawStore.open({ directory: this.liveRawStoreDirectory, sessionId: id, epoch });
+  }
+
+  listLiveEventReplayCaptures(): Promise<LiveEventReplayCapture[]> {
+    return (this.liveEventLog?.list() ?? Promise.resolve([])).then((captures) =>
+      captures.map((capture) => {
+        const projectName = this.deps.store.getWorkplaceProject(capture.projectId)?.title;
+        const sessionTitle = this.deps.store.getSession(capture.sessionId)?.title;
+        return {
+          ...capture,
+          ...(projectName ? { projectName } : {}),
+          ...(sessionTitle ? { sessionTitle } : {})
+        };
+      })
+    );
+  }
+
+  liveEventReplayFrames(
+    meshSessionId: MeshSessionId,
+    observationEpoch: string,
+    query: GetLiveEventReplayFramesQuery
+  ): Promise<LiveEventReplayFramePage | undefined> {
+    return this.liveEventLog?.page(meshSessionId, observationEpoch, query) ?? Promise.resolve(undefined);
   }
 
   setManagedProjectOutputHandler(handler: ManagedProjectOutputHandler): void {

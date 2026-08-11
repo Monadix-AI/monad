@@ -281,9 +281,9 @@ test('message attachment reader rejects paths that changed after registration', 
     await unlink(file);
     await symlink(outside, file);
 
-    await expect(createNativeAgentAttachmentReader(store).read('att_100000000000', false)).rejects.toThrow(
-      'attachment path changed after registration'
-    );
+    await expect(
+      createNativeAgentAttachmentReader(store).read('att_100000000000', { download: false, inline: false })
+    ).rejects.toThrow('attachment path changed after registration');
   } finally {
     await rm(dir, { recursive: true, force: true });
   }

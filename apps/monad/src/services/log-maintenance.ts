@@ -5,7 +5,7 @@ import type { LogCleanupPreview, LogCleanupResult } from '@monad/protocol';
 
 import { constants, renameSync, statSync } from 'node:fs';
 import { lstat, open, readdir, unlink } from 'node:fs/promises';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { debugLogDir, debugLogPath, isDebugLogFileName, isDeveloperLogFileName } from '@monad/logger/log-files';
 
 import { isMeshFixtureCaptureFileName, isMeshFixtureCaptureTempFileName } from '#/services/mesh-agent/fixture-tap.ts';
@@ -29,6 +29,7 @@ export interface LogMaintenanceFileSystem {
 export interface LogMaintenanceServiceOptions {
   logsDir: string;
   captureDir: string;
+  liveEventDir?: string;
   debugDir?: string;
   debugPath?: string;
   noFollowFlag?: number;
@@ -45,8 +46,16 @@ export class LogCleanupPreviewBusyError extends Error {
   }
 }
 
-type CandidateKind = 'fixed' | 'rotation' | 'debug' | 'developer' | 'capture';
-type Candidate = { kind: CandidateKind; path: string; root: string; rootStat: Stats; stat?: Stats };
+type CandidateKind = 'fixed' | 'rotation' | 'debug' | 'developer' | 'capture' | 'live-event';
+type Candidate = {
+  kind: CandidateKind;
+  path: string;
+  parent: string;
+  root: string;
+  parentStat: Stats;
+  rootStat: Stats;
+  stat?: Stats;
+};
 type Inventory = { candidates: Candidate[]; errors: unknown[] };
 type Mutation = 'truncate' | 'unlink';
 
@@ -81,6 +90,7 @@ export class LogMaintenanceService {
   private readonly fileSystem: LogMaintenanceFileSystem;
   private readonly logsDir: string;
   private readonly captureDir: string;
+  private readonly liveEventDir: string;
   private readonly debugDir: string;
   private readonly debugPath: string;
   private readonly noFollowFlag: number;
@@ -95,6 +105,7 @@ export class LogMaintenanceService {
   constructor(options: LogMaintenanceServiceOptions) {
     this.logsDir = resolve(options.logsDir);
     this.captureDir = resolve(options.captureDir);
+    this.liveEventDir = resolve(options.liveEventDir ?? join(options.logsDir, 'live-events'));
     this.debugDir = resolve(options.debugDir ?? debugLogDir);
     this.debugPath = resolve(options.debugPath ?? debugLogPath);
     this.noFollowFlag =
@@ -219,11 +230,14 @@ export class LogMaintenanceService {
 
   private async revalidate(candidate: Candidate): Promise<Stats> {
     const parent = resolve(dirname(candidate.path));
-    if (parent !== candidate.root) throw new Error('Log candidate escaped its inventory root');
+    const rel = relative(candidate.root, candidate.path);
+    if (rel === '' || rel.startsWith('..') || isAbsolute(rel) || parent !== candidate.parent) {
+      throw new Error('Log candidate escaped its inventory root');
+    }
     const root = await this.fileSystem.lstat(candidate.root);
     if (!isSameDirectory(root, candidate.rootStat)) throw new Error('Log inventory root changed');
     const parentStat = await this.fileSystem.lstat(parent);
-    if (!isSameDirectory(parentStat, candidate.rootStat)) throw new Error('Log candidate parent changed');
+    if (!isSameDirectory(parentStat, candidate.parentStat)) throw new Error('Log candidate parent changed');
     const entry = await this.fileSystem.lstat(candidate.path);
     if (!entry.isFile() || entry.isSymbolicLink() || !sameIdentity(entry, candidate.stat)) {
       throw new Error('Log candidate changed');
@@ -260,7 +274,10 @@ export class LogMaintenanceService {
   }
 
   private async inventory(): Promise<Inventory> {
-    const candidates = new Map<string, { kind: CandidateKind; root: string; rootStat: Stats }>();
+    const candidates = new Map<
+      string,
+      { kind: CandidateKind; parent: string; root: string; parentStat: Stats; rootStat: Stats }
+    >();
     const errors: unknown[] = [];
     const addDirectory = async (directory: string, classify: (name: string) => CandidateKind | undefined) => {
       let names: string[];
@@ -280,15 +297,70 @@ export class LogMaintenanceService {
       }
       for (const name of names) {
         const kind = classify(name);
-        if (kind) candidates.set(resolve(directory, name), { kind, root: directory, rootStat });
+        if (kind) {
+          candidates.set(resolve(directory, name), {
+            kind,
+            parent: directory,
+            root: directory,
+            parentStat: rootStat,
+            rootStat
+          });
+        }
       }
+    };
+    const addLiveEventDirectory = async () => {
+      let rootStat: Stats;
+      try {
+        rootStat = await this.fileSystem.lstat(this.liveEventDir);
+      } catch (error) {
+        if (!isMissingPathError(error)) errors.push(error);
+        return;
+      }
+      if (!rootStat.isDirectory() || rootStat.isSymbolicLink()) return;
+      const visit = async (directory: string, depth: number): Promise<void> => {
+        let names: string[];
+        let parentStat: Stats;
+        try {
+          parentStat = await this.fileSystem.lstat(directory);
+          if (!parentStat.isDirectory() || parentStat.isSymbolicLink()) return;
+          names = await this.fileSystem.readdir(directory);
+        } catch (error) {
+          if (!isMissingPathError(error)) errors.push(error);
+          return;
+        }
+        await Promise.all(
+          names.map(async (name) => {
+            const path = resolve(directory, name);
+            let stat: Stats;
+            try {
+              stat = await this.fileSystem.lstat(path);
+            } catch (error) {
+              if (!isMissingPathError(error)) errors.push(error);
+              return;
+            }
+            if (stat.isSymbolicLink()) return;
+            if (depth < 4 && stat.isDirectory()) return visit(path, depth + 1);
+            if (depth === 4 && stat.isFile() && isLiveEventLogPath(this.liveEventDir, path)) {
+              candidates.set(path, {
+                kind: 'live-event',
+                parent: directory,
+                root: this.liveEventDir,
+                parentStat,
+                rootStat
+              });
+            }
+          })
+        );
+      };
+      await visit(this.liveEventDir, 0);
     };
     await Promise.all([
       addDirectory(this.logsDir, classifyPersistentLog),
       addDirectory(this.debugDir, (name) => (isDebugLogFileName(name) ? 'debug' : undefined)),
       addDirectory(this.captureDir, (name) =>
         isMeshFixtureCaptureFileName(name) || isMeshFixtureCaptureTempFileName(name) ? 'capture' : undefined
-      )
+      ),
+      addLiveEventDirectory()
     ]);
     const inspected = await Promise.all(
       [...candidates].map(async ([path, location]): Promise<Candidate | undefined> => {
@@ -332,6 +404,21 @@ function isDaemonRotation(name: string): boolean {
   if (!match?.[1]) return false;
   const generation = Number(match[1]);
   return String(generation) === match[1] && generation >= 1 && generation <= DAEMON_LOG_KEEP;
+}
+
+function isLiveEventLogPath(root: string, path: string): boolean {
+  const parts = relative(root, path).split(/[\\/]/);
+  if (parts.length !== 5) return false;
+  const [projectId, sessionId, memberId, meshSessionId, fileName] = parts;
+  return (
+    /^prj_[0-9A-Za-z]{12}$/.test(projectId ?? '') &&
+    /^ses_[0-9A-Za-z]{12}$/.test(sessionId ?? '') &&
+    !!memberId &&
+    memberId !== '.' &&
+    memberId !== '..' &&
+    /^mesh_[0-9A-Za-z]{12}$/.test(meshSessionId ?? '') &&
+    /^oep_[0-9A-Za-z]{12}\.jsonl$/.test(fileName ?? '')
+  );
 }
 
 function emptyResult(): LogCleanupResult {

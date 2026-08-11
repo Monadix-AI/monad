@@ -341,6 +341,45 @@ describe('LogMaintenanceService', () => {
     expect(readFileSync(staleSession, 'utf8')).toBe('keep');
   });
 
+  test('saved live event logs follow preview, retention, and clear-all lifecycle', async () => {
+    const now = Date.parse('2026-07-21T12:00:00Z');
+    const liveEventDir = join(logsDir, 'live-events');
+    const stale = join(
+      liveEventDir,
+      'prj_100000000001',
+      'ses_100000000001',
+      'pmem_100000000001',
+      'mesh_100000000001',
+      'oep_100000000001.jsonl'
+    );
+    const recent = join(
+      liveEventDir,
+      'prj_100000000001',
+      'ses_100000000001',
+      'pmem_100000000001',
+      'mesh_100000000002',
+      'oep_100000000002.jsonl'
+    );
+    mkdirSync(join(stale, '..'), { recursive: true });
+    mkdirSync(join(recent, '..'), { recursive: true });
+    const staleBytes = write(stale, 'stale-live-event', 8 * DAY_MS, now);
+    write(recent, 'recent-live-event', 60_000, now);
+    const maintenance = service(now);
+
+    expect(await maintenance.preview({ enabled: true, retentionDays: 7 })).toEqual({ files: 1, bytes: staleBytes });
+    expect(await maintenance.sweep({ enabled: true, retentionDays: 7 })).toEqual({
+      filesCleared: 1,
+      filesFailed: 0,
+      bytesFreed: staleBytes
+    });
+    expect(await maintenance.clearAll()).toEqual({
+      filesCleared: 1,
+      filesFailed: 0,
+      bytesFreed: Buffer.byteLength('recent-live-event')
+    });
+    expect({ stale: existsSync(stale), recent: existsSync(recent) }).toEqual({ stale: false, recent: false });
+  });
+
   test('a symlinked capture root is never traversed', async () => {
     const now = Date.parse('2026-07-21T12:00:00Z');
     const outside = join(root, 'outside-captures');
