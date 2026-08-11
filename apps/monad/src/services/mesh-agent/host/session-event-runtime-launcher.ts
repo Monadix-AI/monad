@@ -48,6 +48,7 @@ export interface MeshSessionEventRuntimeStartArgs {
   customPrompt?: string;
   allowAutopilot?: boolean;
   initialInput?: string;
+  beforeInitialTurn?: (meshSessionId: string) => Promise<void>;
 }
 
 interface MeshSessionEventRuntimeLauncherContext {
@@ -455,6 +456,7 @@ export class MeshSessionEventRuntimeLauncher {
         this.establishManagedRuntimeOwnership(args, id);
         managedOwnershipEstablished = true;
       }
+      await args.beforeInitialTurn?.(id);
       await runtime.open(startInput?.initialTurn);
       const snapshot = runtime.snapshot();
       const terminal = snapshot.lifecycle.state === 'terminal' ? snapshot.lifecycle.termination : undefined;

@@ -302,6 +302,7 @@ export class MeshAgentHost {
     speed?: 'standard' | 'fast';
     customPrompt?: string;
     initialInput?: string;
+    beforeInitialTurn?: (meshSessionId: string) => Promise<void>;
     /** Per-member override of the agent template's `allowAutopilot`. When OFF and the adapter can
      *  proxy approvals in the effective launch mode, a managed agent delegates its provider approvals
      *  to the human instead of running unattended. */

@@ -28,7 +28,7 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
     emitLifecycle,
     messageIngress
   } = ctx;
-  const { emitManagedMeshAgentThinking, startManagedMeshAgentRuntimeWithRecovery } =
+  const { emitManagedMeshAgentThinking, retireManagedMeshAgentThinking, startManagedMeshAgentRuntimeWithRecovery } =
     createManagedMeshAgentDelivery(ctx);
 
   async function recordManagedMeshAgentProjectError(
@@ -93,9 +93,16 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
         customPrompt: settings.customPrompt,
         allowAutopilot: settings.allowAutopilot,
         providerSessionRef: resumeFrom ?? undefined,
-        input: MANAGED_MESH_AGENT_JOIN_GREETING_PROMPT.render({})
+        input: MANAGED_MESH_AGENT_JOIN_GREETING_PROMPT.render({}),
+        reserveInitialTurn: async (meshSessionId) => {
+          await emitManagedMeshAgentThinking(session.id, meshSessionId, member.projectMemberId, undefined, displayName);
+        },
+        rollbackInitialTurn: async (meshSessionId) => {
+          await retireManagedMeshAgentThinking(session.id, meshSessionId, member.projectMemberId, {
+            settleTurn: false
+          });
+        }
       });
-      await emitManagedMeshAgentThinking(session.id, nativeSession.id, member.projectMemberId, undefined, displayName);
       return { started: true, nativeSessionId: nativeSession.id };
     } catch (err) {
       const { message } = extractError(err);

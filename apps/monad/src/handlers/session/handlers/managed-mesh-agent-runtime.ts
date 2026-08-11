@@ -43,6 +43,8 @@ export type StartManagedMeshAgentRuntimeArgs = {
   allowAutopilot?: boolean;
   providerSessionRef?: string;
   input: string;
+  reserveInitialTurn?: (meshSessionId: string) => Promise<void>;
+  rollbackInitialTurn?: (meshSessionId: string) => Promise<void>;
 };
 
 /** Cold-starts (or resumes) a managed-project-agent MeshAgent process and de-dupes concurrent starts
@@ -81,9 +83,12 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
     customPrompt,
     allowAutopilot,
     providerSessionRef,
-    input
+    input,
+    reserveInitialTurn,
+    rollbackInitialTurn
   }: StartManagedMeshAgentRuntimeArgs): Promise<MeshSessionView> {
     if (!meshAgentHost) throw new HandlerError('internal', 'MeshAgent host not configured');
+    const host = meshAgentHost;
     const currentSession = ctx.requireSession(session.id);
     if (!currentSession.projectId)
       throw new HandlerError('invalid', `MeshAgent "${spec.name}" requires a project binding`);
@@ -119,8 +124,25 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
       customPrompt,
       initialInput: meshAgentInputText(input)
     };
+    async function startRuntime(args: typeof startArgs & { providerSessionRef?: string }): Promise<MeshSessionView> {
+      let reservedMeshSessionId: string | undefined;
+      try {
+        return await host.start({
+          ...args,
+          beforeInitialTurn: reserveInitialTurn
+            ? async (meshSessionId) => {
+                reservedMeshSessionId = meshSessionId;
+                await reserveInitialTurn(meshSessionId);
+              }
+            : undefined
+        });
+      } catch (err) {
+        if (reservedMeshSessionId && rollbackInitialTurn) await rollbackInitialTurn(reservedMeshSessionId);
+        throw err;
+      }
+    }
     try {
-      const nativeSession = await meshAgentHost.start({
+      const nativeSession = await startRuntime({
         ...startArgs,
         providerSessionRef
       });
@@ -152,7 +174,7 @@ export function createManagedMeshAgentRuntime(ctx: SessionContext) {
         })
       );
       persistAndRetire(session.id, round);
-      const nativeSession = await meshAgentHost.start({
+      const nativeSession = await startRuntime({
         ...startArgs,
         initialInput: meshAgentInputText(managedMeshAgentResumeRecoveryNotice(spec.provider, input))
       });
