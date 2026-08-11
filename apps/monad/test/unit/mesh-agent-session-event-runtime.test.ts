@@ -849,6 +849,96 @@ describe('generic session-event runtime executor', () => {
       }
     });
   });
+
+  test('stopping mid-attach cancels the attach instead of waiting out the startup timeout', async () => {
+    const unhandled: unknown[] = [];
+    const track = (reason: unknown): void => {
+      unhandled.push(reason);
+    };
+    process.on('unhandledRejection', track);
+    const order: string[] = [];
+    let attachStarted!: () => void;
+    const attaching = new Promise<void>((resolve) => {
+      attachStarted = resolve;
+    });
+    const residentDriver = driver('resident');
+    let rejectAttach!: (error: Error) => void;
+    residentDriver.attachChannel = (channel) => {
+      attachStarted();
+      // The real driver keeps writing to the child until its own dispose cancels the handshake;
+      // model that as an attach that only settles when dispose reaches the driver.
+      return new Promise<undefined>((_, reject) => {
+        rejectAttach = (error) => {
+          void channel.send('late-frame').catch(() => undefined);
+          reject(error);
+        };
+      });
+    };
+    residentDriver.dispose = async () => {
+      order.push('driver:disposed');
+      rejectAttach(new Error('EPIPE: broken pipe, write'));
+    };
+    const definition = residentDefinition();
+    definition.driver = residentDriver;
+    (definition.plan as ResidentSessionEventPlan).channel = { kind: 'child-stdio' };
+    (definition.plan as ResidentSessionEventPlan).startup = { timeoutMs: 30_000 };
+    let killed = false;
+    const executor = new SessionEventRuntimeExecutor({
+      definition,
+      executable: '/bin/provider',
+      allowedWorkingRoot: '/workspace',
+      workingPath: '/workspace',
+      resourceFactory: {
+        async start() {
+          const live = activation({ order, pending: true });
+          return {
+            ...live,
+            process: {
+              ...live.process,
+              async kill(signal) {
+                killed = true;
+                await live.process.kill(signal);
+              }
+            },
+            channel: {
+              async send() {
+                if (killed) throw new Error('EPIPE: broken pipe, write');
+              },
+              async close() {}
+            }
+          };
+        }
+      },
+      createObservationEpoch: () => 'epoch-1',
+      captureRaw: async () => {},
+      consumeEvent: async () => {}
+    });
+
+    const opened = executor.open().then(
+      () => 'opened',
+      (error: unknown) => (error as Error).message
+    );
+    await attaching;
+    const startedAt = Date.now();
+    await executor.close();
+    const closeMs = Date.now() - startedAt;
+
+    expect(await opened).toBe('EPIPE: broken pipe, write');
+    expect(closeMs).toBeLessThan(5_000);
+    // The stop tears the child down, disposes the driver to unblock the attach, and the unwinding
+    // activation then runs its own idempotent teardown.
+    expect(order).toEqual([
+      'process:killed',
+      'activation:closed',
+      'driver:disposed',
+      'process:killed',
+      'activation:closed'
+    ]);
+    expect(executor.snapshot().lifecycle).toMatchObject({ state: 'terminal', termination: { kind: 'stopped' } });
+    await Bun.sleep(10);
+    process.off('unhandledRejection', track);
+    expect(unhandled).toEqual([]);
+  });
 });
 
 test('Bun session-event resources expose child stdio as ordered packets and a framed channel', async () => {

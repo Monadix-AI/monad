@@ -254,8 +254,12 @@ export class MeshSessionEventRuntimeLauncher {
       connectionOpen: false,
       outputSeq: 0,
       kill: (signal) => {
-        if (signal) void runtime.interrupt().catch(() => runtime.close());
-        else void runtime.close();
+        // Nothing awaits a kill, so every branch has to end in a caught promise: a stop landing
+        // mid-activation tears the child down under an in-flight write, and that rejection would
+        // otherwise escape as an unhandled rejection.
+        const stop = (): Promise<void> => runtime.close().catch(() => undefined);
+        if (signal) void runtime.interrupt().then(undefined, stop);
+        else void stop();
       }
     };
     runtime = new SessionEventRuntimeExecutor({
