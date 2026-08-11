@@ -204,11 +204,15 @@ test('running tool kinds replace their 16px static icon and status dot with the 
   ]);
 });
 
+test('visible text decoding applies HTML entities exactly once', () => {
+  expect(visibleText('<span>&amp;quot; &quot; &amp;amp;</span>')).toBe('&quot; " &amp;');
+});
+
 function visibleText(markup: string): string {
   return markup
     .replace(/<[^>]+>/g, ' ')
-    .replace(/&amp;/g, '&')
     .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
     .replace(/\s+/g, ' ')
     .trim();
 }

@@ -22,7 +22,12 @@ test('Claude file read output separates provider line numbers before syntax high
     fileReadDisplayContent(
       "11\t} from '@monad/protocol';\n12\timport type { SessionContext } from '#/session';\n13\t\n\n<system-reminder>Provider metadata</system-reminder>",
       'claude-code'
-    )
+    ),
+    fileReadDisplayContent(
+      '11\tconst value = 1;\n12\t\n\n<SYSTEM-REMINDER source="provider">first</SYSTEM-REMINDER>\n<system-reminder>second\nline</system-reminder>',
+      'claude-code'
+    ),
+    fileReadDisplayContent('11\tconst value = 1;\nprovider trailing text  ', 'claude-code')
   ]).toEqual([
     {
       code: "} from '@monad/protocol';\nimport type { SessionContext } from '#/session';\n",
@@ -31,6 +36,14 @@ test('Claude file read output separates provider line numbers before syntax high
     {
       code: "} from '@monad/protocol';\nimport type { SessionContext } from '#/session';\n",
       lineNumbers: [11, 12, 13]
+    },
+    {
+      code: 'const value = 1;\n',
+      lineNumbers: [11, 12]
+    },
+    {
+      code: 'const value = 1;\nprovider trailing text  ',
+      lineNumbers: [11]
     }
   ]);
 
