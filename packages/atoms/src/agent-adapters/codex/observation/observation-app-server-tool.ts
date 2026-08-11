@@ -49,13 +49,23 @@ export function isCodexAppServerToolLikeItem(item: Record<string, unknown>): boo
     normalizedType.includes('mcp') ||
     normalizedType.includes('file') ||
     normalizedType.includes('function') ||
+    normalizedType.includes('image') ||
     normalizedType.includes('websearch') ||
     normalizedType.includes('web_search')
   );
 }
 
 function codexAppServerToolInput(item: Record<string, unknown>): unknown {
-  return item.arguments ?? item.input ?? item.args ?? item.action ?? item.command ?? item.path ?? item.query;
+  return (
+    item.arguments ??
+    item.input ??
+    item.args ??
+    item.action ??
+    item.command ??
+    item.path ??
+    item.query ??
+    item.revisedPrompt
+  );
 }
 
 export function hasCodexAppServerToolInput(item: Record<string, unknown>): boolean {
@@ -66,7 +76,8 @@ export function hasCodexAppServerToolInput(item: Record<string, unknown>): boole
     item.action !== undefined ||
     item.command !== undefined ||
     item.path !== undefined ||
-    item.query !== undefined
+    item.query !== undefined ||
+    item.revisedPrompt !== undefined
   );
 }
 
@@ -128,7 +139,12 @@ export function codexAppServerToolResultObservation(args: {
   createdAt?: string;
 }): MeshAgentObservationEvent[] {
   const recordKey = textValue(args.item.id) ?? String(args.recordIndex);
+  const imageResult =
+    textValue(args.item.type)?.toLowerCase() === 'imagegeneration'
+      ? textValue(args.item.savedPath, args.item.saved_path)
+      : undefined;
   const output =
+    imageResult ??
     textValue(
       args.item.output,
       args.item.result,

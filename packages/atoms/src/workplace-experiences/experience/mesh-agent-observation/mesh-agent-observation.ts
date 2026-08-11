@@ -279,12 +279,14 @@ function meshAgentObservationEvents(args: {
   if (entries.length > 0) {
     const projectionEntries =
       args.mode === 'events' && adapterObservation?.eventEntries ? adapterObservation.eventEntries(entries) : entries;
-    return keepFirstObservationByProviderEventId(
-      mergeAdjacentChunkObservations(
-        parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries: projectionEntries }),
-        adapterObservation
-      )
-    ).map((event) => (event.createdAt || !args.observedAt ? event : { ...event, createdAt: args.observedAt }));
+    const merged = mergeAdjacentChunkObservations(
+      parsedJsonEvents({ id: args.id, provider: args.provider, adapterObservation, entries: projectionEntries }),
+      adapterObservation
+    );
+    const reconciled = adapterObservation?.reconcileEvents?.(merged) ?? merged;
+    return keepFirstObservationByProviderEventId(reconciled).map((event) =>
+      event.createdAt || !args.observedAt ? event : { ...event, createdAt: args.observedAt }
+    );
   }
   if (
     adapterObservation &&

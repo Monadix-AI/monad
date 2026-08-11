@@ -8,6 +8,7 @@ import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { rawJsonText } from '../../src/workplace-experiences/chat-room/components/observation/card-shell.tsx';
+import { imageToolView } from '../../src/workplace-experiences/chat-room/components/observation/image-tool-card.tsx';
 import {
   observationContractRawEvents,
   observationRawEvents
@@ -495,7 +496,7 @@ test('Codex app-server observation preserves empty reasoning lifecycle duration 
       durationMs: 796,
       hasContent: false,
       id: liveStarted.id,
-      type: 'item/reasoning/delta'
+      type: 'item/reasoning/completed'
     },
     started: {
       durationMs: undefined,
@@ -541,13 +542,8 @@ test('Codex app-server observation renders the completed reasoning summary when 
     [
       {
         kind: 'reasoning',
-        summary: 'Inspecting the project.',
-        text: 'Thinking…'
-      },
-      {
-        kind: 'reasoning',
-        summary: 'Checking the tests.',
-        text: 'Raw reasoning fallback.'
+        summary: undefined,
+        text: 'Inspecting the project.\n\nChecking the tests.\n\nRaw reasoning fallback.'
       }
     ],
     [{ kind: 'reasoning', summary: undefined, text: 'Raw reasoning fallback.' }]
@@ -704,7 +700,7 @@ test('Claude Code observation keeps the latest thinking token estimate in one re
       id: 'thinking_1:thinking-tokens',
       kind: 'reasoning',
       streaming: true,
-      text: 'Thinking… · 151 tokens',
+      text: 'Thinking… 151 tokens',
       rawEvents: [first, latest]
     }
   ]);
@@ -721,7 +717,7 @@ test('thinking timeline rows use dedupe identity and keep each run raw', () => {
           dedupeKey: 'claude-code:think-a:agent:thinking_tokens_delta',
           kind: 'reasoning',
           streaming: true,
-          text: 'Thinking… · 25 tokens',
+          text: 'Thinking… 25 tokens',
           provenance: { contractEvents: firstRaw }
         },
         {
@@ -729,7 +725,7 @@ test('thinking timeline rows use dedupe identity and keep each run raw', () => {
           dedupeKey: 'claude-code:think-b:agent:thinking_tokens_delta',
           kind: 'reasoning',
           streaming: true,
-          text: 'Thinking… · 80 tokens',
+          text: 'Thinking… 80 tokens',
           provenance: { contractEvents: secondRaw }
         }
       ],
@@ -961,6 +957,196 @@ test('Codex app-server observation groups one agent message item lifecycle into 
   });
   expect(items[0]?.provenance.rawEvents).toEqual(records);
   expect(rawJsonText(items[0]?.provenance.rawEvents)).toBe(output);
+});
+
+test('Codex app-server observation shows only the latest indexed reasoning summary while streaming', () => {
+  const records = [
+    {
+      method: 'item/reasoning/summaryPartAdded',
+      params: { threadId: 'thread_1', turnId: 'turn_1', itemId: 'reasoning_1', summaryIndex: 0 }
+    },
+    {
+      method: 'item/reasoning/summaryTextDelta',
+      params: { threadId: 'thread_1', turnId: 'turn_1', itemId: 'reasoning_1', summaryIndex: 0, delta: 'Plan A' }
+    },
+    {
+      method: 'item/reasoning/summaryPartAdded',
+      params: { threadId: 'thread_1', turnId: 'turn_1', itemId: 'reasoning_1', summaryIndex: 1 }
+    },
+    {
+      method: 'item/reasoning/summaryTextDelta',
+      params: { threadId: 'thread_1', turnId: 'turn_1', itemId: 'reasoning_1', summaryIndex: 1, delta: 'Plan B' }
+    }
+  ];
+
+  expect(
+    meshAgentNeutralStreamItems({
+      id: 'mesh_codex0000000',
+      provider: 'codex',
+      output: records.map((record) => JSON.stringify(record)).join('\n')
+    }).map(({ kind, summary, text }) => ({ kind, summary, text }))
+  ).toEqual([{ kind: 'reasoning', summary: 'Plan B', text: 'Thinking…' }]);
+});
+
+test('Codex live reasoning replaces one summary until completion exposes the complete expandable body', () => {
+  const records = [
+    {
+      method: 'item/started',
+      params: {
+        item: { type: 'reasoning', id: 'reasoning_1', summary: [], content: [] },
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        startedAtMs: 1_000
+      }
+    },
+    {
+      method: 'item/reasoning/summaryPartAdded',
+      params: { threadId: 'thread_1', turnId: 'turn_1', itemId: 'reasoning_1', summaryIndex: 0 }
+    },
+    {
+      method: 'item/reasoning/summaryTextDelta',
+      params: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        itemId: 'reasoning_1',
+        summaryIndex: 0,
+        delta: '**Plan A**'
+      }
+    },
+    {
+      method: 'item/reasoning/summaryPartAdded',
+      params: { threadId: 'thread_1', turnId: 'turn_1', itemId: 'reasoning_1', summaryIndex: 1 }
+    },
+    {
+      method: 'item/reasoning/summaryTextDelta',
+      params: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        itemId: 'reasoning_1',
+        summaryIndex: 1,
+        delta: '**Plan B**'
+      }
+    },
+    {
+      method: 'item/completed',
+      params: {
+        item: { type: 'reasoning', id: 'reasoning_1', summary: ['**Plan A**', '**Plan B**'], content: [] },
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        completedAtMs: 7_600
+      }
+    }
+  ];
+
+  expect(
+    records.map((_, index) => {
+      const reasoning = meshAgentNeutralStreamItems({
+        id: 'mesh_codex0000000',
+        provider: 'codex',
+        mode: 'live',
+        output: records
+          .slice(0, index + 1)
+          .map((record) => JSON.stringify(record))
+          .join('\n')
+      }).filter((event) => event.kind === 'reasoning');
+      return reasoning.map(({ durationMs, hasContent, streaming, summary, text }) => ({
+        durationMs,
+        hasContent,
+        streaming,
+        summary,
+        text
+      }));
+    })
+  ).toEqual([
+    [{ durationMs: undefined, hasContent: false, streaming: true, summary: undefined, text: 'Thinking…' }],
+    [{ durationMs: undefined, hasContent: false, streaming: true, summary: undefined, text: 'Thinking…' }],
+    [{ durationMs: undefined, hasContent: false, streaming: true, summary: '**Plan A**', text: 'Thinking…' }],
+    [{ durationMs: undefined, hasContent: false, streaming: true, summary: '**Plan A**', text: 'Thinking…' }],
+    [{ durationMs: undefined, hasContent: false, streaming: true, summary: '**Plan B**', text: 'Thinking…' }],
+    [
+      {
+        durationMs: 6_600,
+        hasContent: undefined,
+        streaming: false,
+        summary: undefined,
+        text: '**Plan A**\n\n**Plan B**'
+      }
+    ]
+  ]);
+});
+
+test('Codex item lifecycle marks an unpaired tool running until its completion notification', () => {
+  const records = [
+    {
+      method: 'item/started',
+      params: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        item: {
+          id: 'tool_1',
+          type: 'mcpToolCall',
+          server: 'example',
+          tool: 'inspect',
+          status: 'inProgress',
+          arguments: { id: 1 }
+        }
+      }
+    },
+    {
+      method: 'item/completed',
+      params: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        item: {
+          id: 'tool_1',
+          type: 'mcpToolCall',
+          server: 'example',
+          tool: 'inspect',
+          status: 'completed',
+          arguments: { id: 1 }
+        }
+      }
+    }
+  ];
+  const project = (count: number) => {
+    const events = meshAgentNeutralStreamItems({
+      id: 'mesh_codex0000000',
+      provider: 'codex',
+      mode: 'live',
+      output: records
+        .slice(0, count)
+        .map((record) => JSON.stringify(record))
+        .join('\n')
+    });
+    const card = cardsFromNeutral(events, 'codex')[0];
+    return {
+      events: events.map(({ kind, streaming, tool }) => ({ kind, streaming, tool })),
+      card: card ? { kind: card.kind, streaming: card.streaming } : undefined
+    };
+  };
+
+  expect({ started: project(1), completed: project(2) }).toEqual({
+    started: {
+      events: [
+        {
+          kind: 'tool-call',
+          streaming: false,
+          tool: { callId: 'tool_1', input: { id: 1 }, name: 'inspect', status: 'running' }
+        }
+      ],
+      card: { kind: 'tool', streaming: true }
+    },
+    completed: {
+      events: [
+        {
+          kind: 'tool-call',
+          streaming: false,
+          tool: { callId: 'tool_1', input: { id: 1 }, name: 'inspect', status: 'completed' }
+        }
+      ],
+      card: { kind: 'tool', streaming: false }
+    }
+  });
 });
 
 test('Codex app-server observation groups one user message item lifecycle into one card', () => {
@@ -1571,7 +1757,7 @@ test('Codex app-server observation folds a command lifecycle into one ordered to
           command: 'bun test',
           aggregated_output: '',
           exit_code: null,
-          status: 'in_progress'
+          status: 'running'
         }
       }
     },
@@ -1632,7 +1818,7 @@ test('Codex app-server observation folds a command lifecycle into one ordered to
           category: 'shell',
           input: 'bun test',
           name: 'command_execution',
-          status: 'in_progress'
+          status: 'running'
         }
       },
       {
@@ -1656,7 +1842,7 @@ test('Codex app-server observation folds a command lifecycle into one ordered to
           category: 'shell',
           input: 'bun test',
           name: 'command_execution',
-          status: 'in_progress'
+          status: 'running'
         },
         result: {
           callId: 'item_1',
@@ -1669,6 +1855,132 @@ test('Codex app-server observation folds a command lifecycle into one ordered to
         }
       }
     ]
+  });
+});
+
+test('Codex image generation stays running until completion and exposes the generated image preview', () => {
+  const started = {
+    method: 'item/started',
+    params: {
+      item: {
+        id: 'image_1',
+        type: 'imageGeneration',
+        status: 'in_progress',
+        revisedPrompt: null,
+        result: ''
+      }
+    }
+  };
+  const completed = {
+    method: 'item/completed',
+    params: {
+      item: {
+        id: 'image_1',
+        type: 'imageGeneration',
+        status: 'completed',
+        revisedPrompt: 'Draw a preview',
+        result: 'iVBORw0KGgo=',
+        savedPath: '/tmp/generated.png'
+      }
+    }
+  };
+  const project = (records: unknown[]) => {
+    const events = meshAgentNeutralStreamItems({
+      id: 'mesh_codex_image',
+      provider: 'codex',
+      mode: 'live',
+      output: records.map((record) => JSON.stringify(record)).join('\n')
+    });
+    return { events, cards: agentObservationCards(events, 'codex') };
+  };
+  const running = project([started]);
+  const settled = project([started, completed]);
+  const settledCard = settled.cards.find((card) => card.kind === 'tool');
+  if (!settledCard) throw new Error('Expected image generation tool card');
+  const call = settledCard.payload.call as AgentObservationEvent | undefined;
+  const result = settledCard.payload.result as AgentObservationEvent | undefined;
+  const view = imageToolView(call, result, settledCard.provenance.contractEvents);
+
+  expect({
+    running: running.cards.map((card) => ({ kind: card.kind, streaming: card.streaming })),
+    settled: {
+      events: settled.events.map((event) => ({ kind: event.kind, status: event.tool?.status, text: event.text })),
+      streaming: settledCard.streaming,
+      view: view ? { ...view, imageSrc: view.imageSrc.slice(0, 26) } : null
+    }
+  }).toEqual({
+    running: [{ kind: 'tool', streaming: true }],
+    settled: {
+      events: [
+        { kind: 'tool-call', status: 'running', text: 'Tool call imageGeneration' },
+        { kind: 'tool-result', status: 'completed', text: '/tmp/generated.png' }
+      ],
+      streaming: false,
+      view: {
+        imageSrc: 'data:image/png;base64,iVBO',
+        name: 'generated.png',
+        path: '/tmp/generated.png',
+        sizeLabel: '8 B'
+      }
+    }
+  });
+});
+
+test('Codex history image generation pairs the item and never renders its base64 result as generic tool text', () => {
+  const imageResult = `iVBOR${'a'.repeat(300_000)}`;
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_codex_image_history',
+    provider: 'codex',
+    mode: 'events',
+    output: JSON.stringify({
+      id: 'turn_image_history',
+      itemsView: 'full',
+      status: 'completed',
+      items: [
+        {
+          id: 'image_history_1',
+          type: 'imageGeneration',
+          status: 'completed',
+          revisedPrompt: 'Draw a preview',
+          result: imageResult,
+          savedPath: '/tmp/history-generated.png'
+        }
+      ]
+    })
+  });
+  const cards = agentObservationCards(events, 'codex');
+  const toolCard = cards.find((card) => card.kind === 'tool');
+  if (!toolCard) throw new Error('Expected history image generation tool card');
+  const call = toolCard.payload.call as AgentObservationEvent | undefined;
+  const result = toolCard.payload.result as AgentObservationEvent | undefined;
+  const view = imageToolView(call, result, toolCard.provenance.contractEvents);
+
+  expect({
+    cardCount: cards.filter((card) => card.kind === 'tool').length,
+    callId: call?.tool?.callId,
+    callInput: call?.tool?.input,
+    resultCallId: result?.tool?.callId,
+    resultOutput: result?.tool?.output,
+    view: view
+      ? {
+          imagePrefix: view.imageSrc.slice(0, 26),
+          name: view.name,
+          path: view.path,
+          sizeLabel: view.sizeLabel
+        }
+      : null
+  }).toEqual({
+    cardCount: 1,
+    callId: 'image_history_1',
+    callInput: 'Draw a preview',
+    resultCallId: 'image_history_1',
+    resultOutput: '/tmp/history-generated.png',
+    view: {
+      imagePrefix: 'data:image/png;base64,iVBO',
+      name: 'history-generated.png',
+      path: '/tmp/history-generated.png',
+      sizeLabel: '220 KB'
+    }
   });
 });
 

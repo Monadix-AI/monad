@@ -28,6 +28,7 @@ import {
   thinkingObservation,
   toolCategoryByName
 } from '../observation-projection.ts';
+import { reconcileClaudeStreamEvents } from './observation-stream.ts';
 
 export type ClaudeObservationMessage = Partial<SDKMessage> & Record<string, unknown> & { type: string };
 type ClaudeTranscriptMessage = Partial<SDKAssistantMessage | SDKUserMessage> &
@@ -316,7 +317,16 @@ export function claudeRecordEvents(
           preserveWhitespace: true
         });
       }
-      if (d.type === 'input_json_delta' || d.partial_json !== undefined) return [];
+      if (d.type === 'input_json_delta' || d.partial_json !== undefined) {
+        return observation({
+          id: claudeProjectionId(base, recordIndex, 'stream-boundary', indexedId),
+          role: 'system',
+          text: String(e.type),
+          source: 'claude-code-sdk',
+          providerEventType: `stream/${String(e.type)}`,
+          raw: record
+        });
+      }
       const text = rawTextValue(d.text);
       return observation({
         id: claudeProjectionId(base, recordIndex, 'delta', indexedId),
@@ -328,10 +338,14 @@ export function claudeRecordEvents(
         preserveWhitespace: true
       });
     }
-    if (e.type === 'content_block_start') {
-      const block = recordValue(e.content_block);
-      if (block?.type === 'tool_use') return [];
-    }
+    return observation({
+      id: claudeProjectionId(base, recordIndex, 'stream-boundary', indexedId),
+      role: 'system',
+      text: String(e.type),
+      source: 'claude-code-sdk',
+      providerEventType: `stream/${String(e.type)}`,
+      raw: record
+    });
   }
   if (isClaudeSystemMessage(record)) {
     if (loose.subtype === 'compact_boundary') {
@@ -349,7 +363,7 @@ export function claudeRecordEvents(
       if (estimatedTokens !== undefined) {
         return thinkingObservation({
           id: `${base}:thinking-tokens`,
-          text: `Thinking… · ${Math.trunc(estimatedTokens)} tokens`,
+          text: `Thinking… ${Math.trunc(estimatedTokens)} tokens`,
           source: 'claude-code-sdk',
           providerEventType: 'thinking_tokens_delta',
           raw: record
@@ -385,6 +399,7 @@ export const claudeCodeObservationProjection = {
       provenance: { rawEvents: events.flatMap((event) => event.provenance.rawEvents) }
     };
   },
+  reconcileEvents: reconcileClaudeStreamEvents,
   recordProjectors: [
     {
       supports: isClaudeObservationMessage,

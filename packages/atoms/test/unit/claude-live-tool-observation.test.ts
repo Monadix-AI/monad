@@ -1,7 +1,15 @@
 import { expect, test } from 'bun:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { monadMcpToolView } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-projection.ts';
+import {
+  ObservationTimelineRowView,
+  observationTimelineEntries,
+  observationTimelineRows
+} from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 
 test('Claude live tool argument deltas settle into one canonical tool card', () => {
@@ -10,36 +18,53 @@ test('Claude live tool argument deltas settle into one canonical tool card', () 
 
   const callId = 'toolu_live_1';
   const uuid = 'assistant_live_1';
-  const input = { query: 'project_post', max_results: 5 };
-  const output = [
+  const input = { file_path: '/tmp/example.ts' };
+  const records = [
     {
       type: 'stream_event',
-      uuid,
+      uuid: 'message_start_live_1',
+      session_id: 'session_live_1',
+      event: { type: 'message_start', message: { id: uuid, role: 'assistant', content: [] } }
+    },
+    {
+      type: 'assistant',
+      uuid: 'thinking_live_1',
+      session_id: 'session_live_1',
+      message: {
+        id: uuid,
+        role: 'assistant',
+        stop_reason: null,
+        content: [{ type: 'thinking', thinking: '', signature: 'signature' }]
+      }
+    },
+    {
+      type: 'stream_event',
+      uuid: 'tool_start_live_1',
       session_id: 'session_live_1',
       event: {
         type: 'content_block_start',
-        index: 0,
-        content_block: { type: 'tool_use', id: callId, name: 'ToolSearch', input: {} }
+        index: 1,
+        content_block: { type: 'tool_use', id: callId, name: 'Read', input: {} }
       }
     },
     {
       type: 'stream_event',
-      uuid,
+      uuid: 'tool_delta_live_1_a',
       session_id: 'session_live_1',
       event: {
         type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'input_json_delta', partial_json: '{"query":"project_post",' }
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"file_path":"/tmp/exam' }
       }
     },
     {
       type: 'stream_event',
-      uuid,
+      uuid: 'tool_delta_live_1_b',
       session_id: 'session_live_1',
       event: {
         type: 'content_block_delta',
-        index: 0,
-        delta: { type: 'input_json_delta', partial_json: '"max_results":5}' }
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: 'ple.ts"}' }
       }
     },
     {
@@ -47,10 +72,23 @@ test('Claude live tool argument deltas settle into one canonical tool card', () 
       uuid,
       session_id: 'session_live_1',
       message: {
+        id: uuid,
         role: 'assistant',
         stop_reason: 'tool_use',
-        content: [{ type: 'tool_use', id: callId, name: 'ToolSearch', input }]
+        content: [{ type: 'tool_use', id: callId, name: 'Read', input }]
       }
+    },
+    {
+      type: 'stream_event',
+      uuid: 'tool_stop_live_1',
+      session_id: 'session_live_1',
+      event: { type: 'content_block_stop', index: 1 }
+    },
+    {
+      type: 'stream_event',
+      uuid: 'message_stop_live_1',
+      session_id: 'session_live_1',
+      event: { type: 'message_stop' }
     },
     {
       type: 'user',
@@ -61,24 +99,27 @@ test('Claude live tool argument deltas settle into one canonical tool card', () 
         content: [{ type: 'tool_result', tool_use_id: callId, content: 'posted' }]
       }
     }
-  ]
-    .map((record) => JSON.stringify(record))
-    .join('\n');
+  ];
 
-  const events = meshAgentNeutralStreamItems({
-    id: 'mesh_claude_live_tool',
-    provider: 'claude-code',
-    adapter,
-    mode: 'live',
-    output
-  });
-  const cards = agentObservationCards(events, 'claude-code');
-
-  expect(
-    cards.map((card) => {
+  const cardsAt = (through: number) => {
+    const events = meshAgentNeutralStreamItems({
+      id: 'mesh_claude_live_tool',
+      provider: 'claude-code',
+      adapter,
+      mode: 'live',
+      output: records
+        .slice(0, through)
+        .map((record) => JSON.stringify(record))
+        .join('\n')
+    });
+    return agentObservationCards(events, 'claude-code');
+  };
+  const shape = (through: number) =>
+    cardsAt(through).map((card) => {
       const call = card.payload.call;
       const result = card.payload.result;
       return {
+        id: card.id,
         kind: card.kind,
         streaming: card.streaming,
         call: call && typeof call === 'object' && !Array.isArray(call) ? (call as { tool?: unknown }).tool : undefined,
@@ -87,13 +128,229 @@ test('Claude live tool argument deltas settle into one canonical tool card', () 
             ? (result as { tool?: unknown }).tool
             : undefined
       };
-    })
-  ).toEqual([
+    });
+
+  const started = shape(3);
+  const firstDelta = shape(4);
+  const completeInput = shape(5);
+  const authoritative = shape(6);
+  const blockStopped = shape(7);
+  const messageStopped = shape(8);
+  const completed = shape(9);
+  const startedRow = observationTimelineRows(observationTimelineEntries(cardsAt(3), 'claude-code'))[0];
+  if (!startedRow) throw new Error('Expected the live Read tool row');
+  const startedMarkup = renderToStaticMarkup(
+    createElement(ObservationTimelineRowView, { provider: 'claude-code', row: startedRow })
+  );
+  const markupAt = (through: number): string => {
+    const row = observationTimelineRows(observationTimelineEntries(cardsAt(through), 'claude-code'))[0];
+    if (!row) throw new Error(`Expected the live Read tool row through record ${through}`);
+    return renderToStaticMarkup(createElement(ObservationTimelineRowView, { provider: 'claude-code', row }));
+  };
+  const fileTitle = (markup: string): string | undefined =>
+    /data-slot="file-read-card-title-path">([^<]+)</.exec(markup)?.[1];
+
+  expect({
+    started,
+    firstDelta,
+    completeInput,
+    authoritative,
+    blockStopped,
+    messageStopped,
+    completed,
+    liveCard: {
+      kind: /data-tool-kind="([^"]+)"/.exec(startedMarkup)?.[1],
+      orb: /data-orb-state="([^"]+)"/.exec(startedMarkup)?.[1],
+      title: /data-slot="observation-meta-title">([^<]+)</.exec(startedMarkup)?.[1],
+      genericInputFallback: startedMarkup.includes('Read: {}'),
+      partialFileName: fileTitle(markupAt(4)),
+      completeFileName: fileTitle(markupAt(5))
+    },
+    stableIds: [
+      started[0]?.id,
+      firstDelta[0]?.id,
+      completeInput[0]?.id,
+      authoritative[0]?.id,
+      blockStopped[0]?.id,
+      messageStopped[0]?.id,
+      completed[0]?.id
+    ]
+  }).toEqual({
+    started: [
+      {
+        id: 'tool_start_live_1:stream-boundary',
+        kind: 'tool',
+        streaming: true,
+        call: { name: 'Read', input: {}, callId },
+        result: undefined
+      }
+    ],
+    firstDelta: [
+      {
+        id: 'tool_start_live_1:stream-boundary',
+        kind: 'tool',
+        streaming: true,
+        call: { name: 'Read', input: { file_path: '/tmp/exam' }, callId },
+        result: undefined
+      }
+    ],
+    completeInput: [
+      {
+        id: 'tool_start_live_1:stream-boundary',
+        kind: 'tool',
+        streaming: true,
+        call: { name: 'Read', input, callId },
+        result: undefined
+      }
+    ],
+    authoritative: [
+      {
+        id: 'tool_start_live_1:stream-boundary',
+        kind: 'tool',
+        streaming: true,
+        call: { name: 'Read', input, callId },
+        result: undefined
+      }
+    ],
+    blockStopped: [
+      {
+        id: 'tool_start_live_1:stream-boundary',
+        kind: 'tool',
+        streaming: true,
+        call: { name: 'Read', input, callId },
+        result: undefined
+      }
+    ],
+    messageStopped: [
+      {
+        id: 'tool_start_live_1:stream-boundary',
+        kind: 'tool',
+        streaming: true,
+        call: { name: 'Read', input, callId },
+        result: undefined
+      }
+    ],
+    completed: [
+      {
+        id: 'tool_start_live_1:stream-boundary',
+        kind: 'tool',
+        streaming: false,
+        call: { name: 'Read', input, callId },
+        result: { name: 'tool', output: 'posted', callId, status: 'completed' }
+      }
+    ],
+    liveCard: {
+      kind: 'file',
+      orb: 'shaping',
+      title: 'Read',
+      genericInputFallback: false,
+      partialFileName: 'exam',
+      completeFileName: 'example.ts'
+    },
+    stableIds: Array.from({ length: 7 }, () => 'tool_start_live_1:stream-boundary')
+  });
+});
+
+test('Claude live Monad calls use the connecting orb before a result arrives', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  if (!adapter) throw new Error('claude-code adapter is unavailable');
+  const records = [
     {
-      kind: 'tool',
-      streaming: false,
-      call: { name: 'ToolSearch', input, callId },
-      result: { name: 'tool', output: 'posted', callId, status: 'completed' }
+      type: 'stream_event',
+      uuid: 'message_start_live_monad',
+      session_id: 'session_live_monad',
+      event: { type: 'message_start', message: { id: 'message_live_monad', role: 'assistant', content: [] } }
+    },
+    {
+      type: 'stream_event',
+      uuid: 'tool_start_live_monad',
+      session_id: 'session_live_monad',
+      event: {
+        type: 'content_block_start',
+        index: 1,
+        content_block: {
+          type: 'tool_use',
+          id: 'toolu_live_monad',
+          name: 'mcp__monad__project_post',
+          input: {}
+        }
+      }
+    },
+    {
+      type: 'stream_event',
+      uuid: 'tool_delta_live_monad_1',
+      session_id: 'session_live_monad',
+      event: {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: '{"text":"Project sta' }
+      }
+    },
+    {
+      type: 'stream_event',
+      uuid: 'tool_delta_live_monad_2',
+      session_id: 'session_live_monad',
+      event: {
+        type: 'content_block_delta',
+        index: 1,
+        delta: { type: 'input_json_delta', partial_json: 'tus"}' }
+      }
     }
+  ];
+  const frame = (through: number) => {
+    const events = meshAgentNeutralStreamItems({
+      id: 'mesh_claude_live_monad',
+      provider: 'claude-code',
+      adapter,
+      mode: 'live',
+      output: records
+        .slice(0, through)
+        .map((record) => JSON.stringify(record))
+        .join('\n')
+    });
+    const cards = agentObservationCards(events, 'claude-code');
+    const row = observationTimelineRows(observationTimelineEntries(cards, 'claude-code'))[0];
+    if (!row) throw new Error(`Expected the live Monad tool row through record ${through}`);
+    const markup = renderToStaticMarkup(createElement(ObservationTimelineRowView, { provider: 'claude-code', row }));
+    const call = cards[0]?.payload.call;
+    return {
+      kind: /data-tool-kind="([^"]+)"/.exec(markup)?.[1],
+      input:
+        call && typeof call === 'object' && !Array.isArray(call)
+          ? (call as { tool?: { input?: unknown } }).tool?.input
+          : undefined,
+      text: markup
+        .replace(/<[^>]+>/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim()
+    };
+  };
+
+  expect([frame(2), frame(3), frame(4)]).toEqual([
+    { kind: 'mcp', input: {}, text: 'Post to project No details' },
+    { kind: 'mcp', input: { text: 'Project sta' }, text: 'Post to project Project sta' },
+    { kind: 'mcp', input: { text: 'Project status' }, text: 'Post to project Project status' }
   ]);
+});
+
+test('recognized Monad tools keep their semantic card while a wrapped input is partial', () => {
+  const call = {
+    id: 'partial-wrapped-monad',
+    kind: 'tool-call' as const,
+    streaming: true,
+    tool: {
+      name: 'monad',
+      input: '{"tool":"project_post","arguments":{"text":"Working'
+    },
+    provenance: { contractEvents: [] }
+  };
+
+  expect(monadMcpToolView(call, undefined, [])).toEqual({
+    toolName: 'project_post',
+    input: { text: 'Working' },
+    isError: false,
+    action: 'project-post',
+    text: 'Working',
+    attachments: []
+  });
 });

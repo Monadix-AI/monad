@@ -128,9 +128,14 @@ function eventDedupeDiscriminator(event: MeshAgentObservationEvent, recordIdenti
     .join(':');
 }
 
-function eventDedupeKey(provider: MeshAgentProvider, event: MeshAgentObservationEvent): string {
+function eventDedupeKey(
+  provider: MeshAgentProvider,
+  projection: MeshAgentObservationProjector,
+  event: MeshAgentObservationEvent
+): string {
   const semanticIdentity =
-    provider === 'codex' ? codexRequestIdentity(event) : provider === 'monad' ? monadToolIdentity(event) : undefined;
+    projection.dedupeIdentity?.(event) ??
+    (provider === 'codex' ? codexRequestIdentity(event) : provider === 'monad' ? monadToolIdentity(event) : undefined);
   if (semanticIdentity) {
     const discriminator = [event.role, event.providerEventType]
       .filter((value): value is string => typeof value === 'string' && value.length > 0)
@@ -162,6 +167,7 @@ function withObservedAt(event: MeshAgentObservationEvent, observedAt: string | u
 function unknownEvent(args: {
   id: string;
   provider: MeshAgentProvider;
+  projection: MeshAgentObservationProjector;
   entry: MeshAgentObservationJsonRecordEntry;
   recordIndex: number;
 }): MeshAgentObservationEvent {
@@ -176,7 +182,7 @@ function unknownEvent(args: {
     ...(providerEventType ? { providerEventType } : {}),
     provenance: { rawEvents: [args.entry.record] }
   };
-  return { ...event, dedupeKey: eventDedupeKey(args.provider, event) };
+  return { ...event, dedupeKey: eventDedupeKey(args.provider, args.projection, event) };
 }
 
 function projectedRecordEvents(args: {
@@ -199,7 +205,7 @@ function projectedRecordEvents(args: {
   return events.map((event) =>
     compactEvent({
       ...withObservedAt(event, args.entry.observedAt),
-      dedupeKey: eventDedupeKey(args.provider, event),
+      dedupeKey: eventDedupeKey(args.provider, args.projection, event),
       projection: 'normalized' as const
     })
   );
@@ -240,7 +246,7 @@ function projectedEntries(args: {
       const withRaw = event.provenance.rawEvents.length === 0 ? { ...event, provenance: { rawEvents } } : event;
       return {
         ...withObservedAt(withRaw, group.entries.at(-1)?.observedAt),
-        dedupeKey: eventDedupeKey(args.provider, withRaw),
+        dedupeKey: eventDedupeKey(args.provider, args.projection, withRaw),
         projection: 'normalized' as const
       };
     });
@@ -249,6 +255,7 @@ function projectedEntries(args: {
 
 function plainTextEvents(
   provider: MeshAgentProvider,
+  projection: MeshAgentObservationProjector,
   id: string,
   output: string,
   observedAt?: string
@@ -267,7 +274,7 @@ function plainTextEvents(
         ...(observedAt ? { createdAt: observedAt } : {}),
         provenance: { rawEvents: [text] }
       };
-      return { ...event, dedupeKey: eventDedupeKey(provider, event) };
+      return { ...event, dedupeKey: eventDedupeKey(provider, projection, event) };
     });
 }
 
@@ -290,7 +297,7 @@ function mergeStreamingEvents(
         text: run.map((event) => event.text).join(''),
         provenance: { rawEvents: run.flatMap((event) => event.provenance.rawEvents) }
       });
-    merged.push({ ...next, dedupeKey: eventDedupeKey(provider, next) });
+    merged.push({ ...next, dedupeKey: eventDedupeKey(provider, projection, next) });
     run = [];
   };
   for (const event of events) {
@@ -310,13 +317,28 @@ function mergeStreamingEvents(
   return merged;
 }
 
+function finalizeEvents(
+  provider: MeshAgentProvider,
+  projection: MeshAgentObservationProjector,
+  events: MeshAgentObservationEvent[]
+): MeshAgentObservationEvent[] {
+  const merged = mergeStreamingEvents(provider, projection, events);
+  const reconciled = projection.reconcileEvents?.(merged) ?? merged;
+  return reconciled.map((event) =>
+    compactEvent({
+      ...event,
+      dedupeKey: eventDedupeKey(provider, projection, event)
+    })
+  );
+}
+
 export function createProjectedEventSource(args: {
   provider: MeshAgentProvider;
   projection: MeshAgentObservationProjector;
   readPage?: MeshAgentEventSource['readPage'];
 }): MeshAgentEventSource {
   const projectEntries = (id: string, entries: MeshAgentObservationJsonRecordEntry[]) => ({
-    events: mergeStreamingEvents(
+    events: finalizeEvents(
       args.provider,
       args.projection,
       projectedEntries({
@@ -330,7 +352,8 @@ export function createProjectedEventSource(args: {
   return {
     projectLive: ({ id, output, observedAt, providerSessionRef }) => {
       const entries = jsonRecordEntries(output).map((entry) => ({ ...entry, observedAt }));
-      if (entries.length === 0) return { events: plainTextEvents(args.provider, id, output, observedAt) };
+      if (entries.length === 0)
+        return { events: plainTextEvents(args.provider, args.projection, id, output, observedAt) };
       const projected = args.projection.eventEntries?.(entries, { providerSessionRef }) ?? entries;
       return projectEntries(id, projected);
     },
@@ -371,7 +394,7 @@ export function createProjectedEventSource(args: {
                   event.provenance.rawEvents.length === 0 ? { ...event, provenance: { rawEvents } } : event;
                 return {
                   ...withObservedAt(withRaw, group.entries.at(-1)?.observedAt),
-                  dedupeKey: eventDedupeKey(args.provider, withRaw),
+                  dedupeKey: eventDedupeKey(args.provider, args.projection, withRaw),
                   projection: 'normalized' as const
                 };
               });
@@ -389,11 +412,12 @@ export function createProjectedEventSource(args: {
             }
             recordIndex += 1;
           }
-          if (timeline.length === 0) return { events: plainTextEvents(args.provider, id, output, observedAt) };
+          if (timeline.length === 0)
+            return { events: plainTextEvents(args.provider, args.projection, id, output, observedAt) };
           const events = timeline.flatMap((item) =>
             item.kind === 'events' ? item.events : (groups.get(item.key)?.events ?? [])
           );
-          return { events: mergeStreamingEvents(args.provider, args.projection, events) };
+          return { events: finalizeEvents(args.provider, args.projection, events) };
         }
       };
     },
