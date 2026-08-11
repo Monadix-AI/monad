@@ -214,6 +214,9 @@ import {
 import {
   useClearLogsMutation,
   useGetDeveloperQuery,
+  useGetLiveEventReplayFramesQuery,
+  useLazyGetLiveEventReplayFramesQuery,
+  useListLiveEventReplayCapturesQuery,
   usePreviewLogCleanupMutation,
   useSetDeveloperMutation
 } from './endpoints/settings/developer/index.ts';
@@ -460,6 +463,7 @@ export {
   useGetInboxSummaryQuery,
   useGetIndexerStatusQuery,
   useGetLawsQuery,
+  useGetLiveEventReplayFramesQuery,
   useGetLocaleQuery,
   useGetMem0DataQuery,
   useGetMemoryCoreQuery,
@@ -502,6 +506,7 @@ export {
   useLazyCheckSkillUpdatesQuery,
   useLazyFetchSkillDetailQuery,
   useLazyGetAttachmentQuery,
+  useLazyGetLiveEventReplayFramesQuery,
   useLazyGetMeshAgentAuthStatusQuery,
   useLazyGetMeshAgentConnectionQuery,
   useLazyGetMeshAgentConvenienceEventsQuery,
@@ -529,6 +534,7 @@ export {
   useListInstalledMcpQuery,
   useListInstalledSkillsQuery,
   useListLicensesQuery,
+  useListLiveEventReplayCapturesQuery,
   useListLiveMeshSessionsQuery,
   useListLocalesQuery,
   useListMcpCatalogQuery,

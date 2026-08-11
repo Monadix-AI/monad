@@ -4,7 +4,7 @@ import type { RuntimeModule } from '#/runtime/types.ts';
 import type { LogMaintenanceServiceOptions } from '../log-maintenance.ts';
 
 import { LogMaintenanceService } from '../log-maintenance.ts';
-import { meshFixtureCaptureDirectory } from '../mesh-agent/fixture-paths.ts';
+import { meshFixtureCaptureDirectory, meshLiveEventLogsDirectory } from '../mesh-agent/fixture-paths.ts';
 
 export const LOG_MAINTENANCE_MODULE_ID = 'services.log-maintenance';
 
@@ -114,6 +114,7 @@ export function createLogMaintenanceLifecycleModule(
       const service = createService({
         logsDir: options.paths.logs,
         captureDir: meshFixtureCaptureDirectory(options.paths),
+        liveEventDir: meshLiveEventLogsDirectory(options.paths),
         ...options.serviceOptions
       });
       const current: LifecycleState = {

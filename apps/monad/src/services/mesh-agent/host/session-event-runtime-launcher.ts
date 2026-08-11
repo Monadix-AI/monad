@@ -4,6 +4,7 @@ import type { MeshAgentOutputEvent, MeshAgentProviderAdapter } from '#/services/
 import type { MeshSessionRow } from '#/store/db/index.ts';
 import type { MeshAgentTargetId } from '#/store/db/mesh-sessions.ts';
 import type { MeshFixtureTap } from '../fixture-tap.ts';
+import type { MeshLiveEventLog } from '../live-event-log.ts';
 import type { LiveRawStore } from '../live-raw-store.ts';
 import type {
   LiveMeshSession,
@@ -66,6 +67,7 @@ interface MeshSessionEventRuntimeLauncherContext {
   openLiveRawStore(id: string, epoch: string): LiveRawStore;
   publishSessionUsage(id: string, usage: MeshAgentSessionUsage): boolean;
   fixtureTap?: MeshFixtureTap;
+  liveEventLog?: MeshLiveEventLog;
 }
 
 export class MeshSessionEventRuntimeLauncher {
@@ -230,6 +232,7 @@ export class MeshSessionEventRuntimeLauncher {
     }
     const { definition, executable } = runtimeSetup;
     const observationEpoch = newId('oep');
+    const replayProjectId = args.projectId ?? this.ctx.deps.store.getSession(args.transcriptTargetId)?.projectId;
     const liveRawStore = this.ctx.openLiveRawStore(id, observationEpoch);
     let activationSequence = 0;
     let terminalHandled = false;
@@ -279,6 +282,7 @@ export class MeshSessionEventRuntimeLauncher {
       createObservationEpoch: () => {
         if (activationSequence++ === 0) return live.observationEpoch;
         void this.ctx.fixtureTap?.flush(id, live.observationEpoch);
+        void this.ctx.liveEventLog?.close(id, live.observationEpoch);
         void live.liveRawStore.closeAndDelete();
         live.observationEpoch = newId('oep');
         live.liveRawStore = this.ctx.openLiveRawStore(id, live.observationEpoch);
@@ -304,6 +308,20 @@ export class MeshSessionEventRuntimeLauncher {
           payload,
           observedAt: packet.receivedAt
         });
+        if (replayProjectId && args.projectMemberId) {
+          this.ctx.liveEventLog?.record({
+            projectId: replayProjectId,
+            sessionId: args.transcriptTargetId,
+            projectMemberId: args.projectMemberId,
+            memberName: args.displayName ?? args.agentName,
+            meshSessionId: id,
+            provider: adapter.provider,
+            observationEpoch: epoch,
+            stream,
+            payload,
+            observedAt: packet.receivedAt
+          });
+        }
         this.ctx.observation.publish(id);
       },
       consumeEvent: async (event) => {
@@ -434,6 +452,7 @@ export class MeshSessionEventRuntimeLauncher {
           );
           this.ctx.live.delete(id);
           void this.ctx.fixtureTap?.flush(id, live.observationEpoch);
+          void this.ctx.liveEventLog?.close(id, live.observationEpoch);
           void live.liveRawStore.closeAndDelete();
           if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
           this.ctx.events.emit(args.transcriptTargetId, 'mesh.exited', {
@@ -497,6 +516,7 @@ export class MeshSessionEventRuntimeLauncher {
       this.ctx.live.delete(id);
       await runtime.close().catch(() => undefined);
       await liveRawStore.closeAndDelete();
+      await this.ctx.liveEventLog?.close(id, live.observationEpoch);
       if (managed) cleanupManagedProjectRuntimeToken(managed.workspace);
       const failedAt = new Date().toISOString();
       this.ctx.deps.store.upsertMeshSession({

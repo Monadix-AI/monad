@@ -68,7 +68,7 @@ import { createConfigSandboxActivationService } from '#/platform/sandbox/activat
 import { makeEvent } from '#/services/event-bus.ts';
 import { memoryScopeKey } from '#/services/memory/policy.ts';
 import { resolveMeshAgentEnv } from '#/services/mesh-agent/env.ts';
-import { meshFixtureCaptureDirectory } from '#/services/mesh-agent/fixture-paths.ts';
+import { meshFixtureCaptureDirectory, meshLiveEventLogsDirectory } from '#/services/mesh-agent/fixture-paths.ts';
 import { MeshAgentHost } from '#/services/mesh-agent/host/index.ts';
 import { meshAgentConfigToView } from '#/services/mesh-agent/index.ts';
 import { invitableMeshAgentConfigs } from '#/services/mesh-agent/invitable-agents.ts';
@@ -118,6 +118,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     resolveAgentEnv: async (env) => resolveMeshAgentEnv(env, deps.configManager.get().auth ?? undefined),
     developerMode: deps.configManager.get().cfg.developerMode,
     meshFixtureCaptureDirectory: meshFixtureCaptureDirectory(paths),
+    meshLiveEventLogsDirectory: meshLiveEventLogsDirectory(paths),
     meshAgentProcessRegistryPath: `${paths.runtime}/mesh-agent-processes.json`,
     meshAgentLiveStoreDirectory: `${paths.runtime}/mesh-agent-live-observation`,
     authProcessRegistryPath: `${paths.runtime}/mesh-agent-auth-processes.json`,
@@ -536,7 +537,7 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
     appearance: createAppearanceModule(deps.configManager),
     toolBackends: createToolBackendsModule(deps.configManager),
     sandbox: createSandboxModule(deps.configManager, sandboxActivation),
-    developer: createDeveloperModule(paths, deps.configManager, deps.logMaintenance),
+    developer: createDeveloperModule(paths, deps.configManager, deps.logMaintenance, meshAgentHost),
     profile: createUserProfileModule(deps.configManager),
     startup: createStartupSettingsModule({
       monadHome: paths.home,

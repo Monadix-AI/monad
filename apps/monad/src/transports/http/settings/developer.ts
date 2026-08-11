@@ -65,5 +65,19 @@ export function createDeveloperSettingsController(
     .delete('/developer/logs', async () => handlers.developer.clearLogs(), {
       response: c.clearLogs.response,
       detail: { summary: 'Clear all managed logs' }
-    });
+    })
+    .get('/developer/live-events', async () => handlers.developer.listLiveEvents(), {
+      response: c.listLiveEvents.response,
+      detail: { summary: 'List saved native CLI live event captures' }
+    })
+    .get(
+      '/developer/live-events/:meshSessionId/:observationEpoch',
+      async ({ params, query }) => handlers.developer.getLiveEventFrames({ ...params, query }),
+      {
+        params: c.getLiveEventFrames.params,
+        query: c.getLiveEventFrames.query,
+        response: c.getLiveEventFrames.response,
+        detail: { summary: 'Read saved native CLI live event frames' }
+      }
+    );
 }

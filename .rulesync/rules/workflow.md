@@ -78,6 +78,11 @@ are printed. Full testing conventions and patterns: `docs/internal/development/t
   or `// behavior-ok: <operation and consequence>` for cross-statement layout checks.
   Enforced by `quality:biome` and `quality:test-assertions` in `quality:check`; full table in
   `docs/internal/development/testing.md` / @docs/internal/development/testing.md.
+- Do not write tests that assert CSS classes, inline styles, computed colors, static
+  markup fragments, snapshots, or visual element presence as a proxy for presentation.
+  Styling changes are verified through Storybook or browser-based visual inspection in
+  every affected theme and state. UI tests are justified only when they exercise an
+  interaction or state transition and assert its user-observable behavioral outcome.
 - Every `apps/monad` feature must be exercised over **all transports** (TCP
   loopback and the Unix socket) — behaviour must match on both. See
   `docs/internals/infra/runtime.md` / @docs/internals/infra/runtime.md.

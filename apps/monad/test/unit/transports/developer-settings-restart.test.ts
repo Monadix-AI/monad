@@ -266,3 +266,64 @@ test('clear is rejected by the handler when Developer Mode is disabled', async (
     });
   }
 });
+
+test('live event replay is gated by Developer Mode and delegates exact capture pages', async () => {
+  const cfg = createDefaultConfig('test');
+  cfg.developerMode = true;
+  const config = stubConfigAccess(cfg);
+  const calls: string[] = [];
+  const host = {
+    async listLiveEventReplayCaptures() {
+      calls.push('list');
+      return [];
+    },
+    async liveEventReplayFrames(meshSessionId: string, observationEpoch: string) {
+      calls.push(`${meshSessionId}:${observationEpoch}`);
+      return {
+        frames: [
+          { seq: 1, stream: 'stdout' as const, payload: '{"ok":true}\n', observedAt: '2026-08-11T00:00:00.000Z' }
+        ],
+        total: 1,
+        offset: 0,
+        limit: 100
+      };
+    }
+  };
+  const module = createDeveloperModule(
+    makeTestPaths('/tmp/monad-live-event-handler'),
+    config,
+    {
+      clearAll: async () => ({ filesCleared: 0, filesFailed: 0, bytesFreed: 0 }),
+      preview: async () => ({ files: 0, bytes: 0 })
+    },
+    host as Parameters<typeof createDeveloperModule>[3]
+  );
+
+  const list = await module.listLiveEvents();
+  const page = await module.getLiveEventFrames({
+    meshSessionId: 'mesh_100000000001',
+    observationEpoch: 'oep_100000000001',
+    query: { offset: 0, limit: 100 }
+  });
+  await config.updateConfig((current) => {
+    current.developerMode = false;
+  });
+  let rejected: unknown;
+  try {
+    await module.listLiveEvents();
+  } catch (error) {
+    rejected = error;
+  }
+
+  expect({ calls, list, page, rejected }).toEqual({
+    calls: ['list', 'mesh_100000000001:oep_100000000001'],
+    list: { captures: [] },
+    page: {
+      frames: [{ seq: 1, stream: 'stdout', payload: '{"ok":true}\n', observedAt: '2026-08-11T00:00:00.000Z' }],
+      total: 1,
+      offset: 0,
+      limit: 100
+    },
+    rejected: new HandlerError('forbidden', 'Developer Mode must be enabled to access live event logs')
+  });
+});

@@ -5,3 +5,7 @@ import { join } from 'node:path';
 export function meshFixtureCaptureDirectory(paths: Pick<MonadPaths, 'logs'>): string {
   return join(paths.logs, 'mesh-agent-fixture-capture');
 }
+
+export function meshLiveEventLogsDirectory(paths: Pick<MonadPaths, 'logs'>): string {
+  return join(paths.logs, 'live-events');
+}

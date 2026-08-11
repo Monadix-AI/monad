@@ -57,7 +57,8 @@
     "test:unit": "bun scripts/quiet-run.ts bun run test:unit:raw",
     "test:unit:raw": "turbo run test --output-logs=errors-only && bun scripts/bun-test.ts scripts/test/unit/ --only-failures",
     "typecheck": "bun scripts/quiet-run.ts bun run typecheck:raw",
-    "typecheck:raw": "bun run generate && tsc --noEmit && turbo run typecheck --only --output-logs=errors-only"
+    "typecheck:raw": "bun run generate && tsc --noEmit && turbo run typecheck --only --output-logs=errors-only",
+    "typecheck:staged": "turbo run generate --force --output-logs=errors-only && turbo run typecheck --filter=[HEAD] --output-logs=errors-only"
   },
   "type": "module",
   "workspaces": [

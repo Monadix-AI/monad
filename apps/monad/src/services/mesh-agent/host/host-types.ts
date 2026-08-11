@@ -71,6 +71,7 @@ export interface MeshAgentHostDeps {
   /** Developer mode installs the unredacted live fixture-capture tap. Never set outside developer mode. */
   developerMode?: boolean;
   meshFixtureCaptureDirectory?: string;
+  meshLiveEventLogsDirectory?: string;
   authProcessRegistryPath?: string;
   authHeartbeatTimeoutMs?: number;
   authStatusTimeoutMs?: number;

@@ -137,6 +137,10 @@ import {
 import { appearanceSettingsSchema, setAppearanceSettingsRequestSchema } from './settings/appearance-settings.ts';
 import {
   developerSettingsSchema,
+  getLiveEventReplayFramesParamsSchema,
+  getLiveEventReplayFramesQuerySchema,
+  listLiveEventReplayCapturesResponseSchema,
+  liveEventReplayFramePageSchema,
   logCleanupPreviewSchema,
   logCleanupResultSchema,
   previewLogCleanupRequestSchema,
@@ -655,7 +659,15 @@ export const daemonHttpContract = {
       body: previewLogCleanupRequestSchema,
       response: { 200: logCleanupPreviewSchema, 429: httpErrorSchema }
     }),
-    clearLogs: defineHttpEndpoint({ response: { 200: logCleanupResultSchema, 403: httpErrorSchema } })
+    clearLogs: defineHttpEndpoint({ response: { 200: logCleanupResultSchema, 403: httpErrorSchema } }),
+    listLiveEvents: defineHttpEndpoint({
+      response: { 200: listLiveEventReplayCapturesResponseSchema, 403: httpErrorSchema }
+    }),
+    getLiveEventFrames: defineHttpEndpoint({
+      params: getLiveEventReplayFramesParamsSchema,
+      query: getLiveEventReplayFramesQuerySchema,
+      response: { 200: liveEventReplayFramePageSchema, 403: httpErrorSchema, 404: httpErrorSchema }
+    })
   },
   startupSettings: {
     get: defineHttpEndpoint({ response: { 200: startupSettingsSchema } }),
