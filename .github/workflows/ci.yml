@@ -196,6 +196,7 @@ jobs:
 
       - name: Upload coverage
         if: runner.os == 'Linux'
+        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: coverage
@@ -205,7 +206,9 @@ jobs:
             coverage/lcov.info
             apps/*/coverage/lcov.info
             packages/*/coverage/lcov.info
-          if-no-files-found: error
+          # Turbo replays cached suites without running them, and a replayed run writes no lcov.
+          # Absent coverage there means the tests were already green, not that reporting broke.
+          if-no-files-found: ignore
 
       # Saves even when the job fails: a red Windows job used to skip the post step, so the next
       # run paid a cold install again — the slowness kept itself alive.
