@@ -55,7 +55,7 @@
     "test:e2e:raw": "turbo run test:e2e --output-logs=errors-only",
     "test:raw": "bun run test:unit:raw && bun run test:e2e:raw",
     "test:unit": "bun scripts/quiet-run.ts bun run test:unit:raw",
-    "test:unit:raw": "turbo run test --output-logs=errors-only && bun test scripts/test/unit/",
+    "test:unit:raw": "turbo run test --output-logs=errors-only && bun scripts/bun-test.ts scripts/test/unit/ --only-failures",
     "typecheck": "bun scripts/quiet-run.ts bun run typecheck:raw",
     "typecheck:raw": "bun run generate && tsc --noEmit && turbo run typecheck --only --output-logs=errors-only"
   },
