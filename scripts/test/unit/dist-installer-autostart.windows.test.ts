@@ -1,9 +1,10 @@
 import { expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { POWERSHELL_INSTALLER_AUTO_START } from '../../lib/dist-installer-autostart.ts';
+import { removeDirectory } from '../../test-fs.ts';
 
 test('the interactive PowerShell installer starts Monad, skips automation, and preserves a successful install on launch failure', async () => {
   const root = await mkdtemp(join(tmpdir(), 'monad-installer-autostart-'));
@@ -71,9 +72,11 @@ Start-MonadAfterInstall $args[0]
     expect(await Bun.file(failureLog).text()).toBe('up\n');
     expect(failure.output).toContain('automatic startup failed (exit code 9)');
   } finally {
-    await rm(root, { force: true, recursive: true });
+    await removeDirectory(root);
   }
-});
+  // Compiles a standalone executable and then starts PowerShell three times, none of which fits
+  // Bun's 5s default on a loaded Windows runner.
+}, 30_000);
 
 async function runPowerShell(
   runner: string,
@@ -88,6 +91,12 @@ async function runPowerShell(
       stdout: 'pipe'
     }
   );
-  const [code, output] = await Promise.all([process.exited, new Response(process.stdout).text()]);
+  // stderr has to be drained even though it is unused: an unread pipe fills up and blocks the
+  // child, which surfaces as a test timeout rather than as an error.
+  const [code, output] = await Promise.all([
+    process.exited,
+    new Response(process.stdout).text(),
+    new Response(process.stderr).text()
+  ]);
   return { code, output };
 }

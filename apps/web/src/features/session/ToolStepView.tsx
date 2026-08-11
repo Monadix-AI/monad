@@ -554,7 +554,7 @@ function groupStatus(steps: ToolItem[]): ToolItem['status'] {
 const TOOL_EVENT_HEADER_CLASS =
   'min-h-7 w-fit max-w-full justify-start gap-2 p-0.5 text-[0.95rem] text-muted-foreground leading-6 [&>div]:min-w-0 [&>div]:overflow-hidden [&>div>svg]:size-4 [&>div>svg]:shrink-0 [&>div>span]:min-w-0 [&>div>span]:truncate [&>div>span]:font-normal [&>div>span]:text-[0.95rem] [&>svg]:shrink-0';
 
-export function toolEventIconTone(status: ToolItem['status']): string {
+function toolEventIconTone(status: ToolItem['status']): string {
   if (status === 'error') return '[&>div>svg]:text-destructive';
   if (status === 'running') return '[&>div>svg]:text-accent-blue';
   return '[&>div>svg]:text-success';
