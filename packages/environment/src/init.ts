@@ -36,15 +36,41 @@ export interface InitResult {
 export async function initMonadHome(paths: MonadPaths, opts: InitOptions = {}): Promise<InitResult> {
   const displayName = opts.displayName ?? Bun.env.USER ?? Bun.env.USERNAME ?? '';
 
-  await mkdir(paths.home, { recursive: true });
+  // Every directory here is independent — `recursive` creates any missing parent — and each one
+  // costs a synchronous metadata write on Windows, where this function runs once per E2E case.
+  // packs/providers/skills are always materialized for discovery; the starter-skill seed also expects
+  // skills/. mcp/ and locales/ are created lazily by their installers — an unconfigured daemon stays
+  // tolerant of their absence (the loaders already are).
+  await Promise.all([
+    mkdir(paths.home, { recursive: true }),
+    mkdir(paths.runtime, { recursive: true, mode: 0o700 }),
+    mkdir(paths.backup, { recursive: true }),
+    mkdir(paths.dbDir, { recursive: true }), // main sqlite + mem0 history + qdrant storage
+    mkdir(paths.configs, { recursive: true }),
+    mkdir(paths.bin, { recursive: true }),
+    mkdir(paths.agents, { recursive: true }),
+    mkdir(paths.workspace, { recursive: true }),
+    mkdir(paths.cache, { recursive: true }),
+    mkdir(paths.logs, { recursive: true }),
+    mkdir(paths.atoms, { recursive: true }),
+    mkdir(paths.packs, { recursive: true }),
+    mkdir(paths.providers, { recursive: true }),
+    mkdir(paths.skills, { recursive: true }),
+    // credentials/ is locked down at the OS level: no agent tool or MCP call may access it
+    // without an explicit user approval gate (enforced in main.ts withCredentialsProtection).
+    mkdir(paths.credentials, { recursive: true })
+  ]);
+
   // The daemon's Unix socket lives under paths.runtime and grants UNAUTHENTICATED RPC to anyone who
   // can reach it, so the directory's perms are part of its access control (security-guidelines.md §3:
   // "create ~/.monad/run/ as 0o700"). mkdir's mode only applies on creation, so also chmod an existing
   // dir. POSIX only — chmod is a no-op on Windows, where %APPDATA%\monad is already per-user via ACL.
-  await mkdir(paths.runtime, { recursive: true, mode: 0o700 });
-  if (process.platform !== 'win32') await chmod(paths.runtime, 0o700).catch(() => {});
-  await mkdir(paths.backup, { recursive: true });
-  await mkdir(paths.dbDir, { recursive: true }); // main sqlite + mem0 history + qdrant storage
+  if (process.platform === 'win32') {
+    await Bun.$`icacls ${paths.credentials} /inheritance:r /grant:r ${'*S-1-3-4:(OI)(CI)F'}`.quiet();
+  } else {
+    await Promise.all([chmod(paths.runtime, 0o700).catch(() => {}), chmod(paths.credentials, 0o700)]);
+  }
+
   // Persisted settings reference their schema via a `$schema` file:// URL. In dev that
   // URL points at the repo source (live edits), so the schema is only materialized under .monad/
   // for release builds — where setSchemaRuntimeDir then flips the URL to this single location.
@@ -56,30 +82,6 @@ export async function initMonadHome(paths: MonadPaths, opts: InitOptions = {}): 
       Bun.write(join(paths.runtime, 'auth.schema.json'), AUTH_SCHEMA_CONTENT)
     ]);
     setSchemaRuntimeDir(paths.runtime);
-  }
-  await mkdir(paths.configs, { recursive: true });
-  await mkdir(paths.bin, { recursive: true });
-  await mkdir(paths.agents, { recursive: true });
-  await mkdir(paths.workspace, { recursive: true });
-  await mkdir(paths.cache, { recursive: true });
-  await mkdir(paths.logs, { recursive: true });
-  await mkdir(paths.atoms, { recursive: true });
-  // packs/providers/skills are always materialized for discovery; the starter-skill seed also expects skills/.
-  // mcp/ and locales/ are created lazily by their installers — an unconfigured daemon stays tolerant
-  // of their absence (the loaders already are).
-  await Promise.all([
-    mkdir(paths.packs, { recursive: true }),
-    mkdir(paths.providers, { recursive: true }),
-    mkdir(paths.skills, { recursive: true })
-  ]);
-
-  // credentials/ is locked down at the OS level: no agent tool or MCP call may access it
-  // without an explicit user approval gate (enforced in main.ts withCredentialsProtection).
-  await mkdir(paths.credentials, { recursive: true });
-  if (process.platform === 'win32') {
-    await Bun.$`icacls ${paths.credentials} /inheritance:r /grant:r ${'*S-1-3-4:(OI)(CI)F'}`.quiet();
-  } else {
-    await chmod(paths.credentials, 0o700);
   }
 
   const existing = await loadAll(paths);

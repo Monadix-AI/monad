@@ -3,7 +3,7 @@ if (process.platform === 'win32') process.exit(0);
 import type { MonadPaths } from '../../src/paths.ts';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { rm, stat } from 'node:fs/promises';
+import { chmod, mkdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -71,6 +71,18 @@ describe('initMonadHome unix permissions', () => {
   test('locks credentials/ to owner-only (mode 0o700)', async () => {
     await initMonadHome(paths);
     const { mode } = await stat(paths.credentials);
+    expect(mode & 0o777).toBe(0o700);
+  });
+
+  // The control socket lives here and grants unauthenticated RPC to whoever can connect, so this
+  // mode is its only access control.
+  test('locks runtime/ to owner-only, including a pre-existing world-readable directory', async () => {
+    await mkdir(paths.runtime, { recursive: true, mode: 0o755 });
+    await chmod(paths.runtime, 0o755);
+
+    await initMonadHome(paths);
+
+    const { mode } = await stat(paths.runtime);
     expect(mode & 0o777).toBe(0o700);
   });
 });
