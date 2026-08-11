@@ -358,6 +358,10 @@ export class SessionEventRuntimeExecutor {
       exit = await activation.process.result;
       await activation.close();
     }
+    // The activation promise needs the same join. A stop landing mid-attach otherwise leaves
+    // attachChannel writing into the child killed above, and its EPIPE has no subscriber left —
+    // start() has long returned — so it surfaces as an unhandled rejection instead of settling here.
+    await this.residentActivationPromise?.catch(() => {});
     await this.disposeDriver();
     if (this.lifecycle.state !== 'terminal' || this.lifecycle.termination.kind === 'stopped') {
       this.lifecycle = {
