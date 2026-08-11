@@ -13,7 +13,7 @@ export function CompactFilePath({ className, path, title = path, ...props }: Com
 
   return (
     <span
-      className={cn('grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center', className)}
+      className={cn('flex min-w-0 items-center', className)}
       data-slot="compact-file-path"
       title={title}
       {...props}
