@@ -334,8 +334,10 @@ test('critical daemon and browser E2E jobs cannot be softened or omitted from th
     critical.map((job) => ({
       job,
       continueOnError: workflow.jobs?.[job]?.['continue-on-error'] ?? null,
+      // Uploading diagnostics is allowed to fail — the artifact service going down must not
+      // recolour a suite that already reported its own result.
       softenedSteps: (workflow.jobs?.[job]?.steps ?? [])
-        .filter((step) => step['continue-on-error'] !== undefined)
+        .filter((step) => step['continue-on-error'] !== undefined && !step.uses?.startsWith('actions/upload-artifact@'))
         .map((step) => step.name ?? step.run ?? step.uses)
     }))
   ).toEqual(critical.map((job) => ({ job, continueOnError: null, softenedSteps: [] })));
