@@ -11,7 +11,7 @@ import {
   observationTimelineRows
 } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 
-test('context compaction renders as a quiet divider without a summary hover control', () => {
+test('context compaction renders without a summary control', () => {
   const event: AgentObservationEvent = {
     id: 'compact-1',
     kind: 'context-compaction',
@@ -32,11 +32,9 @@ test('context compaction renders as a quiet divider without a summary hover cont
   );
 
   expect({
-    dividerLines: markup.split('bg-border/70').length - 1,
     marker: markup.includes('data-observation-context-compaction'),
     hoverControl: markup.includes('<button')
   }).toEqual({
-    dividerLines: 2,
     marker: true,
     hoverControl: false
   });

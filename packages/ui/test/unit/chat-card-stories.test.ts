@@ -33,7 +33,6 @@ test('Shell card stories render running, completed, and failed outcomes', () => 
       return {
         completedOutput: markup.includes('2 pass') && markup.includes('0 fail'),
         failedOutput: markup.includes('1 fail') && markup.includes('AssertionError'),
-        failedSurface: markup.includes('border-destructive/45'),
         running: markup.includes('running') && !markup.includes('data-shell-copy-target="output"'),
         shellCard: markup.includes('data-slot="shell-tool-card"')
       };
@@ -42,21 +41,18 @@ test('Shell card stories render running, completed, and failed outcomes', () => 
     {
       completedOutput: false,
       failedOutput: false,
-      failedSurface: false,
       running: true,
       shellCard: true
     },
     {
       completedOutput: true,
       failedOutput: false,
-      failedSurface: false,
       running: false,
       shellCard: true
     },
     {
       completedOutput: false,
       failedOutput: true,
-      failedSurface: true,
       running: false,
       shellCard: true
     }

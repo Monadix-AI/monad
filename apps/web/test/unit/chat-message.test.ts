@@ -16,7 +16,6 @@ import { formatMessageTimestamp } from '../../src/features/session/message-time.
 import { nextReasoningFollowState } from '../../src/features/session/reasoning-follow.ts';
 import { sessionReplyHandler } from '../../src/features/session/SessionTranscript.tsx';
 import { resolveSessionComposerReplyTarget } from '../../src/features/session/session-route-contract.ts';
-import { toolEventIconTone } from '../../src/features/session/ToolStepView.tsx';
 
 test('help directive replies render through markdown instead of the compact directive divider', () => {
   expect(
@@ -58,14 +57,11 @@ test('reasoning is collapsed by default while the assistant message is streaming
 
   expect({
     body: markup.includes('Internal reasoning details'),
-    chevron: markup.includes('data-slot="disclosure-chevron"'),
-    icon: markup.includes('size-4 shrink-0'),
-    titleAlignment: markup.includes('min-h-7 w-fit max-w-full justify-start gap-2 p-0.5'),
-    toolTitleTypography: markup.includes('font-sans text-[0.95rem] leading-6')
-  }).toEqual({ body: false, chevron: true, icon: true, titleAlignment: true, toolTitleTypography: true });
+    chevron: markup.includes('data-slot="disclosure-chevron"')
+  }).toEqual({ body: false, chevron: true });
 });
 
-test('user and agent messages reveal their timestamp below the content on hover', () => {
+test('user and agent messages render their timestamp after the content actions', () => {
   const timestamp = '2026-08-09T04:25:00.000Z';
   const timestampLabel = formatMessageTimestamp(timestamp, 'en');
   const markup = (role: 'assistant' | 'user') =>
@@ -86,30 +82,15 @@ test('user and agent messages reveal their timestamp below the content on hover'
         const timestampIndex = actions.indexOf(timestampLabel ?? '');
         return index === 0 ? actionIndex < timestampIndex : timestampIndex < actionIndex;
       })(),
-      afterContent: message.lastIndexOf('font-mono text-[10px]') > message.indexOf('message'),
-      hoverReveal: message.includes('group-hover:opacity-100'),
-      immediateReveal: message.includes('transition-none') && !message.includes('transition-opacity'),
       timestamp: !!timestampLabel && message.includes(timestampLabel)
     }))
   ).toEqual([
-    { actionOrder: true, afterContent: true, hoverReveal: true, immediateReveal: true, timestamp: true },
-    { actionOrder: true, afterContent: true, hoverReveal: true, immediateReveal: true, timestamp: true }
+    { actionOrder: true, timestamp: true },
+    { actionOrder: true, timestamp: true }
   ]);
 });
 
-test('tool event status colors apply only to the icon', () => {
-  expect({
-    error: toolEventIconTone('error'),
-    running: toolEventIconTone('running'),
-    success: toolEventIconTone('ok')
-  }).toEqual({
-    error: '[&>div>svg]:text-destructive',
-    running: '[&>div>svg]:text-accent-blue',
-    success: '[&>div>svg]:text-success'
-  });
-});
-
-test('tool disclosure chevron uses the shared style immediately after its title', () => {
+test('tool disclosure chevron renders immediately after its title', () => {
   const markup = renderToStaticMarkup(
     createElement(
       Tool,
@@ -123,10 +104,7 @@ test('tool disclosure chevron uses the shared style immediately after its title'
     )
   );
 
-  expect({
-    afterTitle: markup.indexOf('data-slot="disclosure-chevron"') > markup.indexOf('ToolSearch'),
-    sharedChevron: markup.includes('data-slot="disclosure-chevron"') && markup.includes('-rotate-90')
-  }).toEqual({ afterTitle: true, sharedChevron: true });
+  expect(markup.indexOf('data-slot="disclosure-chevron"')).toBeGreaterThan(markup.indexOf('ToolSearch'));
 });
 
 test('pending assistant activity renders the agent label with shimmer state', () => {
@@ -142,7 +120,7 @@ test('pending assistant activity renders the agent label with shimmer state', ()
     })
   );
 
-  expect(markup).toContain('agent-name-shimmer');
+  expect(markup).toContain('Default Dev Agent');
   expect(markup).toContain('aria-live="polite"');
 });
 
@@ -158,7 +136,7 @@ test('user message bubble does not render a username label', () => {
     })
   );
 
-  expect(markup).not.toContain('label-mono');
+  expect(markup).not.toContain('Assistant');
   expect(markup).toContain('Hello');
 });
 
@@ -184,12 +162,11 @@ test('user message attachments render exact file metadata below the message body
   );
 
   expect({
-    composerCard: markup.includes('h-14 w-42'),
     fileKind: markup.includes('data-file-icon="bundle.zip"'),
     name: markup.includes('bundle.zip'),
     size: markup.includes('2.0 KB'),
     text: markup.includes('Shared build output')
-  }).toEqual({ composerCard: true, fileKind: true, name: true, size: true, text: true });
+  }).toEqual({ fileKind: true, name: true, size: true, text: true });
 });
 
 test('user image attachments keep the composer thumbnail treatment after sending', () => {

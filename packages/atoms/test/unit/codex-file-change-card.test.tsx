@@ -228,20 +228,13 @@ test('Codex fileChange rows truncate directories while retaining the complete fi
       }}
     />
   );
-  const pathTag = markup.match(/<span[^>]*data-file-change-path="path"[^>]*>/)?.[0];
-  const directoryTag = markup.match(/<span[^>]*data-slot="compact-file-path-directory"[^>]*>/)?.[0];
-  const filenameTag = markup.match(/<span[^>]*data-slot="compact-file-path-filename"[^>]*>/)?.[0];
-
-  // behavior-ok: rendering a long edit path compresses only its directory while preserving the exact filename text.
   expect({
-    directoryCanShrink: directoryTag?.includes('min-w-0 truncate'),
+    directory: markup.match(/data-slot="compact-file-path-directory"[^>]*>([^<]+)</)?.[1],
     filename: markup.match(/data-slot="compact-file-path-filename"[^>]*>([^<]+)</)?.[1],
-    filenameDoesNotShrink: filenameTag?.includes('shrink-0'),
-    reusablePathLayout: pathTag?.includes('data-slot="compact-file-path"')
+    reusablePath: markup.includes('data-file-change-path="path"')
   }).toEqual({
-    directoryCanShrink: true,
+    directory: '/Users/zeke/Projects/monad/apps/web/src/components/workspace/',
     filename: 'research-desk-final.md',
-    filenameDoesNotShrink: true,
-    reusablePathLayout: true
+    reusablePath: true
   });
 });

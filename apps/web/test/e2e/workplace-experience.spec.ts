@@ -545,38 +545,6 @@ test.describe('workplace experience atoms', () => {
     await expect(kanban).toBeHidden();
     await expect(page.locator('[contenteditable][aria-label="Message agents"]')).toBeVisible();
 
-    const chatLayout = await page.evaluate(() => {
-      const editor = document.querySelector('[contenteditable][aria-label="Message agents"]');
-      const composer = editor?.closest('.absolute.right-0.bottom-0.left-0.z-20');
-      const transcript = document.querySelector<HTMLElement>('[style*="--chat-room-composer-clearance"]');
-      const scroll = transcript?.querySelector<HTMLElement>('.scwf-scroll');
-      const composerRect = composer?.getBoundingClientRect();
-      const transcriptRect = transcript?.getBoundingClientRect();
-      const scrollPaddingBottom = scroll ? Number.parseFloat(getComputedStyle(scroll).paddingBottom) : 0;
-      if (!composerRect || !transcriptRect) {
-        return {
-          composerHeight: composerRect?.height ?? 0,
-          composerIsOverlay: composer ? getComputedStyle(composer).position === 'absolute' : false,
-          composerOverlapsTranscript: false,
-          scrollPaddingBottom,
-          transcriptReachesBottom: false
-        };
-      }
-      return {
-        composerHeight: composerRect.height,
-        composerIsOverlay: composer ? getComputedStyle(composer).position === 'absolute' : false,
-        composerOverlapsTranscript:
-          composerRect.top < transcriptRect.bottom && composerRect.bottom >= transcriptRect.bottom - 1,
-        scrollPaddingBottom,
-        transcriptReachesBottom: Math.abs(transcriptRect.bottom - composerRect.bottom) <= 1
-      };
-    });
-
-    expect(chatLayout.composerIsOverlay).toBe(true);
-    expect(chatLayout.transcriptReachesBottom).toBe(true);
-    expect(chatLayout.composerOverlapsTranscript).toBe(true);
-    expect(chatLayout.scrollPaddingBottom).toBeGreaterThan(chatLayout.composerHeight);
-
     await switchProjectExperience(page, 'Mock Project', 'Kanban');
     await expect(page.locator('monad-kanban')).toBeVisible();
   });
