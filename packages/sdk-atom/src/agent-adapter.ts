@@ -356,6 +356,8 @@ export type MeshAgentObservationActivity =
 export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector & {
   identity?(event: MeshAgentObservationEvent): string | undefined;
   checkpoint?(event: MeshAgentObservationEvent): string | undefined;
+  /** Stable semantic identity shared by live and history envelope variants. */
+  dedupeIdentity?(event: MeshAgentObservationEvent): string | undefined;
   eventEntries?(
     entries: MeshAgentObservationJsonRecordEntry[],
     context?: { providerSessionRef?: string }
@@ -374,6 +376,8 @@ export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector &
    *  this provider's delta event names. */
   isStreamingFragment?(event: MeshAgentObservationEvent): boolean;
   mergeStreamingRun?(events: MeshAgentObservationEvent[]): MeshAgentObservationEvent | undefined;
+  /** Reconcile provider lifecycle fragments after generic adjacent-delta merging. */
+  reconcileEvents?(events: MeshAgentObservationEvent[]): MeshAgentObservationEvent[];
 };
 
 export interface MeshAgentObservationRuntime {

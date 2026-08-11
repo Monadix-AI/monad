@@ -1,0 +1,60 @@
+{
+  "schemaVersion": 1,
+  "fixture": "codex-app-server-live.raw.json",
+  "provider": "codex",
+  "source": {
+    "transport": "app-server-stdio",
+    "store": "live-raw-store",
+    "captureMode": "point-in-time-snapshot",
+    "identifiers": "sanitized"
+  },
+  "snapshot": {
+    "coverage": "exact",
+    "stdoutPackets": 247,
+    "stderrPacketsExcluded": 3,
+    "completeRecords": 410,
+    "trailingPartialBytesExcluded": 0,
+    "hasTurnStarted": true,
+    "hasTurnCompleted": false
+  },
+  "recordKinds": {
+    "responses": 3,
+    "notifications": 407
+  },
+  "methods": {
+    "account/rateLimits/updated": 11,
+    "item/agentMessage/delta": 277,
+    "item/commandExecution/outputDelta": 4,
+    "item/completed": 25,
+    "item/reasoning/summaryPartAdded": 13,
+    "item/reasoning/summaryTextDelta": 13,
+    "item/started": 27,
+    "mcpServer/startupStatus/updated": 19,
+    "remoteControl/status/changed": 1,
+    "thread/goal/cleared": 1,
+    "thread/settings/updated": 1,
+    "thread/status/changed": 2,
+    "thread/tokenUsage/updated": 12,
+    "turn/started": 1
+  },
+  "itemTypes": {
+    "agentMessage": 10,
+    "commandExecution": 8,
+    "imageGeneration": 3,
+    "imageView": 4,
+    "mcpToolCall": 2,
+    "reasoning": 23,
+    "userMessage": 2
+  },
+  "sanitization": {
+    "promotionScript": "scripts/mesh-fixture.ts",
+    "semanticLeaks": 0,
+    "manuallyAuditedStructuralKeys": ["method", "name"],
+    "unredactedTemporaryCaptureDeleted": true
+  },
+  "integrity": {
+    "algorithm": "sha256",
+    "digest": "c662641d907ce982ffce7ad6755975f4ee9a16ce8a12b30da8dcf9d908465e9a",
+    "bytes": 163792
+  }
+}

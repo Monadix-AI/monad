@@ -101,11 +101,14 @@ function toolCard(
   provider: string
 ): AgentObservationCard {
   const events = result ? [call, result] : [call];
+  const callStatus = call.tool?.status?.trim().toLowerCase();
+  const callCompleted =
+    callStatus === 'completed' || callStatus === 'success' || callStatus === 'succeeded' || callStatus === 'failed';
   return {
     id: eventIdentity(call),
     ...(call.dedupeKey ? { dedupeKey: call.dedupeKey } : {}),
     kind: 'tool',
-    streaming: result ? result.streaming : true,
+    streaming: result ? result.streaming : !callCompleted,
     payload: result ? { provider, call, result } : { provider, call },
     provenance: cardProvenance(events),
     ...((result?.at ?? call.at) ? { at: result?.at ?? call.at } : {})

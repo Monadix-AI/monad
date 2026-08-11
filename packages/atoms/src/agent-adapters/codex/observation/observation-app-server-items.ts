@@ -39,7 +39,7 @@ function codexAppServerItemEvents(args: {
       source: 'codex-app-server',
       providerEventType: `item/${type}`,
       createdAt,
-      raw: args.item
+      rawEvents: [args.record, args.item]
     });
   }
   if (type === 'contextCompaction') {

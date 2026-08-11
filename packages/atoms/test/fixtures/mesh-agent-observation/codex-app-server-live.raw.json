@@ -1,0 +1,6130 @@
+{
+  "provider": "codex",
+  "page": {
+    "records": [
+      {
+        "data": {
+          "id": 4,
+          "result": {
+            "userAgent": "<text:1>",
+            "codexHome": "<path:1>",
+            "platformFamily": "<text:2>",
+            "platformOs": "<text:3>"
+          }
+        }
+      },
+      {
+        "data": {
+          "method": "remoteControl/status/changed",
+          "params": {
+            "status": "disabled",
+            "serverName": "<text:4>",
+            "installationId": "<id:1>",
+            "environmentId": null
+          },
+          "emittedAtMs": 1786421145476
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "monad",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147828
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "node_repl",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codex_apps",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "shadcn",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codegraph",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codegraph",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "node_repl",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "monad",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codex_apps",
+            "status": "cancelled",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "shadcn",
+            "status": "cancelled",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "shadcn",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codex-security",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codex_apps",
+            "status": "starting",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147829
+        }
+      },
+      {
+        "data": {
+          "method": "thread/status/changed",
+          "params": {
+            "threadId": "<id:2>",
+            "status": {
+              "type": "idle"
+            }
+          },
+          "emittedAtMs": 1786421147835
+        }
+      },
+      {
+        "data": {
+          "id": 5,
+          "result": {
+            "thread": {
+              "id": "<id:2>",
+              "extra": null,
+              "sessionId": "<id:2>",
+              "forkedFromId": null,
+              "parentThreadId": null,
+              "preview": "<text:5>",
+              "ephemeral": false,
+              "isPinned": false,
+              "historyMode": "<text:6>",
+              "modelProvider": "<text:7>",
+              "createdAt": 1786419891,
+              "updatedAt": 1786419891,
+              "recencyAt": 1786419891,
+              "status": {
+                "type": "idle"
+              },
+              "path": "<path:2>",
+              "cwd": "<path:3>",
+              "cliVersion": "<text:8>",
+              "source": "<text:9>",
+              "canAcceptDirectInput": true,
+              "threadSource": null,
+              "agentNickname": null,
+              "agentRole": null,
+              "gitInfo": {
+                "sha": "<id:3>",
+                "branch": "<text:10>",
+                "originUrl": "<text:11>"
+              },
+              "name": null,
+              "turns": [
+                {
+                  "id": "<id:4>",
+                  "items": [
+                    {
+                      "type": "userMessage",
+                      "id": "<id:5>",
+                      "clientId": "<id:6>",
+                      "content": [
+                        {
+                          "type": "text",
+                          "text": "<text:12>",
+                          "text_elements": []
+                        }
+                      ]
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:7>",
+                      "summary": ["<text:13>", "<text:14>"],
+                      "content": []
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:8>",
+                      "server": "<text:15>",
+                      "tool": "<text:16>",
+                      "status": "completed",
+                      "arguments": {},
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:17>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 11
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:9>",
+                      "server": "<text:15>",
+                      "tool": "<text:18>",
+                      "status": "completed",
+                      "arguments": {
+                        "around": "<id:10>",
+                        "limit": 20
+                      },
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:19>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 6
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:11>",
+                      "summary": ["<text:20>"],
+                      "content": []
+                    },
+                    {
+                      "type": "agentMessage",
+                      "id": "<id:12>",
+                      "text": "<text:21>",
+                      "phase": "commentary",
+                      "memoryCitation": null
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:13>",
+                      "summary": ["<text:22>", "<text:23>"],
+                      "content": []
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:14>",
+                      "server": "<text:15>",
+                      "tool": "<text:24>",
+                      "status": "completed",
+                      "arguments": {
+                        "replyToMessageId": "<id:10>",
+                        "requestId": "<id:15>",
+                        "text": "<text:25>"
+                      },
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:26>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 10
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:16>",
+                      "summary": ["<text:27>"],
+                      "content": []
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:17>",
+                      "server": "<text:15>",
+                      "tool": "<text:16>",
+                      "status": "completed",
+                      "arguments": {},
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:17>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 6
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:18>",
+                      "summary": ["<text:28>"],
+                      "content": []
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:19>",
+                      "server": "<text:15>",
+                      "tool": "<text:29>",
+                      "status": "completed",
+                      "arguments": {},
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:30>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 5
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:20>",
+                      "summary": ["<text:31>", "<text:32>"],
+                      "content": []
+                    },
+                    {
+                      "type": "agentMessage",
+                      "id": "<id:21>",
+                      "text": "<text:33>",
+                      "phase": "commentary",
+                      "memoryCitation": null
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:22>",
+                      "server": "<text:15>",
+                      "tool": "<text:16>",
+                      "status": "completed",
+                      "arguments": {},
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:17>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 6
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:23>",
+                      "server": "<text:15>",
+                      "tool": "<text:18>",
+                      "status": "completed",
+                      "arguments": {
+                        "after": "<id:10>",
+                        "limit": 20
+                      },
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:34>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 2
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:24>",
+                      "server": "<text:15>",
+                      "tool": "<text:29>",
+                      "status": "completed",
+                      "arguments": {},
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:30>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 2
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:25>",
+                      "summary": ["<text:35>"],
+                      "content": []
+                    },
+                    {
+                      "type": "mcpToolCall",
+                      "id": "<id:26>",
+                      "server": "<text:15>",
+                      "tool": "<text:24>",
+                      "status": "completed",
+                      "arguments": {
+                        "replyToMessageId": "<id:10>",
+                        "requestId": "<id:27>",
+                        "text": "<text:36>"
+                      },
+                      "appContext": null,
+                      "pluginId": null,
+                      "result": {
+                        "content": [
+                          {
+                            "type": "text",
+                            "text": "<text:37>"
+                          }
+                        ],
+                        "structuredContent": null,
+                        "_meta": null
+                      },
+                      "error": null,
+                      "durationMs": 6
+                    },
+                    {
+                      "type": "reasoning",
+                      "id": "<id:28>",
+                      "summary": ["<text:38>"],
+                      "content": []
+                    },
+                    {
+                      "type": "agentMessage",
+                      "id": "<id:29>",
+                      "text": "<text:39>",
+                      "phase": "final_answer",
+                      "memoryCitation": null
+                    }
+                  ],
+                  "itemsView": "<text:40>",
+                  "status": "completed",
+                  "error": null,
+                  "startedAt": 1786419891,
+                  "completedAt": 1786420009,
+                  "durationMs": 118014
+                }
+              ]
+            },
+            "model": "<text:41>",
+            "modelProvider": "<text:7>",
+            "serviceTier": "<text:42>",
+            "cwd": "<path:3>",
+            "runtimeWorkspaceRoots": ["<path:3>"],
+            "instructionSources": ["<path:4>", "<path:5>"],
+            "approvalPolicy": "<text:43>",
+            "approvalsReviewer": "<text:44>",
+            "sandbox": {
+              "type": "dangerFullAccess"
+            },
+            "activePermissionProfile": null,
+            "reasoningEffort": "<text:45>",
+            "multiAgentMode": "<text:46>",
+            "initialTurnsPage": null,
+            "turnsBackwardsCursor": null,
+            "itemsBackwardsCursor": null
+          }
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:4>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 531903,
+                "inputTokens": 529911,
+                "cachedInputTokens": 486400,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 1992,
+                "reasoningOutputTokens": 821
+              },
+              "last": {
+                "totalTokens": 49115,
+                "inputTokens": 49019,
+                "cachedInputTokens": 47872,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 96,
+                "reasoningOutputTokens": 44
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421147838
+        }
+      },
+      {
+        "data": {
+          "method": "thread/goal/cleared",
+          "params": {
+            "threadId": "<id:2>"
+          },
+          "emittedAtMs": 1786421147841
+        }
+      },
+      {
+        "data": {
+          "id": 6,
+          "result": {
+            "turn": {
+              "id": "<id:30>",
+              "items": [],
+              "itemsView": "<text:47>",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": null,
+              "completedAt": null,
+              "durationMs": null
+            }
+          }
+        }
+      },
+      {
+        "data": {
+          "method": "thread/settings/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "threadSettings": {
+              "cwd": "<path:3>",
+              "approvalPolicy": "<text:43>",
+              "approvalsReviewer": "<text:44>",
+              "sandboxPolicy": {
+                "type": "dangerFullAccess"
+              },
+              "activePermissionProfile": null,
+              "model": "<text:41>",
+              "modelProvider": "<text:7>",
+              "serviceTier": "<text:42>",
+              "effort": "<text:45>",
+              "summary": "<text:48>",
+              "collaborationMode": {
+                "mode": "<text:42>",
+                "settings": {
+                  "model": "<text:41>",
+                  "reasoning_effort": "<text:45>",
+                  "developer_instructions": null
+                }
+              },
+              "multiAgentMode": "<text:46>",
+              "personality": "<text:49>"
+            }
+          },
+          "emittedAtMs": 1786421147887
+        }
+      },
+      {
+        "data": {
+          "method": "thread/status/changed",
+          "params": {
+            "threadId": "<id:2>",
+            "status": {
+              "type": "active",
+              "activeFlags": []
+            }
+          },
+          "emittedAtMs": 1786421147892
+        }
+      },
+      {
+        "data": {
+          "method": "turn/started",
+          "params": {
+            "threadId": "<id:2>",
+            "turn": {
+              "id": "<id:30>",
+              "items": [],
+              "itemsView": "<text:47>",
+              "status": "inProgress",
+              "error": null,
+              "startedAt": 1786421147,
+              "completedAt": null,
+              "durationMs": null
+            }
+          },
+          "emittedAtMs": 1786421147892
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codex-security",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421147925
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codex_apps",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421148982
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "shadcn",
+            "status": "failed",
+            "error": "<text:50>",
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421151348
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "node_repl",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421151348
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "monad",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421151348
+        }
+      },
+      {
+        "data": {
+          "method": "mcpServer/startupStatus/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "name": "codegraph",
+            "status": "ready",
+            "error": null,
+            "failureReason": null
+          },
+          "emittedAtMs": 1786421151348
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "userMessage",
+              "id": "<id:31>",
+              "clientId": "<id:32>",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "<text:51>",
+                  "text_elements": []
+                }
+              ]
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421153946
+          },
+          "emittedAtMs": 1786421153946
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "userMessage",
+              "id": "<id:31>",
+              "clientId": "<id:32>",
+              "content": [
+                {
+                  "type": "text",
+                  "text": "<text:51>",
+                  "text_elements": []
+                }
+              ]
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421153946
+          },
+          "emittedAtMs": 1786421153946
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:33>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421156880
+          },
+          "emittedAtMs": 1786421156881
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:33>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421159687
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:33>",
+            "delta": "<text:52>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421159687
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:33>",
+            "summaryIndex": 1
+          },
+          "emittedAtMs": 1786421163464
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:33>",
+            "delta": "<text:53>",
+            "summaryIndex": 1
+          },
+          "emittedAtMs": 1786421163473
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:33>",
+              "summary": ["<text:52>", "<text:53>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421163476
+          },
+          "emittedAtMs": 1786421163477
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:34>",
+              "text": "<text:54>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421163481
+          },
+          "emittedAtMs": 1786421163481
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:55>"
+          },
+          "emittedAtMs": 1786421163483
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:56>"
+          },
+          "emittedAtMs": 1786421163483
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:57>"
+          },
+          "emittedAtMs": 1786421163492
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:58>"
+          },
+          "emittedAtMs": 1786421163492
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:59>"
+          },
+          "emittedAtMs": 1786421163492
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:60>"
+          },
+          "emittedAtMs": 1786421163497
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:61>"
+          },
+          "emittedAtMs": 1786421163497
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:62>"
+          },
+          "emittedAtMs": 1786421163503
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:63>"
+          },
+          "emittedAtMs": 1786421163505
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:64>"
+          },
+          "emittedAtMs": 1786421163512
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:65>"
+          },
+          "emittedAtMs": 1786421163512
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:66>"
+          },
+          "emittedAtMs": 1786421163515
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:67>"
+          },
+          "emittedAtMs": 1786421163515
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:68>"
+          },
+          "emittedAtMs": 1786421163520
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:69>"
+          },
+          "emittedAtMs": 1786421163523
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:70>"
+          },
+          "emittedAtMs": 1786421163523
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:71>"
+          },
+          "emittedAtMs": 1786421163525
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:72>"
+          },
+          "emittedAtMs": 1786421163525
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:73>"
+          },
+          "emittedAtMs": 1786421163529
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:74>"
+          },
+          "emittedAtMs": 1786421163535
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:75>"
+          },
+          "emittedAtMs": 1786421163540
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:76>"
+          },
+          "emittedAtMs": 1786421163540
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:77>"
+          },
+          "emittedAtMs": 1786421163540
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:55>"
+          },
+          "emittedAtMs": 1786421163542
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:56>"
+          },
+          "emittedAtMs": 1786421163542
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:78>"
+          },
+          "emittedAtMs": 1786421163544
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:79>"
+          },
+          "emittedAtMs": 1786421163555
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:80>"
+          },
+          "emittedAtMs": 1786421163555
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:81>"
+          },
+          "emittedAtMs": 1786421163555
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:57>"
+          },
+          "emittedAtMs": 1786421163555
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:82>"
+          },
+          "emittedAtMs": 1786421163578
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:83>"
+          },
+          "emittedAtMs": 1786421163589
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:57>"
+          },
+          "emittedAtMs": 1786421163608
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:84>"
+          },
+          "emittedAtMs": 1786421163632
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:85>"
+          },
+          "emittedAtMs": 1786421163649
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:86>"
+          },
+          "emittedAtMs": 1786421163669
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:87>"
+          },
+          "emittedAtMs": 1786421163685
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:88>"
+          },
+          "emittedAtMs": 1786421163707
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:89>"
+          },
+          "emittedAtMs": 1786421163736
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:61>"
+          },
+          "emittedAtMs": 1786421163757
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:90>"
+          },
+          "emittedAtMs": 1786421163757
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:91>"
+          },
+          "emittedAtMs": 1786421163773
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:92>"
+          },
+          "emittedAtMs": 1786421163815
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:93>"
+          },
+          "emittedAtMs": 1786421163815
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:94>"
+          },
+          "emittedAtMs": 1786421163823
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:95>"
+          },
+          "emittedAtMs": 1786421163875
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:96>"
+          },
+          "emittedAtMs": 1786421163875
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:97>"
+          },
+          "emittedAtMs": 1786421163894
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:98>"
+          },
+          "emittedAtMs": 1786421163898
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:99>"
+          },
+          "emittedAtMs": 1786421163939
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:100>"
+          },
+          "emittedAtMs": 1786421163939
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:101>"
+          },
+          "emittedAtMs": 1786421163960
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:102>"
+          },
+          "emittedAtMs": 1786421163979
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:103>"
+          },
+          "emittedAtMs": 1786421163997
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:68>"
+          },
+          "emittedAtMs": 1786421164022
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:104>"
+          },
+          "emittedAtMs": 1786421164022
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:105>"
+          },
+          "emittedAtMs": 1786421164037
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:106>"
+          },
+          "emittedAtMs": 1786421164056
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:75>"
+          },
+          "emittedAtMs": 1786421164074
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:34>",
+            "delta": "<text:107>"
+          },
+          "emittedAtMs": 1786421164098
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:34>",
+              "text": "<text:108>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421164344
+          },
+          "emittedAtMs": 1786421164344
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "mcpToolCall",
+              "id": "<id:35>",
+              "server": "<text:15>",
+              "tool": "<text:16>",
+              "status": "inProgress",
+              "arguments": {},
+              "appContext": null,
+              "pluginId": null,
+              "result": null,
+              "error": null,
+              "durationMs": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421167859
+          },
+          "emittedAtMs": 1786421167860
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "mcpToolCall",
+              "id": "<id:35>",
+              "server": "<text:15>",
+              "tool": "<text:16>",
+              "status": "completed",
+              "arguments": {},
+              "appContext": null,
+              "pluginId": null,
+              "result": {
+                "content": [
+                  {
+                    "type": "text",
+                    "text": "<text:17>"
+                  }
+                ],
+                "structuredContent": null,
+                "_meta": null
+              },
+              "error": null,
+              "durationMs": 10
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421167869
+          },
+          "emittedAtMs": 1786421167870
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:36>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:6>",
+              "cwd": "<path:3>",
+              "processId": "<id:37>",
+              "source": "<text:109>",
+              "status": "inProgress",
+              "commandActions": [
+                {
+                  "type": "search",
+                  "command": "<text:110>",
+                  "query": "<text:111>",
+                  "path": "<path:7>"
+                }
+              ],
+              "aggregatedOutput": null,
+              "exitCode": null,
+              "durationMs": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421167979
+          },
+          "emittedAtMs": 1786421167979
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:36>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:6>",
+              "cwd": "<path:3>",
+              "processId": "<id:37>",
+              "source": "<text:109>",
+              "status": "completed",
+              "commandActions": [
+                {
+                  "type": "search",
+                  "command": "<text:110>",
+                  "query": "<text:111>",
+                  "path": "<path:7>"
+                }
+              ],
+              "aggregatedOutput": "<text:112>",
+              "exitCode": 0,
+              "durationMs": 0
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421167979
+          },
+          "emittedAtMs": 1786421167979
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 582567,
+                "inputTokens": 579975,
+                "cachedInputTokens": 535296,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 2592,
+                "reasoningOutputTokens": 1159
+              },
+              "last": {
+                "totalTokens": 50664,
+                "inputTokens": 50064,
+                "cachedInputTokens": 48896,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 600,
+                "reasoningOutputTokens": 338
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421167984
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421167984
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:39>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421171441
+          },
+          "emittedAtMs": 1786421171441
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:39>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421173049
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:39>",
+            "delta": "<text:115>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421173049
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:39>",
+              "summary": ["<text:115>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421173085
+          },
+          "emittedAtMs": 1786421173085
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:40>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:8>",
+              "cwd": "<path:3>",
+              "processId": "<id:41>",
+              "source": "<text:109>",
+              "status": "inProgress",
+              "commandActions": [
+                {
+                  "type": "unknown",
+                  "command": "<text:116>"
+                }
+              ],
+              "aggregatedOutput": null,
+              "exitCode": null,
+              "durationMs": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421177245
+          },
+          "emittedAtMs": 1786421177246
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:40>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:8>",
+              "cwd": "<path:3>",
+              "processId": "<id:41>",
+              "source": "<text:109>",
+              "status": "failed",
+              "commandActions": [
+                {
+                  "type": "unknown",
+                  "command": "<text:116>"
+                }
+              ],
+              "aggregatedOutput": "<text:117>",
+              "exitCode": 1,
+              "durationMs": 0
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421177246
+          },
+          "emittedAtMs": 1786421177247
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 635801,
+                "inputTokens": 632896,
+                "cachedInputTokens": 585216,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 2905,
+                "reasoningOutputTokens": 1219
+              },
+              "last": {
+                "totalTokens": 53234,
+                "inputTokens": 52921,
+                "cachedInputTokens": 49920,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 313,
+                "reasoningOutputTokens": 60
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421177260
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421177260
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:42>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421179103
+          },
+          "emittedAtMs": 1786421179104
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:42>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421180568
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:42>",
+            "delta": "<text:118>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421180568
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:42>",
+              "summary": ["<text:118>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421180582
+          },
+          "emittedAtMs": 1786421180582
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:43>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:9>",
+              "cwd": "<path:3>",
+              "processId": "<id:44>",
+              "source": "<text:109>",
+              "status": "inProgress",
+              "commandActions": [
+                {
+                  "type": "unknown",
+                  "command": "<text:119>"
+                }
+              ],
+              "aggregatedOutput": null,
+              "exitCode": null,
+              "durationMs": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421184750
+          },
+          "emittedAtMs": 1786421184750
+        }
+      },
+      {
+        "data": {
+          "method": "item/commandExecution/outputDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:43>",
+            "delta": "<text:120>"
+          },
+          "emittedAtMs": 1786421185709
+        }
+      },
+      {
+        "data": {
+          "method": "item/commandExecution/outputDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:43>",
+            "delta": "<text:121>"
+          },
+          "emittedAtMs": 1786421186964
+        }
+      },
+      {
+        "data": {
+          "method": "item/commandExecution/outputDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:43>",
+            "delta": "<text:122>"
+          },
+          "emittedAtMs": 1786421186965
+        }
+      },
+      {
+        "data": {
+          "method": "item/commandExecution/outputDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:43>",
+            "delta": "<path:10>"
+          },
+          "emittedAtMs": 1786421187600
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:43>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:9>",
+              "cwd": "<path:3>",
+              "processId": "<id:44>",
+              "source": "<text:109>",
+              "status": "completed",
+              "commandActions": [
+                {
+                  "type": "unknown",
+                  "command": "<text:119>"
+                }
+              ],
+              "aggregatedOutput": "<text:123>",
+              "exitCode": 0,
+              "durationMs": 2850
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421187601
+          },
+          "emittedAtMs": 1786421187601
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 689672,
+                "inputTokens": 686467,
+                "cachedInputTokens": 637184,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 3205,
+                "reasoningOutputTokens": 1284
+              },
+              "last": {
+                "totalTokens": 53871,
+                "inputTokens": 53571,
+                "cachedInputTokens": 51968,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 300,
+                "reasoningOutputTokens": 65
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421187605
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421187605
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:45>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421189338
+          },
+          "emittedAtMs": 1786421189338
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:45>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421192032
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:45>",
+            "delta": "<text:124>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421192033
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 689672,
+                "inputTokens": 686467,
+                "cachedInputTokens": 637184,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 3205,
+                "reasoningOutputTokens": 1284
+              },
+              "last": {
+                "totalTokens": 53871,
+                "inputTokens": 53571,
+                "cachedInputTokens": 51968,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 300,
+                "reasoningOutputTokens": 65
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421492042
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421492042
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:46>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421495603
+          },
+          "emittedAtMs": 1786421495603
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:46>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421497439
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:46>",
+            "delta": "<text:125>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421497439
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:46>",
+              "summary": ["<text:125>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421497579
+          },
+          "emittedAtMs": 1786421497579
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "imageView",
+              "id": "<id:47>",
+              "path": "<path:11>"
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421498102
+          },
+          "emittedAtMs": 1786421498102
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "imageView",
+              "id": "<id:47>",
+              "path": "<path:11>"
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421498102
+          },
+          "emittedAtMs": 1786421498102
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 743813,
+                "inputTokens": 740473,
+                "cachedInputTokens": 690176,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 3340,
+                "reasoningOutputTokens": 1353
+              },
+              "last": {
+                "totalTokens": 54141,
+                "inputTokens": 54006,
+                "cachedInputTokens": 52992,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 135,
+                "reasoningOutputTokens": 69
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421498130
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421498130
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:48>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421501161
+          },
+          "emittedAtMs": 1786421501162
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:48>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421503725
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:48>",
+            "delta": "<text:126>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421503725
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:48>",
+            "summaryIndex": 1
+          },
+          "emittedAtMs": 1786421506985
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:48>",
+            "delta": "<text:127>",
+            "summaryIndex": 1
+          },
+          "emittedAtMs": 1786421506985
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:48>",
+              "summary": ["<text:126>", "<text:127>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421506985
+          },
+          "emittedAtMs": 1786421506986
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:49>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:12>",
+              "cwd": "<path:3>",
+              "processId": "<id:50>",
+              "source": "<text:109>",
+              "status": "inProgress",
+              "commandActions": [
+                {
+                  "type": "unknown",
+                  "command": "<text:128>"
+                }
+              ],
+              "aggregatedOutput": null,
+              "exitCode": null,
+              "durationMs": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421509886
+          },
+          "emittedAtMs": 1786421509886
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "commandExecution",
+              "id": "<id:49>",
+              "pluginId": null,
+              "scriptPath": null,
+              "command": "<path:12>",
+              "cwd": "<path:3>",
+              "processId": "<id:50>",
+              "source": "<text:109>",
+              "status": "completed",
+              "commandActions": [
+                {
+                  "type": "unknown",
+                  "command": "<text:128>"
+                }
+              ],
+              "aggregatedOutput": "<path:13>",
+              "exitCode": 0,
+              "durationMs": 0
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421509886
+          },
+          "emittedAtMs": 1786421509886
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 800733,
+                "inputTokens": 796918,
+                "cachedInputTokens": 743168,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 3815,
+                "reasoningOutputTokens": 1645
+              },
+              "last": {
+                "totalTokens": 56920,
+                "inputTokens": 56445,
+                "cachedInputTokens": 52992,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 475,
+                "reasoningOutputTokens": 292
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421509893
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421509893
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "imageView",
+              "id": "<id:51>",
+              "path": "<path:14>"
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421512611
+          },
+          "emittedAtMs": 1786421512611
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "imageView",
+              "id": "<id:51>",
+              "path": "<path:14>"
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421512611
+          },
+          "emittedAtMs": 1786421512611
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 857870,
+                "inputTokens": 853989,
+                "cachedInputTokens": 798208,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 3881,
+                "reasoningOutputTokens": 1645
+              },
+              "last": {
+                "totalTokens": 57137,
+                "inputTokens": 57071,
+                "cachedInputTokens": 55040,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 66,
+                "reasoningOutputTokens": 0
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421512627
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421512627
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:52>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421516207
+          },
+          "emittedAtMs": 1786421516207
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:52>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421518194
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:52>",
+            "delta": "<text:129>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421518194
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:52>",
+              "summary": ["<text:129>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421518392
+          },
+          "emittedAtMs": 1786421518393
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:53>",
+              "text": "<text:54>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421518404
+          },
+          "emittedAtMs": 1786421518404
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:130>"
+          },
+          "emittedAtMs": 1786421518404
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:131>"
+          },
+          "emittedAtMs": 1786421518404
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:132>"
+          },
+          "emittedAtMs": 1786421518404
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:70>"
+          },
+          "emittedAtMs": 1786421518405
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:63>"
+          },
+          "emittedAtMs": 1786421518405
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:64>"
+          },
+          "emittedAtMs": 1786421518407
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:133>"
+          },
+          "emittedAtMs": 1786421518411
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:81>"
+          },
+          "emittedAtMs": 1786421518411
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:57>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:134>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:135>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:136>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:68>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:137>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:138>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:139>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:140>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:141>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:142>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:143>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:144>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:145>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:146>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:147>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:57>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:107>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:148>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:85>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:149>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:150>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:151>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:91>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:152>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:153>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:154>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:155>"
+          },
+          "emittedAtMs": 1786421518518
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:156>"
+          },
+          "emittedAtMs": 1786421518561
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:157>"
+          },
+          "emittedAtMs": 1786421518586
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:158>"
+          },
+          "emittedAtMs": 1786421518643
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:159>"
+          },
+          "emittedAtMs": 1786421518748
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:160>"
+          },
+          "emittedAtMs": 1786421518748
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:161>"
+          },
+          "emittedAtMs": 1786421518804
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:162>"
+          },
+          "emittedAtMs": 1786421518804
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:97>"
+          },
+          "emittedAtMs": 1786421518804
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:75>"
+          },
+          "emittedAtMs": 1786421518804
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:163>"
+          },
+          "emittedAtMs": 1786421518804
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:164>"
+          },
+          "emittedAtMs": 1786421518804
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:97>"
+          },
+          "emittedAtMs": 1786421518848
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:165>"
+          },
+          "emittedAtMs": 1786421518952
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:95>"
+          },
+          "emittedAtMs": 1786421518960
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:96>"
+          },
+          "emittedAtMs": 1786421518960
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:151>"
+          },
+          "emittedAtMs": 1786421518960
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:160>"
+          },
+          "emittedAtMs": 1786421518968
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:97>"
+          },
+          "emittedAtMs": 1786421518968
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:166>"
+          },
+          "emittedAtMs": 1786421518968
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:167>"
+          },
+          "emittedAtMs": 1786421518979
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:168>"
+          },
+          "emittedAtMs": 1786421519004
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:169>"
+          },
+          "emittedAtMs": 1786421519004
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:103>"
+          },
+          "emittedAtMs": 1786421519052
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:170>"
+          },
+          "emittedAtMs": 1786421519072
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:171>"
+          },
+          "emittedAtMs": 1786421519072
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:172>"
+          },
+          "emittedAtMs": 1786421519072
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:96>"
+          },
+          "emittedAtMs": 1786421519126
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:173>"
+          },
+          "emittedAtMs": 1786421519126
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:174>"
+          },
+          "emittedAtMs": 1786421519126
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:53>",
+            "delta": "<text:107>"
+          },
+          "emittedAtMs": 1786421519126
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:53>",
+              "text": "<text:175>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421519270
+          },
+          "emittedAtMs": 1786421519270
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "imageGeneration",
+              "id": "<id:54>",
+              "status": "in_progress",
+              "revisedPrompt": null,
+              "result": "<text:54>"
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421532016
+          },
+          "emittedAtMs": 1786421532017
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "imageGeneration",
+              "id": "<id:54>",
+              "status": "completed",
+              "revisedPrompt": "<text:176>",
+              "result": "<text:177>",
+              "savedPath": "<path:15>"
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421604994
+          },
+          "emittedAtMs": 1786421604995
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 917056,
+                "inputTokens": 912302,
+                "cachedInputTokens": 854656,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 4754,
+                "reasoningOutputTokens": 1728
+              },
+              "last": {
+                "totalTokens": 59186,
+                "inputTokens": 58313,
+                "cachedInputTokens": 56448,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 873,
+                "reasoningOutputTokens": 83
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421605021
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421605021
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:55>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421607941
+          },
+          "emittedAtMs": 1786421607941
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:55>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421610809
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:55>",
+            "delta": "<text:178>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421610809
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:55>",
+            "summaryIndex": 1
+          },
+          "emittedAtMs": 1786421615849
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:55>",
+            "delta": "<text:179>",
+            "summaryIndex": 1
+          },
+          "emittedAtMs": 1786421615928
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:55>",
+            "summaryIndex": 2
+          },
+          "emittedAtMs": 1786421617654
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:55>",
+            "delta": "<text:180>",
+            "summaryIndex": 2
+          },
+          "emittedAtMs": 1786421617670
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:55>",
+              "summary": ["<text:178>", "<text:179>", "<text:180>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421617678
+          },
+          "emittedAtMs": 1786421617679
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:56>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421617704
+          },
+          "emittedAtMs": 1786421617704
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryPartAdded",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:56>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421619725
+        }
+      },
+      {
+        "data": {
+          "method": "item/reasoning/summaryTextDelta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:56>",
+            "delta": "<text:181>",
+            "summaryIndex": 0
+          },
+          "emittedAtMs": 1786421619737
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:56>",
+              "summary": ["<text:181>"],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421619744
+          },
+          "emittedAtMs": 1786421619744
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:57>",
+              "text": "<text:54>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421619744
+          },
+          "emittedAtMs": 1786421619744
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:149>"
+          },
+          "emittedAtMs": 1786421619751
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:150>"
+          },
+          "emittedAtMs": 1786421619752
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:131>"
+          },
+          "emittedAtMs": 1786421619761
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:182>"
+          },
+          "emittedAtMs": 1786421619761
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:155>"
+          },
+          "emittedAtMs": 1786421619847
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:70>"
+          },
+          "emittedAtMs": 1786421619847
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:71>"
+          },
+          "emittedAtMs": 1786421619847
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:183>"
+          },
+          "emittedAtMs": 1786421619847
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:184>"
+          },
+          "emittedAtMs": 1786421619847
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:185>"
+          },
+          "emittedAtMs": 1786421619847
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:60>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:186>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:187>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:188>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:189>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:190>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:191>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:192>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:193>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:82>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:194>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:133>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:195>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:94>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:196>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:197>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:198>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:105>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:199>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:200>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:201>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:202>"
+          },
+          "emittedAtMs": 1786421619849
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:203>"
+          },
+          "emittedAtMs": 1786421619861
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:204>"
+          },
+          "emittedAtMs": 1786421619861
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:205>"
+          },
+          "emittedAtMs": 1786421619861
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:206>"
+          },
+          "emittedAtMs": 1786421619861
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:207>"
+          },
+          "emittedAtMs": 1786421619862
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:208>"
+          },
+          "emittedAtMs": 1786421619866
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:209>"
+          },
+          "emittedAtMs": 1786421619866
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:210>"
+          },
+          "emittedAtMs": 1786421619866
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:211>"
+          },
+          "emittedAtMs": 1786421619879
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:56>"
+          },
+          "emittedAtMs": 1786421619900
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:155>"
+          },
+          "emittedAtMs": 1786421619918
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:212>"
+          },
+          "emittedAtMs": 1786421619938
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:213>"
+          },
+          "emittedAtMs": 1786421619957
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:95>"
+          },
+          "emittedAtMs": 1786421620057
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:96>"
+          },
+          "emittedAtMs": 1786421620057
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:214>"
+          },
+          "emittedAtMs": 1786421620057
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:208>"
+          },
+          "emittedAtMs": 1786421620057
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:215>"
+          },
+          "emittedAtMs": 1786421620057
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:216>"
+          },
+          "emittedAtMs": 1786421620057
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:154>"
+          },
+          "emittedAtMs": 1786421620091
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:217>"
+          },
+          "emittedAtMs": 1786421620098
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:87>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:93>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:94>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:218>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:219>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:220>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:221>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:222>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:223>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:202>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:224>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:225>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:202>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:226>"
+          },
+          "emittedAtMs": 1786421620468
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:225>"
+          },
+          "emittedAtMs": 1786421620469
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:202>"
+          },
+          "emittedAtMs": 1786421620469
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:227>"
+          },
+          "emittedAtMs": 1786421620469
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:107>"
+          },
+          "emittedAtMs": 1786421620469
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:148>"
+          },
+          "emittedAtMs": 1786421620469
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:228>"
+          },
+          "emittedAtMs": 1786421620469
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:190>"
+          },
+          "emittedAtMs": 1786421620470
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:88>"
+          },
+          "emittedAtMs": 1786421620485
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:187>"
+          },
+          "emittedAtMs": 1786421620506
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:169>"
+          },
+          "emittedAtMs": 1786421620644
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:57>",
+            "delta": "<text:107>"
+          },
+          "emittedAtMs": 1786421620644
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:57>",
+              "text": "<text:229>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421620803
+          },
+          "emittedAtMs": 1786421620803
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "imageGeneration",
+              "id": "<id:58>",
+              "status": "in_progress",
+              "revisedPrompt": null,
+              "result": "<text:54>"
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421625978
+          },
+          "emittedAtMs": 1786421625978
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 979259,
+                "inputTokens": 973532,
+                "cachedInputTokens": 912128,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 5727,
+                "reasoningOutputTokens": 2351
+              },
+              "last": {
+                "totalTokens": 62203,
+                "inputTokens": 61230,
+                "cachedInputTokens": 57472,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 973,
+                "reasoningOutputTokens": 623
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421746998
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421746998
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:59>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421748461
+          },
+          "emittedAtMs": 1786421748461
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:59>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421749096
+          },
+          "emittedAtMs": 1786421749096
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 1041530,
+                "inputTokens": 1035763,
+                "cachedInputTokens": 973184,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 5767,
+                "reasoningOutputTokens": 2358
+              },
+              "last": {
+                "totalTokens": 62271,
+                "inputTokens": 62231,
+                "cachedInputTokens": 61056,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 40,
+                "reasoningOutputTokens": 7
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421870439
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421870439
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:60>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421872233
+          },
+          "emittedAtMs": 1786421872233
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:60>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421872956
+          },
+          "emittedAtMs": 1786421872956
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:61>",
+              "text": "<text:54>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421872956
+          },
+          "emittedAtMs": 1786421872956
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:230>"
+          },
+          "emittedAtMs": 1786421872961
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:231>"
+          },
+          "emittedAtMs": 1786421872961
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:190>"
+          },
+          "emittedAtMs": 1786421872964
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:191>"
+          },
+          "emittedAtMs": 1786421872965
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:232>"
+          },
+          "emittedAtMs": 1786421872965
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:233>"
+          },
+          "emittedAtMs": 1786421872965
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:78>"
+          },
+          "emittedAtMs": 1786421872968
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:79>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:216>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:87>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:234>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:235>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:236>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:237>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:238>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:239>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:240>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:233>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:221>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:241>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:242>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:243>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:71>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:244>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:245>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:136>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:207>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:208>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:209>"
+          },
+          "emittedAtMs": 1786421873082
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:210>"
+          },
+          "emittedAtMs": 1786421873092
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:246>"
+          },
+          "emittedAtMs": 1786421873109
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:247>"
+          },
+          "emittedAtMs": 1786421873135
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:208>"
+          },
+          "emittedAtMs": 1786421873150
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:95>"
+          },
+          "emittedAtMs": 1786421873165
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:96>"
+          },
+          "emittedAtMs": 1786421873202
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:248>"
+          },
+          "emittedAtMs": 1786421873202
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:187>"
+          },
+          "emittedAtMs": 1786421873243
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:249>"
+          },
+          "emittedAtMs": 1786421873243
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:163>"
+          },
+          "emittedAtMs": 1786421873272
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:164>"
+          },
+          "emittedAtMs": 1786421873272
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:61>",
+            "delta": "<text:107>"
+          },
+          "emittedAtMs": 1786421873289
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:61>",
+              "text": "<text:250>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421873558
+          },
+          "emittedAtMs": 1786421873558
+        }
+      },
+      {
+        "data": {
+          "method": "thread/tokenUsage/updated",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "tokenUsage": {
+              "total": {
+                "totalTokens": 1103925,
+                "inputTokens": 1098062,
+                "cachedInputTokens": 1035264,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 5863,
+                "reasoningOutputTokens": 2371
+              },
+              "last": {
+                "totalTokens": 62395,
+                "inputTokens": 62299,
+                "cachedInputTokens": 62080,
+                "cacheWriteInputTokens": 0,
+                "outputTokens": 96,
+                "reasoningOutputTokens": 13
+              },
+              "modelContextWindow": 258400
+            }
+          },
+          "emittedAtMs": 1786421995083
+        }
+      },
+      {
+        "data": {
+          "method": "account/rateLimits/updated",
+          "params": {
+            "rateLimits": {
+              "limitId": "<id:38>",
+              "limitName": null,
+              "primary": {
+                "usedPercent": 2,
+                "windowDurationMins": 10080,
+                "resetsAt": 1787011291
+              },
+              "secondary": null,
+              "credits": {
+                "hasCredits": false,
+                "unlimited": false,
+                "balance": "<text:113>"
+              },
+              "individualLimit": null,
+              "spendControlReached": null,
+              "planType": "<text:114>",
+              "rateLimitReachedType": null
+            }
+          },
+          "emittedAtMs": 1786421995083
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:62>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421997462
+          },
+          "emittedAtMs": 1786421997462
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "reasoning",
+              "id": "<id:62>",
+              "summary": [],
+              "content": []
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421998076
+          },
+          "emittedAtMs": 1786421998076
+        }
+      },
+      {
+        "data": {
+          "method": "item/started",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:63>",
+              "text": "<text:54>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "startedAtMs": 1786421998080
+          },
+          "emittedAtMs": 1786421998080
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:57>"
+          },
+          "emittedAtMs": 1786421998083
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:84>"
+          },
+          "emittedAtMs": 1786421998091
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:251>"
+          },
+          "emittedAtMs": 1786421998093
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:232>"
+          },
+          "emittedAtMs": 1786421998093
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:233>"
+          },
+          "emittedAtMs": 1786421998093
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:252>"
+          },
+          "emittedAtMs": 1786421998099
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:253>"
+          },
+          "emittedAtMs": 1786421998099
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:150>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:155>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:254>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:255>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:106>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:256>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:257>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:235>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:258>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:60>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:259>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:260>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:261>"
+          },
+          "emittedAtMs": 1786421998232
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:262>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:132>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:155>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:263>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:264>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:265>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:266>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:85>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:267>"
+          },
+          "emittedAtMs": 1786421998233
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:268>"
+          },
+          "emittedAtMs": 1786421998381
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:269>"
+          },
+          "emittedAtMs": 1786421998381
+        }
+      },
+      {
+        "data": {
+          "method": "item/agentMessage/delta",
+          "params": {
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "itemId": "<id:63>",
+            "delta": "<text:107>"
+          },
+          "emittedAtMs": 1786421998381
+        }
+      },
+      {
+        "data": {
+          "method": "item/completed",
+          "params": {
+            "item": {
+              "type": "agentMessage",
+              "id": "<id:63>",
+              "text": "<text:270>",
+              "phase": "commentary",
+              "memoryCitation": null
+            },
+            "threadId": "<id:2>",
+            "turnId": "<id:30>",
+            "completedAtMs": 1786421998526
+          },
+          "emittedAtMs": 1786421998527
+        }
+      }
+    ],
+    "coverage": "exact"
+  }
+}

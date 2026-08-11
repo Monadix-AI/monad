@@ -275,7 +275,7 @@ test('Claude event source keeps only the latest cumulative thinking token estima
     {
       id: 'thinking_0:thinking-tokens',
       providerEventType: 'thinking_tokens_delta',
-      text: 'Thinking… · 1120 tokens',
+      text: 'Thinking… 1120 tokens',
       provenance: { rawEvents: records }
     }
   ]);
@@ -306,8 +306,139 @@ test('Claude event source starts a new thinking card after a tool boundary', () 
       text: event.text
     }))
   ).toEqual([
-    { type: 'thinking_tokens_delta', text: 'Thinking… · 80 tokens' },
+    { type: 'thinking_tokens_delta', text: 'Thinking… 80 tokens' },
     { type: 'tool_use', text: 'Tool call Bash {"command":"pwd"}' },
-    { type: 'thinking_tokens_delta', text: 'Thinking… · 150 tokens' }
+    { type: 'thinking_tokens_delta', text: 'Thinking… 150 tokens' }
   ]);
+});
+
+test('Claude event source reconciles interleaved live blocks with the authoritative assistant message', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  if (!adapter?.events) throw new Error('Claude event source is required');
+  const messageId = 'msg_011CdvJ8vJZPvAr4RSiDXEY1';
+  const records = [
+    { type: 'stream_event', event: { type: 'message_start', message: { id: messageId } }, uuid: 'stream-1' },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } },
+      uuid: 'stream-2'
+    },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'Need ' } },
+      uuid: 'stream-3'
+    },
+    { type: 'system', subtype: 'thinking_tokens', estimated_tokens: 61, uuid: 'tokens-1' },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: 'context.' } },
+      uuid: 'stream-4'
+    },
+    { type: 'stream_event', event: { type: 'content_block_stop', index: 0 }, uuid: 'stream-5' },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '' } },
+      uuid: 'stream-6'
+    },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'Final ' } },
+      uuid: 'stream-7'
+    },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 1, delta: { type: 'text_delta', text: 'answer.' } },
+      uuid: 'stream-8'
+    },
+    {
+      type: 'assistant',
+      uuid: 'assistant-1',
+      message: {
+        id: messageId,
+        content: [
+          { type: 'thinking', thinking: 'Need context.', signature: 'signed' },
+          { type: 'text', text: 'Final answer.' }
+        ]
+      }
+    },
+    { type: 'result', uuid: 'result-1', result: 'Final answer.', is_error: false }
+  ];
+
+  expect(
+    adapter.events
+      .projectLive({ id: 'mesh_claude000000', output: records.map((record) => JSON.stringify(record)).join('\n') })
+      .events.map((event) => ({
+        role: event.role,
+        type: event.providerEventType,
+        text: event.text,
+        summary: event.summary
+      }))
+  ).toEqual([
+    { role: 'agent', type: 'thinking', text: 'Need context.', summary: 'Thinking… 61 tokens' },
+    { role: 'agent', type: 'assistant', text: 'Final answer.', summary: undefined },
+    { role: 'agent', type: 'result', text: 'Final answer.', summary: undefined }
+  ]);
+});
+
+test('Codex live and history message envelopes share semantic dedupe identities', () => {
+  const source = createProjectedEventSource({ provider: 'codex', projection: codexObservationProjection });
+  const turnId = 'turn_1';
+  const text = 'The live answer is complete.';
+  const live = source.projectLive({
+    id: 'live',
+    output: [
+      JSON.stringify({
+        method: 'item/started',
+        params: { threadId: 'thread_1', turnId, item: { type: 'agentMessage', id: 'live-item', text: '' } }
+      }),
+      JSON.stringify({
+        method: 'item/completed',
+        params: { threadId: 'thread_1', turnId, item: { type: 'agentMessage', id: 'live-item', text } }
+      })
+    ].join('\n')
+  }).events;
+  const history = source.projectLive({
+    id: 'history',
+    mode: 'events',
+    output: JSON.stringify({
+      id: turnId,
+      itemsView: 'full',
+      status: 'completed',
+      items: [{ type: 'agentMessage', id: 'item-13', text }]
+    })
+  }).events;
+  const userText = 'The user message is complete.';
+  const liveUser = source.projectLive({
+    id: 'live-user',
+    output: JSON.stringify({
+      method: 'item/completed',
+      params: {
+        threadId: 'thread_1',
+        turnId: 'turn_2',
+        item: { type: 'userMessage', id: 'live-user-item', content: [{ type: 'text', text: userText }] }
+      }
+    })
+  }).events;
+  const historyUser = source.projectLive({
+    id: 'history-user',
+    mode: 'events',
+    output: JSON.stringify({
+      id: 'turn_2',
+      itemsView: 'full',
+      status: 'completed',
+      items: [{ type: 'userMessage', id: 'item-14', content: [{ type: 'text', text: userText }] }]
+    })
+  }).events;
+
+  expect({
+    live: live.find((event) => event.role === 'agent')?.dedupeKey,
+    history: history.find((event) => event.role === 'agent')?.dedupeKey,
+    liveUser: liveUser.find((event) => event.role === 'user')?.dedupeKey,
+    historyUser: historyUser.find((event) => event.role === 'user')?.dedupeKey
+  }).toEqual({
+    live: 'codex:turn:turn_1:message:agent:6461d3ff:agent:item/agentMessage',
+    history: 'codex:turn:turn_1:message:agent:6461d3ff:agent:item/agentMessage',
+    liveUser: 'codex:turn:turn_2:message:user:ae2abba7:user:item/userMessage',
+    historyUser: 'codex:turn:turn_2:message:user:ae2abba7:user:item/userMessage'
+  });
 });

@@ -13,6 +13,7 @@ import {
   recordValue,
   textValue
 } from './observation-projection.ts';
+import { parseStreamingJson } from './partial-json.ts';
 
 // Provider start markers. The legacy classifier folds these into `message`/`system` (it never modelled
 // turn-start), so the neutral decode detects them here to fill the `turn-start` kind.
@@ -74,15 +75,20 @@ function isBareProviderItem(raw: Record<string, unknown> | undefined): raw is Re
 // Best-effort structured tool extraction across provider raw shapes. The adapter's record projector
 // already normalized the human `text`; here we surface the machine fields a neutral renderer needs.
 function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool-result'): AgentObservationTool {
-  const raw = recordValue(event.provenance.rawEvents[0]);
+  const rawRecords = event.provenance.rawEvents
+    .map((value) => recordValue(value))
+    .filter((value): value is Record<string, unknown> => value !== undefined);
+  const raw = rawRecords[0];
   const params = recordValue(raw?.params);
   const sourceEvent = recordValue(params?.event);
   const sourcePayload = recordValue(sourceEvent?.payload);
-  const item = recordValue(params?.item) ?? recordValue(raw?.item);
+  const item = recordValue(params?.item) ?? recordValue(raw?.item) ?? rawRecords.find(isBareProviderItem);
   const itemResult = recordValue(item?.result);
-  const message = recordValue(raw?.message);
-  const content = Array.isArray(message?.content) ? message.content : Array.isArray(raw?.content) ? raw.content : [];
-  const toolUse = content.find(
+  const content = rawRecords.flatMap((record) => {
+    const message = recordValue(record.message);
+    return Array.isArray(message?.content) ? message.content : Array.isArray(record.content) ? record.content : [];
+  });
+  const transcriptToolUse = content.findLast(
     (part) =>
       part && typeof part === 'object' && !Array.isArray(part) && (part as Record<string, unknown>).type === 'tool_use'
   ) as Record<string, unknown> | undefined;
@@ -93,6 +99,15 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
       !Array.isArray(part) &&
       (part as Record<string, unknown>).type === 'tool_result'
   ) as Record<string, unknown> | undefined;
+  const streamToolUse = rawRecords
+    .map((record) => recordValue(recordValue(record.event)?.content_block))
+    .find((block) => block?.type === 'tool_use');
+  const toolUse = transcriptToolUse ?? streamToolUse;
+  const partialInputJson = rawRecords
+    .map((record) => recordValue(recordValue(record.event)?.delta)?.partial_json)
+    .filter((value): value is string => typeof value === 'string')
+    .join('');
+  const partialInput = partialInputJson ? parseStreamingJson(partialInputJson) : undefined;
   const declaredName = textValue(
     toolUse?.name,
     item?.tool,
@@ -112,7 +127,8 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     (declaredName?.toLowerCase() === 'tool' ? undefined : declaredName) ??
     textValue(
       item?.type === 'commandExecution' ? item.type : undefined,
-      item?.type === 'command_execution' ? item.type : undefined
+      item?.type === 'command_execution' ? item.type : undefined,
+      item?.type === 'imageGeneration' ? item.type : undefined
     ) ??
     projectedName ??
     declaredName ??
@@ -146,7 +162,12 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
             ? 'failed'
             : 'completed'
           : undefined;
-  const explicitStatus = textValue(item?.status, raw?.status, params?.status, sourceStatus);
+  const lifecycleMethod = rawRecords.map((record) => textValue(record.method)).find((method) => method !== undefined);
+  const lifecycleStatus =
+    lifecycleMethod === 'item/started' ? 'running' : lifecycleMethod === 'item/completed' ? 'completed' : undefined;
+  const providerStatus = textValue(item?.status, raw?.status, params?.status, sourceStatus, lifecycleStatus);
+  const explicitStatus =
+    providerStatus?.replace(/[-_\s]/g, '').toLowerCase() === 'inprogress' ? 'running' : providerStatus;
   const claudeResultStatus =
     kind === 'tool-result' &&
     (toolResult !== undefined || (event.source === 'claude-code-sdk' && raw?.type === 'tool_result'))
@@ -182,11 +203,15 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
             : {})
   };
   const input =
-    toolUse?.input ??
+    transcriptToolUse?.input ??
+    partialInput ??
+    streamToolUse?.input ??
     item?.input ??
     item?.arguments ??
     item?.action ??
     item?.command ??
+    item?.path ??
+    item?.revisedPrompt ??
     raw?.input ??
     raw?.args ??
     raw?.arguments ??
@@ -195,7 +220,12 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
   if (kind === 'tool-call') {
     return input === undefined ? { name, ...metadata } : { name, input, ...metadata };
   }
+  const imageOutput =
+    textValue(item?.type)?.toLowerCase() === 'imagegeneration'
+      ? textValue(item?.savedPath, item?.saved_path)
+      : undefined;
   const output =
+    imageOutput ??
     item?.aggregatedOutput ??
     item?.aggregated_output ??
     item?.output ??

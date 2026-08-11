@@ -4,6 +4,8 @@ import type {
   MeshAgentObservationProjector
 } from '../../observation-projection.ts';
 
+import { contentHash } from '@monad/sdk-atom/agent-observation';
+
 import {
   classifyObservationActivity,
   isStreamingObservationFragment,
@@ -78,8 +80,26 @@ function codexObservationCheckpoint(event: MeshAgentObservationEvent): string | 
   return textValue(raw?.method) === 'turn/completed' ? codexObservationIdentity(event) : undefined;
 }
 
+function codexObservationDedupeIdentity(event: MeshAgentObservationEvent): string | undefined {
+  if (event.providerEventType !== 'item/agentMessage' && event.providerEventType !== 'item/userMessage') {
+    return undefined;
+  }
+  for (const rawEvent of event.provenance.rawEvents) {
+    const raw = recordValue(rawEvent);
+    const params = recordValue(raw?.params);
+    const turnId = textValue(
+      params?.turnId,
+      recordValue(params?.turn)?.id,
+      raw?.itemsView && raw?.status ? raw.id : undefined
+    );
+    if (turnId) return `turn:${turnId}:message:${event.role}:${contentHash(event.text)}`;
+  }
+  return undefined;
+}
+
 export const codexObservationProjection = {
   checkpoint: codexObservationCheckpoint,
+  dedupeIdentity: codexObservationDedupeIdentity,
   identity: codexObservationIdentity,
   eventEntries: codexHistoryEntries,
   usageRecords: codexUsageRecordsFromRecord,

@@ -12,6 +12,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./agent-observation": "./src/agent-observation.ts",
     "./channel": "./src/channel.ts",
     "./command": "./src/command.ts",
     "./connector": "./src/connector.ts",
