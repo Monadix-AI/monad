@@ -49,7 +49,7 @@ export function replayProjection(args: {
   return { events, cards: agentObservationCards(events, args.provider) };
 }
 
-export function replayPayloadText(payload: unknown): string {
+function replayPayloadText(payload: unknown): string {
   if (typeof payload === 'string') return payload;
   return `${JSON.stringify(payload)}\n`;
 }
