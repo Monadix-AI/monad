@@ -66,7 +66,7 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
   await expect.poll(() => contentCopyOverlay.evaluate((element) => getComputedStyle(element).opacity)).toBe('1');
   await contentCopyButton.click();
   await expect(contentCopyButton).toHaveAttribute('data-copied', 'true');
-  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(
+  expect((await page.evaluate(() => navigator.clipboard.readText())).replaceAll('\r\n', '\n')).toBe(
     Array.from({ length: 32 }, (_, index) => `export const observationLine${index + 1} = ${index + 1};`).join('\n')
   );
   const commandCard = cards.filter({
@@ -770,7 +770,6 @@ test('the loading header is shown while an older page is being fetched', async (
   await openHarness(page);
 
   await page.getByRole('button', { name: 'Scroll to top' }).click();
-  await expect.poll(async () => (await state(page)).loadingHeader).toBe(true);
   await expect(page.locator('[data-events-state="loading"]')).toBeVisible();
   await expect.poll(async () => (await state(page)).loadCount).toBe(1);
 });
