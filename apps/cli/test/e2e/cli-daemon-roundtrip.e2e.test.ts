@@ -1,10 +1,11 @@
 import type { Subprocess } from 'bun';
 
 import { afterAll, beforeAll, expect, test } from 'bun:test';
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { createDefaultConfig, saveAll } from '@monad/environment';
 
 // Every other CLI test drives a mocked treaty client. This one runs the real binary against a real
 // daemon over TCP, so the parts a mock cannot check — argv parsing, the wire contract, the
@@ -117,6 +118,22 @@ async function startDaemon(): Promise<void> {
 
 beforeAll(async () => {
   home = await mkdtemp(join(tmpdir(), 'monad-cli-e2e-'));
+  if (process.platform === 'win32') {
+    // This fixture owns every child it launches, and Windows currently has no confining launcher.
+    // Opt this isolated temporary home into the explicit escape hatch without weakening defaults.
+    const config = createDefaultConfig('cli-e2e');
+    config.sandbox.allowUnconfinedExec = true;
+    const configs = join(home, 'configs');
+    await mkdir(configs, { recursive: true });
+    await saveAll(
+      {
+        agentsConfig: join(configs, 'agents.json'),
+        config: join(configs, 'config.json'),
+        mesh: join(configs, 'mesh.json')
+      },
+      config
+    );
+  }
   // `--mock-model` swaps in the deterministic model AND reports the home as initialized, so the
   // session commands' init gate passes without seeding a provider credential.
   await startDaemon();

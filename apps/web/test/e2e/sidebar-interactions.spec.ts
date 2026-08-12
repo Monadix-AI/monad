@@ -809,7 +809,7 @@ test.describe('workspace sidebar interactions', () => {
     await expect(home.getByRole('button', { exact: true, name: 'Sidebar Project' })).toBeVisible();
 
     await page.goto(`/workspace/${PROJECT_ID}`);
-    await page.getByRole('button', { name: 'New session' }).last().click({ force: true });
+    await page.getByRole('button', { exact: true, name: 'New session' }).click();
     await expect(page).toHaveURL(/\/$/);
     await expect(page.getByRole('main').locator('[data-target-mode="agent"]')).toBeVisible();
 
