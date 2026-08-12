@@ -1,5 +1,3 @@
-import { posix, win32 } from 'node:path';
-
 import { compareReleaseVersions, normalizeReleaseVersion, type ReleaseChannel } from './release-version.ts';
 
 export * from './release-version.ts';
@@ -8,6 +6,15 @@ export interface ResolvedRelease {
   tag: string;
   version: string;
   notes: string | null;
+  immutable: boolean;
+  assets: ResolvedReleaseAsset[];
+}
+
+export interface ResolvedReleaseAsset {
+  name: string;
+  url: string;
+  size: number;
+  digest: string | null;
 }
 
 export type ReleaseFetch = (...args: Parameters<typeof fetch>) => ReturnType<typeof fetch>;
@@ -21,18 +28,22 @@ export interface ResolveReleaseOptions {
 }
 
 interface GithubRelease {
+  assets?: unknown;
   body?: unknown;
   draft?: unknown;
+  immutable?: unknown;
   prerelease?: unknown;
   tag_name?: unknown;
 }
 
-const DEFAULT_REPOSITORY = 'Monadix-AI/monad';
-
-export function monadUpdaterPath(binaryPath: string, platform: NodeJS.Platform = process.platform): string {
-  const targetPath = platform === 'win32' ? win32 : posix;
-  return targetPath.join(targetPath.dirname(binaryPath), platform === 'win32' ? 'monad-update.exe' : 'monad-update');
+interface GithubReleaseAsset {
+  browser_download_url?: unknown;
+  digest?: unknown;
+  name?: unknown;
+  size?: unknown;
 }
+
+const DEFAULT_REPOSITORY = 'Monadix-AI/monad';
 
 export async function resolveRelease(
   channel: ReleaseChannel,
@@ -42,7 +53,7 @@ export async function resolveRelease(
   const apiBaseUrl = options.apiBaseUrl ?? `https://api.github.com/repos/${repository}`;
   const downloadBaseUrl = options.downloadBaseUrl ?? 'https://github.com';
   const fetchImpl = options.fetch ?? fetch;
-  const headers = { 'User-Agent': options.userAgent ?? 'monad-updater' };
+  const headers = { 'User-Agent': options.userAgent ?? 'monad-upgrade' };
 
   if (channel === 'stable') {
     const response = await fetchImpl(`${apiBaseUrl}/releases/latest`, { headers });
@@ -53,7 +64,7 @@ export async function resolveRelease(
     });
     const location = redirect.headers.get('location') ?? redirect.url;
     const tag = location.match(/\/releases\/tag\/([^/?#]+)/)?.[1];
-    return tag ? { tag, version: normalizeReleaseVersion(tag), notes: null } : null;
+    return tag ? { tag, version: normalizeReleaseVersion(tag), notes: null, immutable: false, assets: [] } : null;
   }
 
   const response = await fetchImpl(`${apiBaseUrl}/releases?per_page=50`, { headers });
@@ -78,7 +89,7 @@ export async function resolveReleaseTag(
   const apiBaseUrl = options.apiBaseUrl ?? `https://api.github.com/repos/${repository}`;
   const downloadBaseUrl = options.downloadBaseUrl ?? 'https://github.com';
   const fetchImpl = options.fetch ?? fetch;
-  const headers = { 'User-Agent': options.userAgent ?? 'monad-updater' };
+  const headers = { 'User-Agent': options.userAgent ?? 'monad-upgrade' };
   const normalizedTag = tag.startsWith('v') ? tag : `v${tag}`;
 
   if (
@@ -98,7 +109,9 @@ export async function resolveReleaseTag(
       redirect: 'manual'
     }
   );
-  return releasePage.ok ? { tag: normalizedTag, version: normalizeReleaseVersion(normalizedTag), notes: null } : null;
+  return releasePage.ok
+    ? { tag: normalizedTag, version: normalizeReleaseVersion(normalizedTag), notes: null, immutable: false, assets: [] }
+    : null;
 }
 
 function githubRelease(value: unknown): ResolvedRelease | null {
@@ -108,8 +121,31 @@ function githubRelease(value: unknown): ResolvedRelease | null {
   return {
     tag: release.tag_name,
     version: normalizeReleaseVersion(release.tag_name),
-    notes: typeof release.body === 'string' ? release.body : null
+    notes: typeof release.body === 'string' ? release.body : null,
+    immutable: release.immutable === true,
+    assets: Array.isArray(release.assets) ? release.assets.flatMap(githubReleaseAsset) : []
   };
+}
+
+function githubReleaseAsset(value: unknown): ResolvedReleaseAsset[] {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return [];
+  const asset = value as GithubReleaseAsset;
+  if (
+    typeof asset.name !== 'string' ||
+    typeof asset.browser_download_url !== 'string' ||
+    typeof asset.size !== 'number' ||
+    !Number.isSafeInteger(asset.size) ||
+    asset.size < 0
+  )
+    return [];
+  return [
+    {
+      name: asset.name,
+      url: asset.browser_download_url,
+      size: asset.size,
+      digest: typeof asset.digest === 'string' ? asset.digest : null
+    }
+  ];
 }
 
 function isChannelTag(tag: string, channel: Exclude<ReleaseChannel, 'stable'>): boolean {

@@ -35,7 +35,7 @@ import { command as start } from './start.ts';
 import { command as status } from './status.ts';
 import { command as stop } from './stop.ts';
 import { command as tui } from './tui.ts';
-import { command as upgrade } from './upgrade.ts';
+import { command as update } from './upgrade.ts';
 import { command as usage } from './usage.ts';
 import { command as version } from './version.ts';
 
@@ -52,7 +52,7 @@ export const commands: CommandDef[] = [
   status,
   logs,
   doctor,
-  upgrade,
+  update,
   version,
 
   // Do the work: talk to agents, run the team, unblock it.

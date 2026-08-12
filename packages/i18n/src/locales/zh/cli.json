@@ -141,7 +141,7 @@
   "cli.atom.scaffoldNext": "下一步：构建并提交 atom-pack.json 与 dist，然后推送仓库",
   "cli.atom.outFlag": "将 Release ZIP 写入此路径",
   "cli.atom.packed": "已打包 Atom Pack",
-  "cli.atom.packChecksum": "SHA-256 {sha256}（校验和文件：{file}）",
+  "cli.atom.packChecksum": "SHA-256 {sha256}",
   "cli.atom.requests": "Atom Pack「{name}」请求以下能力：",
   "cli.atom.scan": "⚠ 扫描：",
   "cli.atom.consentHint": "重新运行并加上 --yes 以同意并安装",

@@ -1,16 +1,10 @@
 import type { CommandDef } from './types.ts';
 
-import { access, readFile, rm, stat } from 'node:fs/promises';
-import { homedir } from 'node:os';
+import { readFile, rm, stat } from 'node:fs/promises';
 import { join } from 'node:path';
 import { certExpiry, certFingerprint, getPaths, loadConfig, resolveClientConn } from '@monad/environment';
 import { getHealthResponseSchema, MONAD_VERSION } from '@monad/protocol';
-import {
-  isUpgradeAvailable,
-  monadUpdaterPath,
-  releaseChannelOfVersion,
-  resolveRelease
-} from '@monad/utils/release-update';
+import { isUpgradeAvailable, releaseChannelOfVersion, resolveRelease } from '@monad/utils/release-update';
 
 import { dim, green, json, out, red, yellow } from '../lib/output.ts';
 import { CliError, EXIT } from './types.ts';
@@ -76,13 +70,13 @@ export const command: CommandDef = {
       detail: daemonOk ? baseUrl : `unreachable at ${baseUrl} — run \`monad start\``
     });
 
-    // version skew between this client and the running daemon (soft — restart or upgrade resolves it).
+    // version skew between this client and the running daemon (soft — restart or update resolves it).
     if (daemonOk && daemonVersion !== MONAD_VERSION) {
       checks.push({
         name: 'version',
         ok: false,
         warn: true,
-        detail: `client ${MONAD_VERSION} ≠ daemon ${daemonVersion} — run \`monad upgrade\` then restart`
+        detail: `client ${MONAD_VERSION} ≠ daemon ${daemonVersion} — run \`monad update\` then restart`
       });
     } else {
       checks.push({ name: 'version', ok: true, detail: MONAD_VERSION });
@@ -92,10 +86,10 @@ export const command: CommandDef = {
     const latestVersion = healthData?.latestVersion;
     if (daemonOk && latestVersion && daemonVersion && isUpgradeAvailable(daemonVersion, latestVersion)) {
       checks.push({
-        name: 'upgrade',
+        name: 'update',
         ok: false,
         warn: true,
-        detail: `new version available: ${latestVersion} (run \`monad upgrade\`)`
+        detail: `new version available: ${latestVersion} (run \`monad update\`)`
       });
     }
 
@@ -187,29 +181,12 @@ export const command: CommandDef = {
 };
 
 async function runUpdateDoctor(cacheRoot: string): Promise<void> {
-  const updater = monadUpdaterPath(process.execPath, process.platform);
-  const receipt =
-    process.platform === 'win32'
-      ? join(Bun.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local'), 'monad', 'monad-receipt.json')
-      : join(Bun.env.XDG_CONFIG_HOME ?? join(homedir(), '.config'), 'monad', 'monad-receipt.json');
   const upgradeCache = join(cacheRoot, 'upgrade');
   const attemptPath = join(upgradeCache, 'attempt.json');
   const resultPath = join(upgradeCache, 'result.txt');
   const logPath = join(upgradeCache, 'updater.log');
   const channel = releaseChannelOfVersion(MONAD_VERSION);
   const checks: Check[] = [];
-
-  for (const [name, path] of [
-    ['updater', updater],
-    ['receipt', receipt]
-  ] as const) {
-    try {
-      await access(path);
-      checks.push({ name, ok: true, detail: path });
-    } catch {
-      checks.push({ name, ok: false, detail: `missing: ${path}` });
-    }
-  }
 
   checks.push({ name: 'channel', ok: true, detail: `${channel} (${MONAD_VERSION})` });
   try {

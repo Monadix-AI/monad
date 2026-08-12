@@ -1,22 +1,30 @@
 import type { SystemUpgradeAttempt, SystemUpgradeStatus } from '@monad/protocol';
 
 import { readFileSync } from 'node:fs';
-import { access, mkdir, rm } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { MONAD_VERSION, systemUpgradeAttemptSchema } from '@monad/protocol';
 import {
   isUpgradeAvailable,
-  monadUpdaterPath,
   type ResolvedRelease,
   releaseChannelOfVersion,
   resolveRelease,
   shouldInstallRelease
 } from '@monad/utils/release-update';
+import {
+  type PreparedUpgrade,
+  prepareUpgradeAssets,
+  upgradeWorkerCommand,
+  upgradeWorkerLauncherCommand
+} from '@monad/utils/release-upgrade';
+
+declare const BUILD_DIST_TARGET: string | undefined;
 
 export interface SystemUpgradeOptions {
-  access?: (path: string) => Promise<void>;
+  arch?: NodeJS.Architecture;
   binaryPath?: string;
   cacheDir?: string;
+  distTarget?: string;
   env?: NodeJS.ProcessEnv;
   fetch?: typeof fetch;
   getUpgradeInfo?: () => { latestVersion: string; latestVersionCheckedAt: string } | null;
@@ -24,7 +32,6 @@ export interface SystemUpgradeOptions {
   platform?: NodeJS.Platform;
   scheduleExit?: () => void;
   spawn?: typeof Bun.spawn;
-  updaterPath?: string;
   now?: () => Date;
 }
 
@@ -42,8 +49,8 @@ const STAGES: Record<SystemUpgradeStatus['stage'], number> = {
   downloading: 25,
   verifying: 70,
   ready: 100,
-  installing: 75,
-  restarting: 90,
+  installing: 92,
+  restarting: 98,
   complete: 100,
   failed: 100
 };
@@ -51,10 +58,9 @@ const STAGES: Record<SystemUpgradeStatus['stage'], number> = {
 export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
   const binaryPath = options.binaryPath ?? process.execPath;
   const platform = options.platform ?? process.platform;
-  const updaterPath = options.updaterPath ?? monadUpdaterPath(binaryPath, platform);
+  const distTarget = options.distTarget ?? currentDistTarget(platform, options.arch ?? process.arch);
   const fetchImpl = options.fetch ?? fetch;
   const spawn = options.spawn ?? Bun.spawn;
-  const checkAccess = options.access ?? access;
   const parentPid = options.parentPid ?? process.pid;
   const now = options.now ?? (() => new Date());
   const channel = releaseChannelOfVersion(MONAD_VERSION);
@@ -66,28 +72,30 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
       setTimeout(() => process.kill(process.pid, 'SIGTERM'), 500);
     });
   let status = buildIdleStatus(options.getUpgradeInfo, channel, lastAttempt);
-  let prepared: ResolvedRelease | null = null;
+  let selectedRelease: ResolvedRelease | null = null;
+  let prepared: PreparedUpgrade | null = null;
+  let checking: Promise<void> | null = null;
   let preparing: Promise<void> | null = null;
   let installing = false;
 
   function current(): SystemUpgradeStatus {
-    if (options.cacheDir && (status.stage === 'idle' || status.stage === 'complete')) void prepare();
+    if (options.cacheDir && (status.stage === 'idle' || status.stage === 'complete')) void check();
     return status;
   }
 
   async function start(): Promise<SystemUpgradeStatus> {
     if (installing) return status;
-    if (!prepared) {
-      void prepare();
-      return status;
-    }
+    await check();
+    if (!selectedRelease || !status.available) return status;
+    if (!prepared) await prepare();
+    if (!prepared || status.stage === 'failed' || installing) return status;
 
     installing = true;
     const startedAt = now().toISOString();
     const attempt: SystemUpgradeAttempt | null = attemptPaths
       ? {
-          targetVersion: prepared.version,
-          tag: prepared.tag,
+          targetVersion: selectedRelease.version,
+          tag: selectedRelease.tag,
           startedAt,
           completedAt: null,
           exitCode: null,
@@ -107,8 +115,8 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
         workerLauncherCommand(
           platform,
           parentPid,
-          updaterPath,
-          prepared.tag,
+          prepared.installerPath,
+          prepared.downloadDirectory,
           binaryPath,
           attemptPaths?.result,
           attemptPaths?.log
@@ -131,22 +139,27 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
     return status;
   }
 
-  async function prepare(): Promise<void> {
-    if (preparing) return preparing;
-    if (installing || status.stage === 'ready' || status.stage === 'restarting') return;
-    preparing = runPrepare().finally(() => {
-      preparing = null;
+  async function check(): Promise<void> {
+    if (checking) return checking;
+    if (installing || status.stage === 'restarting' || (selectedRelease && status.stage === 'ready')) return;
+    checking = runCheck().finally(() => {
+      checking = null;
     });
-    return preparing;
+    return checking;
   }
 
-  async function runPrepare(): Promise<void> {
+  async function runCheck(): Promise<void> {
+    prepared = null;
+    selectedRelease = null;
     status = {
       available: false,
       currentVersion: MONAD_VERSION,
       latestVersion: null,
       stage: 'checking',
       progress: STAGES.checking,
+      downloadedBytes: null,
+      totalBytes: null,
+      bytesPerSecond: null,
       error: null,
       lastAttempt: status.lastAttempt
     };
@@ -164,22 +177,59 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
         status = { ...status, stage: 'complete', progress: STAGES.complete };
         return;
       }
-      await checkAccess(updaterPath);
-      prepared = release;
+      selectedRelease = release;
+      status = { ...status, stage: 'ready', progress: 0, error: null };
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      fail(message);
+    }
+  }
+
+  async function prepare(): Promise<void> {
+    if (preparing) return preparing;
+    preparing = runPrepare().finally(() => {
+      preparing = null;
+    });
+    return preparing;
+  }
+
+  async function runPrepare(): Promise<void> {
+    try {
+      if (!selectedRelease) throw new Error('system upgrade release is unavailable');
+      if (!options.cacheDir) throw new Error('system upgrade cache directory is unavailable');
+      const release = selectedRelease;
+      status = { ...status, stage: 'downloading', progress: STAGES.downloading, error: null };
+      prepared = await prepareUpgradeAssets({
+        directory: join(
+          options.cacheDir,
+          'staged',
+          new Bun.CryptoHasher('sha256').update(release.tag).digest('hex').slice(0, 24)
+        ),
+        distTarget,
+        fetch: fetchImpl,
+        platform,
+        release,
+        onProgress: ({ downloadedBytes, totalBytes, bytesPerSecond }) => {
+          status = {
+            ...status,
+            stage: 'downloading',
+            progress: totalBytes === 0 ? STAGES.downloading : 10 + (downloadedBytes / totalBytes) * 75,
+            downloadedBytes,
+            totalBytes,
+            bytesPerSecond
+          };
+        }
+      });
+      status = { ...status, stage: 'verifying', progress: 90, bytesPerSecond: 0 };
       status = { ...status, stage: 'ready', progress: STAGES.ready, error: null };
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      const missingUpdater = typeof error === 'object' && error !== null && 'code' in error && error.code === 'ENOENT';
-      fail(
-        missingUpdater
-          ? `monad-update is missing at ${updaterPath}; reinstall Monad with the current installer`
-          : message
-      );
+      fail(message);
     }
   }
 
   function fail(error: string): void {
-    status = { ...status, stage: 'failed', progress: STAGES.failed, error };
+    status = { ...status, stage: 'failed', progress: STAGES.failed, bytesPerSecond: 0, error };
   }
 
   return { getStatus: current, start };
@@ -188,68 +238,43 @@ export function createSystemUpgradeModule(options: SystemUpgradeOptions = {}) {
 export function workerCommand(
   platform: NodeJS.Platform,
   parentPid: number,
-  updaterPath: string,
-  tag: string,
+  installerPath: string,
+  downloadDirectory: string,
   binaryPath: string,
   resultPath?: string,
   logPath?: string
 ): string[] {
-  const result = resultPath ?? platformNullDevice(platform);
-  const log = logPath ?? platformNullDevice(platform);
-  if (platform === 'win32') {
-    const script =
-      'Wait-Process -Id ([int]$args[0]) -ErrorAction SilentlyContinue; ' +
-      '& $args[1] --tag $args[2] *> $args[5]; $updateCode = $LASTEXITCODE; ' +
-      '$completed = [DateTime]::UtcNow.ToString("o"); ' +
-      'Set-Content -LiteralPath "$($args[4]).tmp" -Value @($updateCode, $completed); ' +
-      'Move-Item -Force -LiteralPath "$($args[4]).tmp" -Destination $args[4]; ' +
-      '& $args[3] restart *>> $args[5]; exit $updateCode';
-    return [
-      'powershell',
-      '-NoProfile',
-      '-ExecutionPolicy',
-      'Bypass',
-      '-Command',
-      script,
-      String(parentPid),
-      updaterPath,
-      tag,
-      binaryPath,
-      result,
-      log
-    ];
-  }
-  const script =
-    'while kill -0 "$1" 2>/dev/null; do sleep 0.1; done; ' +
-    '"$2" --tag "$3" >"$6" 2>&1; update_code=$?; completed=$(date -u +%Y-%m-%dT%H:%M:%SZ); ' +
-    'printf "%s\\n%s\\n" "$update_code" "$completed" >"$5.tmp"; mv "$5.tmp" "$5"; ' +
-    '"$4" restart >>"$6" 2>&1; exit "$update_code"';
-  return ['sh', '-c', script, 'monad-upgrade', String(parentPid), updaterPath, tag, binaryPath, result, log];
+  return upgradeWorkerCommand({
+    binaryPath,
+    downloadDirectory,
+    installerPath,
+    logPath,
+    parentPid,
+    platform,
+    restart: true,
+    resultPath
+  });
 }
 
 export function workerLauncherCommand(
   platform: NodeJS.Platform,
   parentPid: number,
-  updaterPath: string,
-  tag: string,
+  installerPath: string,
+  downloadDirectory: string,
   binaryPath: string,
   resultPath?: string,
   logPath?: string
 ): string[] {
-  const worker = workerCommand(platform, parentPid, updaterPath, tag, binaryPath, resultPath, logPath);
-  if (platform === 'win32') {
-    const invocation = `& ${worker.map(powerShellLiteral).join(' ')}`;
-    const encoded = Buffer.from(invocation, 'utf16le').toString('base64');
-    const script =
-      "$proc = Start-Process -FilePath 'powershell' " +
-      `-ArgumentList @('-NoProfile', '-EncodedCommand', '${encoded}') -WindowStyle Hidden -PassThru; $proc.Id`;
-    return ['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script];
-  }
-  return ['sh', '-c', 'nohup "$@" >/dev/null 2>&1 < /dev/null &', 'monad-upgrade-launch', ...worker];
-}
-
-function powerShellLiteral(value: string): string {
-  return `'${value.replaceAll("'", "''")}'`;
+  return upgradeWorkerLauncherCommand({
+    binaryPath,
+    downloadDirectory,
+    installerPath,
+    logPath,
+    parentPid,
+    platform,
+    restart: true,
+    resultPath
+  });
 }
 
 function buildIdleStatus(
@@ -266,6 +291,9 @@ function buildIdleStatus(
     latestVersion,
     stage: failedAttempt || interruptedAttempt ? 'failed' : lastAttempt?.state === 'complete' ? 'complete' : 'idle',
     progress: failedAttempt || interruptedAttempt || lastAttempt?.state === 'complete' ? 100 : STAGES.idle,
+    downloadedBytes: null,
+    totalBytes: null,
+    bytesPerSecond: null,
     error: failedAttempt
       ? `Update to ${failedAttempt.targetVersion} failed with exit code ${failedAttempt.exitCode}; see ${failedAttempt.logPath}`
       : interruptedAttempt
@@ -296,6 +324,12 @@ function readUpgradeAttempt(attemptPath: string, resultPath: string): SystemUpgr
   }
 }
 
-function platformNullDevice(platform: NodeJS.Platform): string {
-  return platform === 'win32' ? 'NUL' : '/dev/null';
+function currentDistTarget(platform: NodeJS.Platform, arch: NodeJS.Architecture): string {
+  if (typeof BUILD_DIST_TARGET === 'string') return BUILD_DIST_TARGET;
+  const targetArch = arch === 'arm64' ? 'aarch64' : arch === 'x64' ? 'x86_64' : null;
+  if (!targetArch) throw new Error(`unsupported release architecture: ${arch}`);
+  if (platform === 'darwin') return `${targetArch}-apple-darwin`;
+  if (platform === 'linux') return `${targetArch}-unknown-linux-gnu`;
+  if (platform === 'win32') return `${targetArch}-pc-windows-msvc`;
+  throw new Error(`unsupported release platform: ${platform}`);
 }

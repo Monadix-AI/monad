@@ -93,7 +93,7 @@ printed one section per group. The groups name what a reader is trying to do:
 
 | Group | Contents |
 |-------|----------|
-| `daemon` | run and inspect Monad: `start`, `stop`, `restart`, `status`, `logs`, `doctor`, `upgrade`, `version` |
+| `daemon` | run and inspect Monad: `start`, `stop`, `restart`, `status`, `logs`, `doctor`, `update`, `version` |
 | `work` | talk to agents and drive the team: `chat`, `session`, `agent`, `mesh`, `approval` |
 | `configure` | set Monad up: `init`, `config`, `model`, `provider`, `credential`, `atom`, `skill`, `mcp`, `memory`, `command`, `channel`, `peer`, `remote`, `monadix`, `import`, `usage`, `license`, `completion`, `purge`, `tui` |
 

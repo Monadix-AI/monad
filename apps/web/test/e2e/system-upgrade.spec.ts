@@ -23,11 +23,14 @@ async function installSystemSettingsApiMock(
   let upgradeState = {
     available: Boolean(upgradeLatestVersion && isUpgradeAvailable(health.version, upgradeLatestVersion)),
     currentVersion: health.version,
+    downloadedBytes: null,
     error: null,
     latestVersion: upgradeLatestVersion ?? null,
     lastAttempt: null,
     progress: 0,
-    stage: 'idle'
+    stage: 'idle',
+    totalBytes: null,
+    bytesPerSecond: null
   };
 
   await page.route(API_ROUTE_PATTERN, async (route) => {
@@ -158,7 +161,7 @@ test.describe('System upgrade settings', () => {
 
     await expect(page.getByRole('heading', { name: 'System' })).toBeVisible();
     await expect(page.getByText('Up to date')).toBeVisible();
-    await expect(page.getByText('monad upgrade')).toHaveCount(0);
+    await expect(page.getByText('monad update')).toHaveCount(0);
   });
 
   test('shows a channel update resolved by the system upgrade endpoint', async ({ page }) => {

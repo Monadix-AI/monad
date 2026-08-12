@@ -23,7 +23,7 @@ import {
   useSetStartupMutation,
   useStartSystemUpgradeMutation
 } from '@monad/client-rtk';
-import { Badge, Button, ScrollArea, Separator, Skeleton } from '@monad/ui';
+import { Badge, Button, Progress, ScrollArea, Separator, Skeleton } from '@monad/ui';
 import { isUpgradeAvailable } from '@monad/utils/release-version';
 import { useEffect, useState } from 'react';
 
@@ -208,16 +208,33 @@ export function SystemSettings() {
                   </Button>
                 </div>
                 {upgradeStage !== 'idle' ? (
-                  <div className="flex items-center gap-2 text-xs">
-                    {upgradeActive ? (
-                      <HugeiconsIcon
-                        className="size-3.5 animate-spin text-muted-foreground"
-                        icon={LoaderPinwheelIcon}
+                  <div className="flex flex-col gap-1.5 text-xs">
+                    <div className="flex items-center gap-2">
+                      {upgradeActive ? (
+                        <HugeiconsIcon
+                          className="size-3.5 animate-spin text-muted-foreground"
+                          icon={LoaderPinwheelIcon}
+                        />
+                      ) : null}
+                      <span className={upgradeStage === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>
+                        {upgradeStatus?.error ?? upgradeStageLabel(t, upgradeStage)}
+                      </span>
+                      {upgradeStatus?.downloadedBytes != null ? (
+                        <span className="ml-auto text-muted-foreground tabular-nums">
+                          {formatUpgradeTransfer(
+                            upgradeStatus.downloadedBytes,
+                            upgradeStatus.totalBytes,
+                            upgradeStatus.bytesPerSecond
+                          )}
+                        </span>
+                      ) : null}
+                    </div>
+                    {upgradeActive && upgradeStatus ? (
+                      <Progress
+                        aria-label={upgradeStageLabel(t, upgradeStage)}
+                        value={upgradeStatus.progress}
                       />
                     ) : null}
-                    <span className={upgradeStage === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>
-                      {upgradeStatus?.error ?? upgradeStageLabel(t, upgradeStage)}
-                    </span>
                   </div>
                 ) : null}
               </div>
@@ -412,4 +429,22 @@ function upgradeStageLabel(t: ReturnType<typeof useT>, stage: string): string {
     default:
       return t('web.settings.system.upgradeStage.idle');
   }
+}
+
+function formatUpgradeTransfer(downloaded: number, total: number | null, rate: number | null): string {
+  const transferred = total == null ? formatBytes(downloaded) : `${formatBytes(downloaded)} / ${formatBytes(total)}`;
+  return rate == null || rate <= 0 ? transferred : `${transferred} · ${formatBytes(rate)}/s`;
+}
+
+function formatBytes(bytes: number): string {
+  if (bytes < 1024) return `${Math.round(bytes)} B`;
+  const units = ['KB', 'MB', 'GB'];
+  let value = bytes / 1024;
+  let unit = units[0] as string;
+  for (const candidate of units.slice(1)) {
+    if (value < 1024) break;
+    value /= 1024;
+    unit = candidate;
+  }
+  return `${value.toFixed(value >= 10 ? 1 : 2)} ${unit}`;
 }

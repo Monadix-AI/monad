@@ -1,36 +1,40 @@
 import type { CommandDef } from './types.ts';
 
-import { access } from 'node:fs/promises';
+import { mkdir, rm } from 'node:fs/promises';
+import { join } from 'node:path';
+import { getPaths } from '@monad/environment';
 import { MONAD_VERSION } from '@monad/protocol';
 import {
-  monadUpdaterPath,
   parseReleaseChannel,
+  type ReleaseFetch,
   type ResolvedRelease,
   releaseChannelOfVersion,
   resolveRelease,
   resolveReleaseTag,
   shouldInstallRelease
 } from '@monad/utils/release-update';
+import { prepareUpgradeAssets, upgradeWorkerLauncherCommand } from '@monad/utils/release-upgrade';
 
 import { isDaemonReachable } from '../lib/daemon.ts';
 import { t } from '../lib/i18n.ts';
 import { bold, dim, green, json, out, yellow } from '../lib/output.ts';
-import { restartDaemon } from './restart.ts';
 import { usageError } from './types.ts';
 
-type FetchFn = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
+declare const BUILD_DIST_TARGET: string | undefined;
 
 interface UpgradeCommandDeps {
-  access?: (path: string) => Promise<void>;
+  arch?: NodeJS.Architecture;
   binaryPath?: string | (() => string);
-  fetch?: FetchFn;
+  cacheDir?: string;
+  distTarget?: string;
+  fetch?: ReleaseFetch;
   isDaemonRunning?: () => Promise<boolean>;
+  parentPid?: number;
   platform?: NodeJS.Platform;
+  prepare?: typeof prepareUpgradeAssets;
   releaseApiBaseUrl?: string;
   releaseDownloadBaseUrl?: string;
-  restart?: () => Promise<void>;
   spawn?: typeof Bun.spawn;
-  updaterPath?: string | (() => string);
 }
 
 export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): CommandDef {
@@ -38,22 +42,19 @@ export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): Comm
   const binaryPath =
     typeof binaryPathOption === 'function' ? binaryPathOption : () => binaryPathOption ?? process.execPath;
   const platform = commandDeps.platform ?? process.platform;
-  const updaterPathOption = commandDeps.updaterPath;
-  const updaterPath =
-    typeof updaterPathOption === 'function'
-      ? updaterPathOption
-      : () => updaterPathOption ?? monadUpdaterPath(binaryPath(), platform);
+  const distTarget = commandDeps.distTarget ?? currentDistTarget(platform, commandDeps.arch ?? process.arch);
   const fetchImpl = commandDeps.fetch ?? ((...args: Parameters<typeof fetch>) => globalThis.fetch(...args));
   const isDaemonRunning = commandDeps.isDaemonRunning ?? isDaemonReachable;
+  const parentPid = commandDeps.parentPid ?? process.pid;
+  const prepare = commandDeps.prepare ?? prepareUpgradeAssets;
   const spawn = commandDeps.spawn ?? Bun.spawn;
-  const checkAccess = commandDeps.access ?? access;
-  const restart = commandDeps.restart ?? restartDaemon;
 
   return {
     local: true,
-    name: 'upgrade',
+    name: 'update',
+    aliases: ['upgrade'],
     group: 'daemon',
-    synopsis: 'upgrade [--check] [--channel <stable|beta|nightly>] [--tag <version>] [--force]',
+    synopsis: 'update [--check] [--channel <stable|beta|nightly>] [--tag <version>] [--force]',
     description: 'check for and apply Monad updates',
     descriptionKey: 'cli.cmd.upgrade.desc',
     flags: {
@@ -83,7 +84,7 @@ export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): Comm
     },
     async run({ flags, globals }) {
       if (flags.channel !== undefined && flags.tag !== undefined) {
-        throw usageError('upgrade accepts either --channel or --tag, not both');
+        throw usageError('update accepts either --channel or --tag, not both');
       }
       const exactTag = typeof flags.tag === 'string' ? flags.tag : undefined;
       const force = flags.force === true;
@@ -139,26 +140,72 @@ export function createUpgradeCommand(commandDeps: UpgradeCommandDeps = {}): Comm
       if (checkOnly) return;
 
       const daemonWasRunning = await isDaemonRunning();
-
-      const updater = updaterPath();
-      try {
-        await checkAccess(updater);
-      } catch {
-        out(yellow(`✖ monad-update is missing at ${updater}; reinstall Monad with the current installer.`));
-        process.exit(1);
-      }
-
       out(dim(t('cli.upgrade.applying')));
-      const proc = spawn([updater, '--tag', release.tag], {
-        stdout: 'inherit',
-        stderr: 'inherit',
-        stdin: 'inherit'
+      const cacheDir = commandDeps.cacheDir ?? join(getPaths().cache, 'upgrade');
+      const prepared = await prepare({
+        directory: join(
+          cacheDir,
+          'staged',
+          new Bun.CryptoHasher('sha256').update(release.tag).digest('hex').slice(0, 24)
+        ),
+        distTarget,
+        fetch: fetchImpl,
+        platform,
+        release,
+        onProgress: () => {}
       });
+      const attemptPath = join(cacheDir, 'attempt.json');
+      const resultPath = join(cacheDir, 'result.txt');
+      const logPath = join(cacheDir, 'updater.log');
+      await mkdir(cacheDir, { recursive: true });
+      await rm(resultPath, { force: true });
+      await Bun.write(
+        attemptPath,
+        `${JSON.stringify(
+          {
+            targetVersion: release.version,
+            tag: release.tag,
+            startedAt: new Date().toISOString(),
+            completedAt: null,
+            exitCode: null,
+            logPath,
+            state: 'installing'
+          },
+          null,
+          2
+        )}\n`
+      );
+      const proc = spawn(
+        upgradeWorkerLauncherCommand({
+          binaryPath: binaryPath(),
+          downloadDirectory: prepared.downloadDirectory,
+          installerPath: prepared.installerPath,
+          logPath,
+          parentPid,
+          platform,
+          restart: daemonWasRunning,
+          resultPath
+        }),
+        {
+          stdout: 'ignore',
+          stderr: 'ignore',
+          stdin: 'ignore'
+        }
+      );
       const code = await proc.exited;
       if (code == null || code !== 0) process.exit(code ?? 1);
-      if (daemonWasRunning) await restart();
     }
   };
+}
+
+function currentDistTarget(platform: NodeJS.Platform, arch: NodeJS.Architecture): string {
+  if (typeof BUILD_DIST_TARGET === 'string') return BUILD_DIST_TARGET;
+  const targetArch = arch === 'arm64' ? 'aarch64' : arch === 'x64' ? 'x86_64' : null;
+  if (!targetArch) throw new Error(`unsupported release architecture: ${arch}`);
+  if (platform === 'darwin') return `${targetArch}-apple-darwin`;
+  if (platform === 'linux') return `${targetArch}-unknown-linux-gnu`;
+  if (platform === 'win32') return `${targetArch}-pc-windows-msvc`;
+  throw new Error(`unsupported release platform: ${platform}`);
 }
 
 export const command: CommandDef = createUpgradeCommand();

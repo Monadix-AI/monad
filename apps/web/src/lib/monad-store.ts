@@ -18,6 +18,7 @@ declare const __MONAD_WEB_PORT__: string | undefined;
 
 const ERROR_DETAIL_LIMIT = 3000;
 const UPGRADE_RESTART_SUPPRESS_UNTIL_KEY = 'monad:upgradeRestartSuppressUntil';
+const UPGRADE_RESTART_WINDOW_MS = 15 * 60_000;
 let upgradeReloadWatcher: number | null = null;
 let daemonRestartReloadWatcher: number | null = null;
 
@@ -110,13 +111,13 @@ export function watchUpgradeRestartAndReload(args: {
   currentVersion?: string;
   targetVersion?: string | null;
 }): void {
-  markUpgradeRestartWindow();
+  markUpgradeRestartWindow(UPGRADE_RESTART_WINDOW_MS);
   if (upgradeReloadWatcher !== null) window.clearInterval(upgradeReloadWatcher);
 
   const targetVersion = args.targetVersion ?? undefined;
   const currentVersion = args.currentVersion;
   let sawUnavailable = false;
-  const deadline = Date.now() + 120_000;
+  const deadline = Date.now() + UPGRADE_RESTART_WINDOW_MS;
   upgradeReloadWatcher = window.setInterval(async () => {
     if (Date.now() > deadline) {
       if (upgradeReloadWatcher !== null) window.clearInterval(upgradeReloadWatcher);
