@@ -2,6 +2,7 @@ export interface CodexRuntimeState {
   deferredThreadFrame?: string;
   threadResumeRetry?: { params: Record<string, unknown>; attempts: number };
   currentTurnId?: string;
+  lastCompletedTurnId?: string;
   lastTurnInput?: string;
   turnRecoveries: number;
 }

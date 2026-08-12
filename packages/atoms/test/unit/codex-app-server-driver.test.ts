@@ -102,3 +102,57 @@ test('Codex app-server short-circuits later writes once the channel failed', asy
   await expect(driver.sendTurn({ text: 'hello', attachments: [] })).rejects.toThrow('EPIPE: broken pipe, write');
   expect(attempts.length).toBe(afterFailure);
 });
+
+test('Codex app-server does not restore a turn that completed beside its start response', async () => {
+  const sent: string[] = [];
+  const driver = new CodexAppServerDriver({ workingPath: '/tmp/project' });
+  const opening = driver.attachChannel(
+    {
+      async send(frame) {
+        sent.push(String(frame));
+      },
+      close: async () => {}
+    },
+    {}
+  );
+  const request = async (method: string, minimumCount = 1) => {
+    for (let attempt = 0; attempt < 100; attempt += 1) {
+      const matches = sent
+        .map((frame) => JSON.parse(frame) as { id?: number; method?: string })
+        .filter((frame) => frame.method === method);
+      if (matches.length >= minimumCount) return matches.at(-1) as { id?: number; method?: string };
+      await Bun.sleep(0);
+    }
+    throw new Error(`request was not sent: ${method}`);
+  };
+
+  await driver.accept(packet(JSON.stringify({ id: (await request('initialize')).id, result: {} })), collectingSink());
+  await driver.accept(
+    packet(JSON.stringify({ id: (await request('thread/start')).id, result: { thread: { id: 'thread-race' } } })),
+    collectingSink()
+  );
+  await opening;
+
+  const firstTurn = driver.sendTurn({ text: 'first', attachments: [] });
+  const firstTurnRequest = await request('turn/start');
+  await driver.accept(
+    packet(
+      [
+        JSON.stringify({ id: firstTurnRequest?.id, result: { turn: { id: 'turn-race' } } }),
+        JSON.stringify({ method: 'turn/completed', params: { threadId: 'thread-race', turn: { id: 'turn-race' } } })
+      ].join('\n')
+    ),
+    collectingSink()
+  );
+  await firstTurn;
+
+  const secondTurn = driver.sendTurn({ text: 'second', attachments: [] });
+  const secondTurnRequest = await request('turn/start', 2);
+  const lastRequest = JSON.parse(sent.at(-1) as string) as { method: string };
+  expect(lastRequest.method).toBe('turn/start');
+  await driver.accept(
+    packet(JSON.stringify({ id: secondTurnRequest.id, result: { turn: { id: 'turn-next' } } })),
+    collectingSink()
+  );
+  await secondTurn;
+});
