@@ -118,7 +118,8 @@ test('system upgrade rejects an asset whose bytes do not match the GitHub digest
   const upgrade = createSystemUpgradeModule({
     cacheDir,
     distTarget: 'x86_64-unknown-linux-gnu',
-    fetch: releaseFetch('v9.9.9', 'monad-x86_64-unknown-linux-gnu.tar.gz')
+    fetch: releaseFetch('v9.9.9', 'monad-x86_64-unknown-linux-gnu.tar.gz'),
+    platform: 'linux'
   });
 
   upgrade.getStatus();

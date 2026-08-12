@@ -235,6 +235,7 @@ test('developer fixture capture requires and uses only the explicit canonical di
   const host = new MeshAgentHost({
     ...deps,
     meshAgentLiveStoreDirectory: join(monadHome, 'live'),
+    meshLiveEventLogsDirectory: join(monadHome, 'logs', 'live-events'),
     meshFixtureCaptureDirectory: canonical
   });
   try {

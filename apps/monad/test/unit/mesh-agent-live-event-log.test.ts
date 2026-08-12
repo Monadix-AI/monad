@@ -44,7 +44,6 @@ describe('MeshLiveEventLog', () => {
 
     expect({
       page,
-      mode: info.mode & 0o777,
       lines: (await readFile(capturePath, 'utf8')).trim().split('\n').length
     }).toEqual({
       page: {
@@ -57,9 +56,9 @@ describe('MeshLiveEventLog', () => {
         offset: 0,
         limit: 10
       },
-      mode: 0o600,
       lines: 3
     });
+    if (process.platform !== 'win32') expect(info.mode & 0o777).toBe(0o600);
   });
 
   test('lists capture metadata and pages the requested native session only', async () => {
