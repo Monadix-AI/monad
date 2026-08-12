@@ -146,6 +146,24 @@ function sessionAgentName(state: MeshAgentExperienceState, meshSessionId: string
 
 export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): MeshAgentLifecycleNotice[] {
   const t = workplaceExperienceT();
+  // `connection_required` is the durable provider-level failure. Once the auth probe confirms that
+  // the same runtime needs a login, `login_required` becomes the actionable chat card and the generic
+  // reconnect notice would only duplicate it (and can expose an internal ProjectMember id as text).
+  // Remember live login events as well as the current snapshot requirement so resolving the card does
+  // not make the older reconnect notice reappear during the same projection lifetime.
+  const loginRequiredMeshSessionIds = new Set(
+    [...state.loginRequirements.values()].flatMap((requirement) =>
+      requirement.meshSessionId ? [requirement.meshSessionId] : []
+    )
+  );
+  const pendingLoginAgentNames = new Set(
+    [...state.loginRequirements.values()].map((requirement) => requirement.agentName)
+  );
+  for (const event of state.events) {
+    if (event.type !== 'mesh.login_required') continue;
+    const payload = parseEventPayload('mesh.login_required', event.payload);
+    if (payload.meshSessionId) loginRequiredMeshSessionIds.add(payload.meshSessionId);
+  }
   return state.events.flatMap((event): MeshAgentLifecycleNotice[] => {
     if (event.type === 'mesh.idle_suspended') {
       const payload = parseEventPayload('mesh.idle_suspended', event.payload);
@@ -201,6 +219,12 @@ export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): Mesh
     }
     if (event.type === 'mesh.connection_required') {
       const payload = parseEventPayload('mesh.connection_required', event.payload);
+      if (
+        payload.meshSessionId
+          ? loginRequiredMeshSessionIds.has(payload.meshSessionId)
+          : pendingLoginAgentNames.has(payload.agentName)
+      )
+        return [];
       return [
         {
           id: `mesh-agent-connection-required:${payload.agentName}:${event.id}`,
