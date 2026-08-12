@@ -39,7 +39,7 @@
   // Root-level dependency invoked by generated tooling.
   "ignoreDependencies": ["@inlang/paraglide-js"],
   // System and prerequisite binaries invoked from scripts.
-  "ignoreBinaries": ["icacls", "shasum", "sha256sum"],
+  "ignoreBinaries": ["icacls"],
   // Workspaces are auto-discovered from package.json "workspaces". Framework and tool
   // entrypoints are handled by Knip plugins. The only repo-specific shape Knip can't infer is
   // the Bun test wrapper (`bun ../../scripts/bun-test.ts ...`), so those test/fixture globs are
