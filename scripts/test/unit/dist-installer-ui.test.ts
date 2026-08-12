@@ -26,7 +26,13 @@ test('dist installer enhancement preserves the product and download contracts', 
   expect(enhancer).toContain('Confirm-MonadArchiveSha256 $dir_path $url');
   expect(enhancer).toContain('Get-FileHash -LiteralPath $path -Algorithm SHA256');
   expect(enhancer).toContain('MONAD_INSTALLER_ARTIFACT_DIR');
-  expect(enhancer).toContain('Write-Progress -Activity "Downloading Monad $app_version"');
+  expect(enhancer).toContain('Write-MonadInlineProgress $status');
+  expect(enhancer).toContain('$MonadGlyphBrand = [char]0x25c6');
+  expect(enhancer).toContain('$MonadGlyphFilled = [char]0x25ae');
+  expect(enhancer).toContain('([string]$MonadGlyphFilled * $filled)');
+  expect(enhancer).not.toContain('Write-Progress');
+  expect(enhancer).toContain('rejects code that PowerShell has already allowed to run');
+  expect(enhancer).toContain('PowerShell installer must remain ASCII-safe for Windows PowerShell 5.1');
   expect(enhancer).toContain('copyFile(generatedShell, shellInstaller)');
   expect(enhancer).toContain('copyFile(generatedPowerShell, powerShellInstaller)');
 });

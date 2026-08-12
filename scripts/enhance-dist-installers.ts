@@ -467,6 +467,26 @@ async function enhancePowerShell(
   let source = await readFile(path, 'utf8');
   if (source.includes('# MONAD_INSTALLER_UI')) return;
 
+  source = replaceOnce(
+    source,
+    `  # show notification to change execution policy:
+  $allowedExecutionPolicy = @('Unrestricted', 'RemoteSigned', 'Bypass')
+  If ((Get-ExecutionPolicy).ToString() -notin $allowedExecutionPolicy) {
+    throw @"
+Error: PowerShell requires an execution policy in [$($allowedExecutionPolicy -join ", ")] to run $app_name. For example, to set the execution policy to 'RemoteSigned' please run:
+
+    Set-ExecutionPolicy RemoteSigned -scope CurrentUser
+
+"@
+  }
+
+`,
+    `  # The installer is commonly piped to Invoke-Expression. Requiring a file
+  # execution policy here rejects code that PowerShell has already allowed to run.
+
+`
+  );
+
   const powershellArtifactSizes = [...artifactSizes]
     .map(([name, size]) => `  '${name.replaceAll("'", "''")}' = [int64]${size}`)
     .join('\n');
@@ -512,11 +532,43 @@ function Test-MonadInteractive {
   return (-not (Test-MonadJson)) -and ((-not [Console]::IsErrorRedirected) -or ($env:MONAD_FORCE_INTERACTIVE -eq '1')) -and ($env:MONAD_PRINT_QUIET -ne '1')
 }
 
+$script:MonadInlineProgressActive = $false
+$script:MonadInlineProgressWidth = 0
+$MonadGlyphBrand = [char]0x25c6
+$MonadGlyphStep = [char]0x25c7
+$MonadGlyphDone = [char]0x2713
+$MonadGlyphError = [char]0x2716
+$MonadGlyphFilled = [char]0x25ae
+$MonadGlyphEmpty = [char]0x25af
+
+function Write-MonadInlineProgress($status) {
+  if (-not (Test-MonadInteractive)) { return }
+  try { $columns = $Host.UI.RawUI.WindowSize.Width } catch { $columns = 80 }
+  $maxWidth = [Math]::Max(20, $columns - 1)
+  $line = "    $status"
+  if ($line.Length -gt $maxWidth) { $line = $line.Substring(0, $maxWidth) }
+  $padding = if ($script:MonadInlineProgressWidth -gt $line.Length) {
+    ' ' * ($script:MonadInlineProgressWidth - $line.Length)
+  } else {
+    ''
+  }
+  Write-Host ("$([char]13)$line$padding") -NoNewline
+  $script:MonadInlineProgressActive = $true
+  $script:MonadInlineProgressWidth = $line.Length
+}
+
+function Complete-MonadInlineProgress {
+  if (-not $script:MonadInlineProgressActive) { return }
+  Write-Host ''
+  $script:MonadInlineProgressActive = $false
+  $script:MonadInlineProgressWidth = 0
+}
+
 function Write-MonadBanner {
   if (Test-MonadJson) { Write-MonadEvent 'started' 'Installing Monad'; return }
   if ($env:MONAD_PRINT_QUIET -eq '1') { return }
   Write-Host ""
-  Write-Host "  ◆ MONAD" -NoNewline -ForegroundColor Cyan
+  Write-Host "  $MonadGlyphBrand MONAD" -NoNewline -ForegroundColor Cyan
   Write-Host "  $app_version" -ForegroundColor White
   Write-Host "    Daemon-first agent team runtime with headless architecture." -ForegroundColor DarkGray
   Write-Host ""
@@ -525,14 +577,14 @@ function Write-MonadBanner {
 function Write-MonadStep($message) {
   if (Test-MonadJson) { Write-MonadEvent 'stage' $message; return }
   if ($env:MONAD_PRINT_QUIET -eq '1') { return }
-  Write-Host "  ◇" -NoNewline -ForegroundColor Cyan
+  Write-Host "  $MonadGlyphStep" -NoNewline -ForegroundColor Cyan
   Write-Host " $message" -ForegroundColor White
 }
 
 function Write-MonadDone($message) {
   if (Test-MonadJson) { Write-MonadEvent 'completed' $message; return }
   if ($env:MONAD_PRINT_QUIET -eq '1') { return }
-  Write-Host "  ✓" -NoNewline -ForegroundColor Green
+  Write-Host "  $MonadGlyphDone" -NoNewline -ForegroundColor Green
   Write-Host " $message" -ForegroundColor DarkGray
 }
 
@@ -541,7 +593,7 @@ function Write-MonadError($message) {
   if (Test-MonadJson) { Write-MonadEvent 'error' $message; return }
   if ($env:MONAD_PRINT_QUIET -eq '1') { return }
   Write-Host ""
-  Write-Host "  ✖ Installation failed" -ForegroundColor Red
+  Write-Host "  $MonadGlyphError Installation failed" -ForegroundColor Red
   Write-Host "    $message" -ForegroundColor DarkGray
   Write-Host ""
 }
@@ -549,15 +601,11 @@ function Write-MonadError($message) {
 ${POWERSHELL_INSTALLER_AUTO_START}
 
 function Start-MonadActivity($message) {
-  if (Test-MonadInteractive) {
-    Write-Progress -Id 2 -Activity $message -Status "Working…" -PercentComplete -1
-  } else {
-    Write-MonadStep $message
-  }
+  Write-MonadStep $message
 }
 
 function Stop-MonadActivity($message) {
-  if (Test-MonadInteractive) { Write-Progress -Id 2 -Activity $message -Completed }
+  Complete-MonadInlineProgress
 }
 
 function Format-MonadBytes([int64]$bytes) {
@@ -649,23 +697,27 @@ function Invoke-MonadDownloadFileOnce($client, $url, $path) {
         try { $columns = $Host.UI.RawUI.WindowSize.Width } catch { $columns = 80 }
         $barWidth = if ($columns -lt 72) { 10 } else { 20 }
         $filled = [Math]::Floor(($percent * $barWidth) / 100)
-        $bar = ('▮' * $filled) + ('▯' * ($barWidth - $filled))
+        $bar = ([string]$MonadGlyphFilled * $filled) + ([string]$MonadGlyphEmpty * ($barWidth - $filled))
         $elapsed = ([DateTime]::UtcNow - $startedAt).TotalSeconds
         $rate = if ($elapsed -gt 0) { [int64]($received / $elapsed) } else { [int64]0 }
         $eta = if ($rate -gt 0) { [Math]::Max(0, [int](($total - $received) / $rate)) } else { $null }
-        $status = if ($columns -lt 72) { "[$bar] $percent%" } else { "[$bar] $percent%  $(Format-MonadBytes $received) / $(Format-MonadBytes $total)" }
+        $status = if ($columns -lt 72) {
+          "[ $bar ] {0,3}%" -f $percent
+        } else {
+          "[ $bar ] {0,3}%  $(Format-MonadBytes $received) / $(Format-MonadBytes $total)" -f $percent
+        }
         if ($columns -ge 100 -and $rate -gt 0) { $status += "  $(Format-MonadBytes $rate)/s" }
-        if ($columns -ge 100 -and $null -ne $eta) { $status += "  $eta sec left" }
-        Write-Progress -Activity "Downloading Monad $app_version" -Status $status -PercentComplete $percent
+        if ($columns -ge 100 -and $null -ne $eta) { $status += "  $($eta)s left" }
+        Write-MonadInlineProgress $status
       } elseif ($showProgress) {
-        Write-Progress -Activity "Downloading Monad $app_version" -Status "$(Format-MonadBytes $received) downloaded" -PercentComplete -1
+        Write-MonadInlineProgress "$(Format-MonadBytes $received) downloaded"
       }
     }
   } catch {
     $message = Get-ExceptionMessage $_.Exception
     throw "failed to download $url to \${path}: $message"
   } finally {
-    if ($showProgress) { Write-Progress -Activity "Downloading Monad $app_version" -Completed }
+    if ($showProgress) { Complete-MonadInlineProgress }
     if ($null -ne $outputStream) { $outputStream.Dispose() }
     if ($null -ne $inputStream) { $inputStream.Dispose() }
   }
@@ -719,6 +771,10 @@ function Invoke-MonadDownloadFileOnce($client, $url, $path) {
 }`
   );
 
+  const nonAscii = [...source].find((character) => character.charCodeAt(0) > 0x7f);
+  if (nonAscii) {
+    throw new Error(`PowerShell installer must remain ASCII-safe for Windows PowerShell 5.1: ${nonAscii}`);
+  }
   await writeFile(path, source);
 }
 
