@@ -593,12 +593,12 @@ export function createDaemonHandlers(deps: DaemonHandlerDeps) {
       const workingPath = args.workingPath ?? nativeSession?.workingPath;
       const projectId = deps.store.getSession(args.sessionId)?.projectId;
       const workspaces =
-        nativeSession && projectId
+        projectId && args.projectMemberId
           ? managedProjectRuntimeWorkspaces({
               monadHome: paths.home,
               projectId,
               sessionId: args.sessionId,
-              agentId: nativeSession.projectMemberId ?? nativeSession.agentName
+              agentId: nativeSession?.projectMemberId ?? args.projectMemberId
             })
           : null;
       return [

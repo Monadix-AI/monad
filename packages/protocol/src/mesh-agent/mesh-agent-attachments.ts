@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { attachmentIdSchema } from '../ids.ts';
+import { attachmentIdSchema, projectMemberIdSchema, sessionIdSchema } from '../ids.ts';
 import { absolutePath } from './mesh-agent-paths.ts';
 
 // Inline request-body cap (DoS guard). Longer content is spilled to a file and referenced as an
@@ -64,14 +64,26 @@ export const nativeAgentAttachmentInputSchema = z.object({
 });
 export type NativeAgentAttachmentInput = z.infer<typeof nativeAgentAttachmentInputSchema>;
 
-/** Client-facing read of a registered attachment (web wall preview). `text` is a bounded inline
- *  read of the referenced file; `truncated` marks a partial read of a larger file. */
-export const attachmentReadResponseSchema = z.object({
-  attachment: messageAttachmentRefSchema,
+export const filePreviewTargetSchema = z.union([
+  z.object({ attachmentId: attachmentIdSchema }),
+  z.object({ path: z.string().min(1), sessionId: sessionIdSchema, projectMemberId: projectMemberIdSchema })
+]);
+export type FilePreviewTarget = z.infer<typeof filePreviewTargetSchema>;
+
+export const filePreviewResourceSchema = z.object({
+  path: z.string().min(1),
+  name: z.string().min(1).max(500),
+  mime: z.string().min(1).max(100),
+  bytes: z.number().int().nonnegative()
+});
+export type FilePreviewResource = z.infer<typeof filePreviewResourceSchema>;
+
+export const filePreviewReadResponseSchema = z.object({
+  resource: filePreviewResourceSchema,
   text: z.string(),
   truncated: z.boolean().optional()
 });
-export type AttachmentReadResponse = z.infer<typeof attachmentReadResponseSchema>;
+export type FilePreviewReadResponse = z.infer<typeof filePreviewReadResponseSchema>;
 
 // Per-message attachment count cap.
 export const NATIVE_AGENT_ATTACHMENTS_MAX = 10;

@@ -1,6 +1,6 @@
 import type { MessageAttachment } from '../../experience/types.ts';
 
-import { useDownloadAttachmentMutation } from '@monad/sdk-experience/react';
+import { useDownloadFilePreviewMutation } from '@monad/sdk-experience/react';
 import { AttachmentCard } from '@monad/ui';
 
 import { workplaceExperienceT } from '../../i18n.ts';
@@ -29,11 +29,11 @@ export function AttachmentChip({
   const t = workplaceExperienceT();
   const available = attachment.path !== undefined;
   const previewable = isAttachmentPreviewable(attachment);
-  const [downloadAttachment] = useDownloadAttachmentMutation();
+  const [downloadFilePreview] = useDownloadFilePreviewMutation();
   const download = async () => {
     if (!available) return;
     try {
-      const { blob } = await downloadAttachment({ id: attachment.id }).unwrap();
+      const { blob } = await downloadFilePreview({ attachmentId: attachment.id }).unwrap();
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = blobUrl;

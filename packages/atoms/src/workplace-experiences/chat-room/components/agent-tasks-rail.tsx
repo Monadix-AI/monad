@@ -641,6 +641,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
     (attachment: MessageAttachment, line?: number) => {
       if (!isMessageAttachmentRef(attachment)) return;
       openFilePreview(uiKey, {
+        target: { attachmentId: attachment.id },
         attachment,
         ...(attachment.mime.startsWith('image/') ? { gallery: previewImageGallery } : {}),
         line,
@@ -1076,7 +1077,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const previewReturnsToObservation = Boolean(observation && filePreview?.returnTo === 'observation');
   const observationImagePreview =
-    previewReturnsToObservation && Boolean(filePreview?.attachment.mime.startsWith('image/'));
+    previewReturnsToObservation && Boolean(filePreview?.attachment?.mime.startsWith('image/'));
 
   return (
     <FilePreviewContext.Provider

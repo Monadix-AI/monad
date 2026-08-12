@@ -37,7 +37,6 @@ import { installMcpAtomRequestSchema, installMcpAtomResponseSchema } from './mcp
 import { getMem0DataResponseSchema } from './mem0-data.ts';
 import { getLawsResponseSchema, optionalMemoryScopeQuerySchema } from './memory.ts';
 import {
-  attachmentReadResponseSchema,
   bindSessionMemberResponseSchema,
   inviteSessionMemberRequestSchema,
   listProjectRosterResponseSchema,
@@ -833,11 +832,6 @@ export const daemonHttpContract = {
     }),
     sessionMembers: defineHttpEndpoint({
       response: { 200: nativeAgentSessionMembersResponseSchema, 403: httpErrorSchema, 404: httpErrorSchema }
-    }),
-    // Client-facing wall read (GET /v1/attachments/:id). `?download=1` streams the raw file and
-    // bypasses schema validation; 410 = the referenced file no longer exists.
-    attachmentRead: defineHttpEndpoint({
-      response: { 200: attachmentReadResponseSchema, 404: httpErrorSchema, 410: httpErrorSchema }
     })
   }
 } as const;

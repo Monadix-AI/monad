@@ -1,5 +1,7 @@
 import type {
-  AttachmentReadResponse,
+  FilePreviewReadResponse,
+  FilePreviewResource,
+  FilePreviewTarget,
   MessageAttachmentRef,
   NativeAgentAttachmentInput,
   SessionId
@@ -7,7 +9,7 @@ import type {
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
 import { realpath, stat } from 'node:fs/promises';
-import { basename, isAbsolute, resolve } from 'node:path';
+import { basename, isAbsolute, relative, resolve, sep } from 'node:path';
 import {
   attachmentPreviewText,
   isPdfAttachmentMime,
@@ -142,45 +144,97 @@ export function createNativeAgentAttachmentReader(store: ReturnType<typeof creat
     return resolved;
   }
 
-  return {
-    async read(
-      id: string,
-      options: { download: boolean; inline: boolean }
-    ): Promise<Response | AttachmentReadResponse> {
-      const attachment = store.getMessageAttachment(id);
-      if (!attachment) throw new HandlerError('not_found', `attachment not found: ${id}`);
-      const { sessionId: _sessionId, preview: _preview, createdBy: _createdBy, ...ref } = attachment;
-      const path = await currentAttachmentPath(attachment);
-      const file = Bun.file(path);
-      if (options.inline) {
-        if (!isPdfAttachmentMime(attachment.mime)) {
-          throw new HandlerError('invalid', `inline preview is not supported for attachment: ${id}`);
+  async function currentLocalPath(path: string, roots: readonly string[]): Promise<string> {
+    if (roots.length === 0) {
+      throw new HandlerError('forbidden', 'local file preview has no accessible roots', 'ATTACHMENT_WORKSPACE_MISSING');
+    }
+    const resolvedRoots = (
+      await Promise.all(
+        roots.map(async (root) => {
+          try {
+            return await realpath(root);
+          } catch {
+            return null;
+          }
+        })
+      )
+    ).filter((root): root is string => root !== null);
+    const candidates = isAbsolute(path) ? [path] : resolvedRoots.map((root) => resolve(root, path));
+    for (const candidate of candidates) {
+      try {
+        const resolvedPath = await realpath(candidate);
+        const stats = await stat(resolvedPath);
+        if (!stats.isFile()) continue;
+        for (const resolvedRoot of resolvedRoots) {
+          const rel = relative(resolvedRoot, resolvedPath);
+          if (!rel || (rel !== '..' && !rel.startsWith(`..${sep}`) && !isAbsolute(rel))) return resolvedPath;
         }
-        return new Response(file, {
-          headers: {
-            'cache-control': 'private, no-store',
-            'content-disposition': attachmentContentDisposition(attachment.name, 'inline'),
-            'content-type': 'application/pdf',
-            'x-content-type-options': 'nosniff'
-          }
-        });
+      } catch {}
+    }
+    throw new HandlerError('forbidden', `local file is outside accessible roots: ${path}`, 'ATTACHMENT_PATH_FORBIDDEN');
+  }
+
+  async function readResource(
+    resource: FilePreviewResource,
+    options: { download: boolean; inline: boolean }
+  ): Promise<Response | FilePreviewReadResponse> {
+    const file = Bun.file(resource.path);
+    if (options.inline) {
+      if (!isPdfAttachmentMime(resource.mime)) {
+        throw new HandlerError('invalid', `inline preview is not supported for file: ${resource.path}`);
       }
-      if (options.download) {
-        return new Response(file, {
-          headers: {
-            'content-type': attachment.mime,
-            'content-disposition': attachmentContentDisposition(attachment.name)
-          }
-        });
+      return new Response(file, {
+        headers: {
+          'cache-control': 'private, no-store',
+          'content-disposition': attachmentContentDisposition(resource.name, 'inline'),
+          'content-type': 'application/pdf',
+          'x-content-type-options': 'nosniff'
+        }
+      });
+    }
+    if (options.download) {
+      return new Response(file, {
+        headers: {
+          'content-type': resource.mime,
+          'content-disposition': attachmentContentDisposition(resource.name)
+        }
+      });
+    }
+    const previewable = isPreviewableAttachmentMime(resource.mime);
+    const currentBytes = file.size;
+    const text = previewable ? await file.slice(0, Math.min(currentBytes, ATTACHMENT_INLINE_READ_MAX)).text() : '';
+    return {
+      resource,
+      text,
+      truncated: previewable && currentBytes > ATTACHMENT_INLINE_READ_MAX
+    };
+  }
+
+  async function registeredResource(id: string) {
+    const attachment = store.getMessageAttachment(id);
+    if (!attachment) throw new HandlerError('not_found', `attachment not found: ${id}`);
+    const path = await currentAttachmentPath(attachment);
+    return {
+      path,
+      name: attachment.name,
+      mime: attachment.mime,
+      bytes: attachment.bytes
+    } satisfies FilePreviewResource;
+  }
+
+  return {
+    async preview(
+      target: FilePreviewTarget,
+      options: { download: boolean; inline: boolean },
+      roots: readonly string[] = []
+    ): Promise<Response | FilePreviewReadResponse> {
+      if ('attachmentId' in target) {
+        return readResource(await registeredResource(target.attachmentId), options);
       }
-      const previewable = isPreviewableAttachmentMime(attachment.mime);
-      const size = file.size;
-      const text = previewable ? await file.slice(0, Math.min(size, ATTACHMENT_INLINE_READ_MAX)).text() : '';
-      return {
-        attachment: ref,
-        text,
-        truncated: previewable && size > ATTACHMENT_INLINE_READ_MAX
-      };
+      const path = await currentLocalPath(target.path, roots);
+      const file = Bun.file(path);
+      const mime = file.type.split(';')[0]?.trim() || 'application/octet-stream';
+      return readResource({ path, name: basename(path), mime, bytes: file.size }, options);
     }
   };
 }

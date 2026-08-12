@@ -1,4 +1,4 @@
-import type { MessageAttachmentRef, NativeAgentDeliveryId } from '@monad/protocol';
+import type { FilePreviewTarget, MessageAttachmentRef, NativeAgentDeliveryId } from '@monad/protocol';
 
 import { create } from 'zustand';
 
@@ -12,7 +12,8 @@ export interface ChatRoomRailObservation {
 }
 
 export interface ChatRoomFilePreview {
-  attachment: MessageAttachmentRef;
+  target: FilePreviewTarget;
+  attachment?: MessageAttachmentRef;
   gallery?: MessageAttachmentRef[];
   line?: number;
   returnTo?: 'observation';

@@ -10,7 +10,9 @@ export type {
 } from './agent-session-state.ts';
 export type { InvitableMeshAgent, ListInvitableMeshAgentsResponse } from './invitable-agent.ts';
 export type {
-  AttachmentReadResponse,
+  FilePreviewReadResponse,
+  FilePreviewResource,
+  FilePreviewTarget,
   MessageAttachment,
   MessageAttachmentRef,
   NativeAgentAttachmentInput
@@ -210,7 +212,9 @@ export {
 export { invitableMeshAgentSchema, listInvitableMeshAgentsResponseSchema } from './invitable-agent.ts';
 export {
   attachmentPreviewText,
-  attachmentReadResponseSchema,
+  filePreviewReadResponseSchema,
+  filePreviewResourceSchema,
+  filePreviewTargetSchema,
   isPdfAttachmentMime,
   isPreviewableAttachmentMime,
   messageAttachmentRefSchema,

@@ -920,11 +920,13 @@ test('chatroom message file preview is session scoped and replaces observation d
     agentId: 'mesh-agent:codex',
     agentName: 'codex'
   });
-  useChatRoomExperienceStore.getState().openFilePreview(firstKey, { attachment, line: 12 });
+  useChatRoomExperienceStore
+    .getState()
+    .openFilePreview(firstKey, { target: { attachmentId: attachment.id }, attachment, line: 12 });
 
   expect(useChatRoomExperienceStore.getState().railObservationBySession[firstKey]).toBeUndefined();
   expect(useChatRoomExperienceStore.getState().filePreviewBySession).toEqual({
-    [firstKey]: { attachment, line: 12 }
+    [firstKey]: { target: { attachmentId: attachment.id }, attachment, line: 12 }
   });
   expect(useChatRoomExperienceStore.getState().filePreviewBySession[secondKey]).toBeUndefined();
 
@@ -957,6 +959,7 @@ test('chatroom observation file preview returns to the observation after closing
     agentName: observation.agentName
   });
   useChatRoomExperienceStore.getState().openFilePreview(uiKey, {
+    target: { attachmentId: attachment.id },
     attachment,
     line: 4,
     returnTo: 'observation'
@@ -964,6 +967,7 @@ test('chatroom observation file preview returns to the observation after closing
 
   expect(useChatRoomExperienceStore.getState().railObservationBySession[uiKey]).toEqual(observation);
   expect(useChatRoomExperienceStore.getState().filePreviewBySession[uiKey]).toEqual({
+    target: { attachmentId: attachment.id },
     attachment,
     line: 4,
     returnTo: 'observation'

@@ -1,6 +1,6 @@
 import type { createDaemonHandlers } from '#/handlers/daemon-handlers/index.ts';
 
-import { daemonHttpContract } from '@monad/protocol';
+import { daemonHttpContract, filePreviewTargetSchema } from '@monad/protocol';
 import { Elysia } from 'elysia';
 
 import {
@@ -106,12 +106,27 @@ export function createNativeAgentController(handlers: ReturnType<typeof createDa
       },
       { body: contracts.agentRead.body, response: contracts.agentRead.response }
     )
-    .get('/attachments/:id', async ({ params, request }) => {
+    .get('/file-preview', async ({ request }) => {
       const url = new URL(request.url);
-      return attachmentReader.read(params.id, {
-        download: url.searchParams.get('download') === '1',
-        inline: url.searchParams.get('inline') === '1'
-      });
+      const attachmentId = url.searchParams.get('attachmentId');
+      const path = url.searchParams.get('path');
+      const sessionId = url.searchParams.get('sessionId');
+      const projectMemberId = url.searchParams.get('projectMemberId');
+      const target = filePreviewTargetSchema.parse(
+        attachmentId ? { attachmentId } : { path, sessionId, projectMemberId }
+      );
+      const roots =
+        'path' in target
+          ? attachmentRoots({ sessionId: target.sessionId, projectMemberId: target.projectMemberId })
+          : [];
+      return attachmentReader.preview(
+        target,
+        {
+          download: url.searchParams.get('download') === '1',
+          inline: url.searchParams.get('inline') === '1'
+        },
+        roots
+      );
     })
     .get(
       '/internal/native-agent/session/members',

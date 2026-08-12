@@ -103,3 +103,18 @@ test('absolute message and observation paths stay local preview buttons instead 
     hoverStyle: true
   });
 });
+
+test('monad:file links stay openable without a registered message attachment', () => {
+  const markup = renderToStaticMarkup(
+    createElement(MarkdownWithMentions, {
+      onOpenFilePath: () => {},
+      text: 'Open [the report](/workspace/report.ts "monad:file").'
+    })
+  );
+
+  expect({
+    fileButton: /<button[^>]+data-inline-link="file"[^>]*>/.test(markup),
+    disabled: markup.includes('disabled=""'),
+    unavailable: markup.includes('File unavailable')
+  }).toEqual({ fileButton: true, disabled: false, unavailable: false });
+});

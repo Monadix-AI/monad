@@ -1,28 +1,33 @@
-import type { AttachmentReadResponse } from '@monad/protocol';
+import type { FilePreviewReadResponse, FilePreviewTarget } from '@monad/protocol';
 
-import { attachmentReadResponseSchema } from '@monad/protocol';
+import { filePreviewReadResponseSchema } from '@monad/protocol';
 
 import { apiSlice } from '../../api-slice.ts';
 import { clientOf, toError } from '../../endpoint-helpers.ts';
+import { filePreviewUrl } from './file-preview-url.ts';
+
+async function getPreview<T>(
+  url: string,
+  parse: (body: unknown) => T,
+  api: { extra: unknown }
+): Promise<{ data: T } | { error: ReturnType<typeof toError> }> {
+  try {
+    const res = await clientOf(api).fetch(url);
+    const body = await res.json().catch(() => ({}));
+    return res.ok ? { data: parse(body) } : { error: toError({ status: res.status, value: body }) };
+  } catch (err) {
+    return { error: toError(err) };
+  }
+}
 
 const getAttachmentApi = apiSlice.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    // `/v1/attachments/:id` lives on an http-only controller (no Treaty typing) —
-    // same raw-fetch pattern as transcribeAudio.
-    getAttachment: builder.query<AttachmentReadResponse, { id: string }>({
-      queryFn: async ({ id }, api: { extra: unknown }) => {
-        try {
-          const res = await clientOf(api).fetch(`/v1/attachments/${encodeURIComponent(id)}`);
-          const body = await res.json().catch(() => ({}));
-          if (!res.ok) return { error: toError({ status: res.status, value: body }) };
-          return { data: attachmentReadResponseSchema.parse(body) };
-        } catch (err) {
-          return { error: toError(err) };
-        }
-      }
+    getFilePreview: builder.query<FilePreviewReadResponse, FilePreviewTarget>({
+      queryFn: (target, api: { extra: unknown }) =>
+        getPreview(filePreviewUrl(target), filePreviewReadResponseSchema.parse, api)
     })
   })
 });
 
-export const { useGetAttachmentQuery, useLazyGetAttachmentQuery } = getAttachmentApi;
+export const { useGetFilePreviewQuery } = getAttachmentApi;

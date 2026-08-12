@@ -178,10 +178,12 @@ function flattenReactText(node: React.ReactNode): string {
 
 function createMessageMarkdownComponents({
   attachments = [],
-  onOpenAttachment
+  onOpenAttachment,
+  onOpenFilePath
 }: {
   attachments?: readonly MessageAttachment[];
   onOpenAttachment?: (attachment: MessageAttachment, line?: number) => void;
+  onOpenFilePath?: (path: string, line?: number) => void;
 } = {}): Components {
   return {
     a: ({ href, children, title }) => {
@@ -206,7 +208,7 @@ function createMessageMarkdownComponents({
             <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
           </>
         );
-        if (!reference.attachment) {
+        if (!reference.attachment && !onOpenFilePath) {
           return (
             <button
               aria-disabled="true"
@@ -220,13 +222,16 @@ function createMessageMarkdownComponents({
             </button>
           );
         }
-        const attachment = reference.attachment;
         return (
           <button
             className="inline-flex max-w-full cursor-pointer items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-accent-blue leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
             data-inline-link="file"
-            onClick={() => onOpenAttachment?.(attachment, reference.line)}
-            title={attachment.path}
+            onClick={() =>
+              reference.attachment
+                ? onOpenAttachment?.(reference.attachment, reference.line)
+                : onOpenFilePath?.(reference.path, reference.line)
+            }
+            title={reference.attachment?.path ?? reference.path}
             type="button"
           >
             {content}
@@ -339,11 +344,13 @@ function MessageHeader({
 export function MarkdownWithMentions({
   attachments,
   onOpenAttachment,
+  onOpenFilePath,
   text,
   streaming
 }: {
   attachments?: readonly MessageAttachment[];
   onOpenAttachment?: (attachment: MessageAttachment, line?: number) => void;
+  onOpenFilePath?: (path: string, line?: number) => void;
   text: string;
   streaming?: boolean;
 }): React.ReactElement {
@@ -354,9 +361,10 @@ export function MarkdownWithMentions({
     () =>
       createMessageMarkdownComponents({
         attachments: resolvedAttachments,
-        onOpenAttachment: resolvedOnOpenAttachment
+        onOpenAttachment: resolvedOnOpenAttachment,
+        onOpenFilePath
       }),
-    [resolvedAttachments, resolvedOnOpenAttachment]
+    [onOpenFilePath, resolvedAttachments, resolvedOnOpenAttachment]
   );
   const markdownText = useMemo(() => markdownTextWithMentionCapsules(text), [text]);
   return (
@@ -378,7 +386,8 @@ function MessageBubbleContent({
   hasText,
   labels,
   msg,
-  onOpenAttachment
+  onOpenAttachment,
+  onOpenFilePath
 }: {
   agent: boolean;
   attachments?: readonly MessageAttachment[];
@@ -386,6 +395,7 @@ function MessageBubbleContent({
   labels?: MessageRowLabels;
   msg: Message;
   onOpenAttachment?: (attachment: MessageAttachment, line?: number) => void;
+  onOpenFilePath?: (path: string, line?: number) => void;
 }): React.ReactElement | null {
   const agentContent = agent ? (
     msg.question ? (
@@ -398,6 +408,7 @@ function MessageBubbleContent({
       <MarkdownWithMentions
         attachments={attachments ?? msg.attachments}
         onOpenAttachment={onOpenAttachment}
+        onOpenFilePath={onOpenFilePath}
         streaming={msg.streaming}
         text={msg.text}
       />
@@ -446,6 +457,7 @@ export const MessageRow = memo(function MessageRow({
   linkAttachments,
   onAgentClick,
   onOpenAttachment,
+  onOpenFilePath,
   onOpenReplyTarget,
   onReply,
   resolveAgentIdentity,
@@ -459,6 +471,7 @@ export const MessageRow = memo(function MessageRow({
   linkAttachments?: readonly MessageAttachment[];
   onAgentClick?: (id: string) => void;
   onOpenAttachment?: (attachment: MessageAttachment, line?: number) => void;
+  onOpenFilePath?: (path: string, line?: number) => void;
   onOpenReplyTarget?: () => void;
   onReply?: (message: Message) => void;
   resolveAgentIdentity?: WorkplaceExperienceAgentIdentityResolver;
@@ -534,6 +547,7 @@ export const MessageRow = memo(function MessageRow({
               labels={labels}
               msg={msg}
               onOpenAttachment={onOpenAttachment}
+              onOpenFilePath={onOpenFilePath}
             />
           </>
         }

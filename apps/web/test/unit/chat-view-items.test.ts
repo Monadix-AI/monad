@@ -107,7 +107,7 @@ test('persisted image attachments project to the daemon download preview', () =>
     attachments: [
       {
         id: 'att_123456789012',
-        imageSrc: '/v1/attachments/att_123456789012?download=1'
+        imageSrc: '/v1/file-preview?attachmentId=att_123456789012&download=1'
       }
     ]
   });

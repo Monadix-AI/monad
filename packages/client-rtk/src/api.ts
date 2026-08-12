@@ -58,9 +58,9 @@ import {
   useUploadSkillMutation
 } from './endpoints/atoms/index.ts';
 import {
-  useDownloadAttachmentMutation,
-  useGetAttachmentQuery,
-  useLazyGetAttachmentQuery
+  filePreviewUrl,
+  useDownloadFilePreviewMutation,
+  useGetFilePreviewQuery
 } from './endpoints/attachments/index.ts';
 import { useSendChannelMessageMutation } from './endpoints/channels/index.ts';
 import { commandsApi, useLazyListCommandsQuery, useListCommandsQuery } from './endpoints/commands/index.ts';
@@ -366,6 +366,7 @@ export {
   credentialAdapter,
   credentialSelectors,
   factSelectors,
+  filePreviewUrl,
   graphApi,
   inboxApi,
   indexerApi,
@@ -438,7 +439,7 @@ export {
   useDeleteSessionPlanTodoMutation,
   useDeleteWorkplaceProjectMutation,
   useDiscoverAtomKindsMutation,
-  useDownloadAttachmentMutation,
+  useDownloadFilePreviewMutation,
   useEditMemoryFactMutation,
   useFetchSkillDetailQuery,
   useForgetMemoryFactMutation,
@@ -449,13 +450,13 @@ export {
   useGetAgentPromptQuery,
   useGetAgentQuery,
   useGetAppearanceQuery,
-  useGetAttachmentQuery,
   useGetBrowserPresetQuery,
   useGetCatalogQuery,
   useGetComputerPresetQuery,
   useGetDefaultAgentQuery,
   useGetDefaultQuery,
   useGetDeveloperQuery,
+  useGetFilePreviewQuery,
   useGetGraphQuery,
   useGetHealthQuery,
   useGetHooksQuery,
@@ -505,7 +506,6 @@ export {
   useLazyCheckAtomPackUpdateQuery,
   useLazyCheckSkillUpdatesQuery,
   useLazyFetchSkillDetailQuery,
-  useLazyGetAttachmentQuery,
   useLazyGetLiveEventReplayFramesQuery,
   useLazyGetMeshAgentAuthStatusQuery,
   useLazyGetMeshAgentConnectionQuery,

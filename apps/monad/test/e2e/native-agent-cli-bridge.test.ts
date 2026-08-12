@@ -479,18 +479,18 @@ for (const kind of TRANSPORTS) {
         expect(wallText.length).toBeLessThan(3_000);
 
         // Client-facing read (web wall): bounded JSON preview and raw download from the file.
-        const webRes = await t.fetch(`/v1/attachments/${attachment.id}`);
+        const webRes = await t.fetch(`/v1/file-preview?attachmentId=${attachment.id}`);
         expect(webRes.status).toBe(200);
         const webBody = (await webRes.json()) as { text: string; truncated?: boolean };
         expect(webBody.text.startsWith('START ')).toBe(true);
-        const download = await t.fetch(`/v1/attachments/${attachment.id}?download=1`);
+        const download = await t.fetch(`/v1/file-preview?attachmentId=${attachment.id}&download=1`);
         expect(download.status).toBe(200);
         expect(download.headers.get('content-disposition')).toContain('report.md');
         expect(await download.text()).toBe(longBody);
 
         // Reference semantics: deleting the file makes later reads report the reference as gone.
         await rm(filePath);
-        expect((await t.fetch(`/v1/attachments/${attachment.id}`)).status).toBe(410);
+        expect((await t.fetch(`/v1/file-preview?attachmentId=${attachment.id}`)).status).toBe(410);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -513,7 +513,7 @@ for (const kind of TRANSPORTS) {
         const { message } = (await posted.json()) as { message: { attachments?: Array<{ id: string }> } };
         const id = message.attachments?.[0]?.id;
         if (!id) throw new Error('expected attachment ref');
-        const download = await t.fetch(`/v1/attachments/${id}?download=1`);
+        const download = await t.fetch(`/v1/file-preview?attachmentId=${id}&download=1`);
         expect(download.status).toBe(200);
         expect(download.headers.get('content-disposition')).toContain("filename*=UTF-8''");
         expect(await download.text()).toBe('# 报告');
@@ -552,7 +552,7 @@ for (const kind of TRANSPORTS) {
         const [pdfAttachment, textAttachment] = body.message.attachments ?? [];
         if (!pdfAttachment || !textAttachment) throw new Error('expected PDF and text attachment refs');
 
-        const inline = await t.fetch(`/v1/attachments/${pdfAttachment.id}?inline=1`);
+        const inline = await t.fetch(`/v1/file-preview?attachmentId=${pdfAttachment.id}&inline=1`);
         expect({
           body: await inline.text(),
           cacheControl: inline.headers.get('cache-control'),
@@ -568,7 +568,7 @@ for (const kind of TRANSPORTS) {
           nosniff: 'nosniff',
           status: 200
         });
-        expect((await t.fetch(`/v1/attachments/${textAttachment.id}?inline=1`)).status).toBe(400);
+        expect((await t.fetch(`/v1/file-preview?attachmentId=${textAttachment.id}&inline=1`)).status).toBe(400);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -583,7 +583,7 @@ for (const kind of TRANSPORTS) {
       createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
       try {
         // The web endpoint is id-gated: unregistered ids never resolve to file reads.
-        expect((await t.fetch('/v1/attachments/att_UNKNOWN')).status).toBe(404);
+        expect((await t.fetch('/v1/file-preview?attachmentId=att_100000000000')).status).toBe(404);
 
         // Referencing a nonexistent file fails the post outright; nothing lands on the wall.
         const missing = await t.fetch(
@@ -602,16 +602,14 @@ for (const kind of TRANSPORTS) {
         const { message } = (await outside.json()) as { message: { attachments?: Array<{ id: string }> } };
         const id = message.attachments?.[0]?.id;
         if (!id) throw new Error('expected attachment ref');
-        const attachment = await t.fetch(`/v1/attachments/${id}`);
+        const attachment = await t.fetch(`/v1/file-preview?attachmentId=${id}`);
         expect(attachment.status).toBe(200);
         expect(await attachment.json()).toEqual({
-          attachment: {
-            id,
+          resource: {
             path: secretPath,
             name: 'secret.txt',
             mime: 'text/plain',
-            bytes: 9,
-            createdAt: expect.any(String)
+            bytes: 9
           },
           text: 'not yours',
           truncated: false
@@ -645,7 +643,7 @@ for (const kind of TRANSPORTS) {
         const { message } = (await posted.json()) as { message: { attachments?: Array<{ id: string }> } };
         const id = message.attachments?.[0]?.id;
         if (!id) throw new Error('expected attachment ref');
-        const read = await t.fetch(`/v1/attachments/${id}`);
+        const read = await t.fetch(`/v1/file-preview?attachmentId=${id}`);
         const readBody = await read.text();
         expect({ status: read.status, body: readBody }).toMatchObject({ status: 200 });
         expect((JSON.parse(readBody) as { text: string }).text).toBe('# Proposal');

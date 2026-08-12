@@ -37,19 +37,17 @@ function fakeClientWithFetch(fetchImpl: (path: string, init?: RequestInit) => Pr
   } as unknown as MonadClient;
 }
 
-test('getAttachment: fetches the JSON preview for an attachment', async () => {
+test('getFilePreview: fetches the JSON preview for an attachment id', async () => {
   let observedPath: string | undefined;
   const client = fakeClientWithFetch(async (path) => {
     observedPath = path;
     return new Response(
       JSON.stringify({
-        attachment: {
-          id: 'att_100000000000',
+        resource: {
           path: '/tmp/notes.txt',
           name: 'notes.txt',
           mime: 'text/plain',
-          bytes: 5,
-          createdAt: '2026-07-06T00:00:00.000Z'
+          bytes: 5
         },
         text: 'hello',
         truncated: false
@@ -59,37 +57,65 @@ test('getAttachment: fetches the JSON preview for an attachment', async () => {
   });
   const store = createMonadStore({ client });
 
-  const res = await dispatchEndpoint(store, 'getAttachment', { id: 'att_100000000000' });
+  const res = await dispatchEndpoint(store, 'getFilePreview', { attachmentId: 'att_100000000000' });
 
-  expect(observedPath).toBe('/v1/attachments/att_100000000000');
+  expect(observedPath).toBe('/v1/file-preview?attachmentId=att_100000000000');
   expect((res.data as { text?: string } | undefined)?.text).toBe('hello');
 });
 
-test('getAttachment: maps a non-ok response to an error', async () => {
+test('getFilePreview: maps a non-ok response to an error', async () => {
   const client = fakeClientWithFetch(
     async () => new Response(JSON.stringify({ error: 'gone' }), { status: 410, headers: {} })
   );
   const store = createMonadStore({ client });
 
-  const res = await dispatchEndpoint(store, 'getAttachment', { id: 'att_missing00000' });
+  const res = await dispatchEndpoint(store, 'getFilePreview', { attachmentId: 'att_missing00000' });
 
   expect((res.error as { status?: number } | undefined)?.status).toBe(410);
 });
 
-test('downloadAttachment: requests the binary variant and returns a Blob', async () => {
+test('getFilePreview: reads a session-scoped local path', async () => {
   let observedPath: string | undefined;
   const client = fakeClientWithFetch(async (path) => {
     observedPath = path;
-    return new Response(new Uint8Array([1, 2, 3]), {
-      status: 200,
-      headers: { 'content-type': 'application/octet-stream' }
-    });
+    return new Response(
+      JSON.stringify({
+        resource: {
+          path: '/workspace/report.md',
+          name: 'report.md',
+          mime: 'text/markdown',
+          bytes: 5
+        },
+        text: 'hello'
+      }),
+      { status: 200, headers: { 'content-type': 'application/json' } }
+    );
   });
   const store = createMonadStore({ client });
 
-  const res = await dispatchEndpoint(store, 'downloadAttachment', { id: 'att_100000000000' });
+  const res = await dispatchEndpoint(store, 'getFilePreview', {
+    path: '/workspace/report.md',
+    sessionId: 'ses_100000000000',
+    projectMemberId: 'pmem_100000000000'
+  });
 
-  expect(observedPath).toBe('/v1/attachments/att_100000000000?download=1');
+  expect(observedPath).toBe(
+    '/v1/file-preview?path=%2Fworkspace%2Freport.md&sessionId=ses_100000000000&projectMemberId=pmem_100000000000'
+  );
+  expect((res.data as { text?: string } | undefined)?.text).toBe('hello');
+});
+
+test('downloadFilePreview: accepts an attachment id', async () => {
+  let observedPath: string | undefined;
+  const client = fakeClientWithFetch(async (path) => {
+    observedPath = path;
+    return new Response(new Uint8Array([1]), { status: 200 });
+  });
+  const store = createMonadStore({ client });
+
+  const res = await dispatchEndpoint(store, 'downloadFilePreview', { attachmentId: 'att_100000000000' });
+
+  expect(observedPath).toBe('/v1/file-preview?attachmentId=att_100000000000&download=1');
   expect((res.data as { blob?: Blob } | undefined)?.blob).toBeInstanceOf(Blob);
 });
 

@@ -5,6 +5,7 @@ import type { MessageRowLabels } from './message-row.tsx';
 
 import { ArrowDown01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
+import { projectMemberIdSchema, sessionIdSchema } from '@monad/protocol';
 import { activeMessageOutlineIds, MessageOutline, type MessageOutlineItem } from '@monad/ui/components/MessageOutline';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
 import { type CSSProperties, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -188,12 +189,30 @@ export function ChatMessageList({
     (attachment: MessageAttachment, line?: number) => {
       if (isMessageAttachmentRef(attachment))
         openFilePreview(uiKey, {
+          target: { attachmentId: attachment.id },
           attachment,
           ...(attachment.mime.startsWith('image/') ? { gallery: imageGallery } : {}),
           line
         });
     },
     [imageGallery, openFilePreview, uiKey]
+  );
+  const onOpenFilePath = useCallback(
+    (path: string, authorId: string, line?: number) => {
+      if (!room.activeSessionId) return;
+      const projectMemberId = projectMemberIdSchema.safeParse(authorId);
+      const sessionId = sessionIdSchema.safeParse(room.activeSessionId);
+      if (!projectMemberId.success || !sessionId.success) return;
+      openFilePreview(uiKey, {
+        target: {
+          path,
+          sessionId: sessionId.data,
+          projectMemberId: projectMemberId.data
+        },
+        line
+      });
+    },
+    [openFilePreview, room.activeSessionId, uiKey]
   );
   const lastMessageKey = lastMessage ? messageRenderKey(lastMessage) : undefined;
   const messagesById = useMemo(() => new Map(room.messages.map((message) => [message.id, message])), [room.messages]);
@@ -303,6 +322,7 @@ export function ChatMessageList({
             msg={msg}
             onAgentClick={room.openAgentCard}
             onOpenAttachment={onOpenAttachment}
+            onOpenFilePath={(path, line) => onOpenFilePath(path, msg.authorId, line)}
             onOpenReplyTarget={
               showReplyPreview && replyTarget ? () => setLocalRequestedMessageId(replyTarget.id) : undefined
             }
@@ -320,6 +340,7 @@ export function ChatMessageList({
       room.channelIcons,
       messagesById,
       onOpenAttachment,
+      onOpenFilePath,
       previousMessageIds,
       room.actions,
       room.onReply,

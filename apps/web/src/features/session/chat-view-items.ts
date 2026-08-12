@@ -190,7 +190,7 @@ function attachmentsFromParts(parts: UIPart[]): MessageAttachmentView[] {
       {
         ...attachment,
         ...(attachment.path && attachment.mime.startsWith('image/')
-          ? { imageSrc: `/v1/attachments/${encodeURIComponent(attachment.id)}?download=1` }
+          ? { imageSrc: `/v1/file-preview?attachmentId=${encodeURIComponent(attachment.id)}&download=1` }
           : {})
       }
     ];

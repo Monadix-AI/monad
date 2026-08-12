@@ -1,6 +1,6 @@
 'use client';
 
-import type { MessageAttachmentRef } from '@monad/protocol';
+import type { FilePreviewResource } from '@monad/protocol';
 import type { CSSProperties } from 'react';
 import type { BundledLanguage, BundledTheme, HighlighterGeneric, ThemedToken } from 'shiki';
 import type { ChatRoomFilePreview } from '../store.ts';
@@ -8,7 +8,7 @@ import type { ChatRoomFilePreview } from '../store.ts';
 import { ArrowLeft01Icon, CollapseIcon, Download04Icon, ExpandIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { isPdfAttachmentMime, isPreviewableAttachmentMime } from '@monad/protocol';
-import { useDownloadAttachmentMutation, useGetAttachmentQuery } from '@monad/sdk-experience/react';
+import { filePreviewUrl, useDownloadFilePreviewMutation, useGetFilePreviewQuery } from '@monad/sdk-experience/react';
 import { Button, ImageGalleryDialog } from '@monad/ui';
 import { FileIcon } from '@monad/ui/components/FileIcon';
 import { Markdown } from '@monad/ui/components/Markdown';
@@ -64,7 +64,9 @@ export function inferPreviewLanguage(path: string): FilePreviewLanguage {
   return EXTENSION_LANGUAGES[extension] ?? 'text';
 }
 
-export function renderedFilePreviewKind(attachment: MessageAttachmentRef): RenderedFilePreviewKind | null {
+export function renderedFilePreviewKind(
+  attachment: Pick<FilePreviewResource, 'mime' | 'path'>
+): RenderedFilePreviewKind | null {
   const mime = attachment.mime.split(';', 1)[0]?.trim().toLowerCase();
   if (mime === 'text/html') return 'html';
   if (mime === 'text/markdown') return 'markdown';
@@ -89,7 +91,7 @@ function RenderedFilePreview({
   kind,
   title
 }: {
-  attachment: MessageAttachmentRef;
+  attachment: FilePreviewResource;
   content: string;
   kind: RenderedFilePreviewKind;
   title: string;
@@ -211,7 +213,7 @@ function FilePreviewContent({
   truncated,
   truncatedLabel
 }: {
-  attachment: MessageAttachmentRef;
+  attachment: FilePreviewResource;
   content: string;
   focusLine?: number;
   truncated?: boolean;
@@ -277,28 +279,38 @@ export function FilePreviewPanel({
   const t = workplaceExperienceT();
   const gallery = useMemo(() => {
     const images = (preview.gallery ?? []).filter((item) => item.mime.startsWith('image/'));
-    return images.some((item) => item.id === preview.attachment.id) ? images : [preview.attachment, ...images];
+    if (!preview.attachment) return images;
+    return images.some((item) => item.id === preview.attachment?.id) ? images : [preview.attachment, ...images];
   }, [preview.attachment, preview.gallery]);
   const initialIndex = Math.max(
     0,
-    gallery.findIndex((item) => item.id === preview.attachment.id)
+    gallery.findIndex((item) => item.id === preview.attachment?.id)
   );
   const [galleryIndex, setGalleryIndex] = useState(initialIndex);
   useEffect(() => setGalleryIndex(initialIndex), [initialIndex]);
-  const attachment = gallery[galleryIndex] ?? preview.attachment;
-  const image = attachment.mime.startsWith('image/');
-  const pdf = isPdfAttachmentMime(attachment.mime);
-  const previewable = image || pdf || isPreviewableAttachmentMime(attachment.mime);
-  const query = useGetAttachmentQuery({ id: attachment.id }, { skip: !previewable || image || pdf });
-  const [downloadAttachment] = useDownloadAttachmentMutation();
+  const galleryAttachment = gallery[galleryIndex] ?? preview.attachment;
+  const target = galleryAttachment ? { attachmentId: galleryAttachment.id } : preview.target;
+  const targetKey = 'attachmentId' in target ? target.attachmentId : target.path;
+  const query = useGetFilePreviewQuery(target);
+  const fallbackPath = 'path' in target ? target.path : (galleryAttachment?.path ?? target.attachmentId);
+  const resource: FilePreviewResource = query.data?.resource ?? {
+    path: fallbackPath,
+    name: galleryAttachment?.name ?? fallbackPath.split(/[\\/]/).at(-1) ?? fallbackPath,
+    mime: galleryAttachment?.mime ?? 'application/octet-stream',
+    bytes: galleryAttachment?.bytes ?? 0
+  };
+  const image = resource.mime.startsWith('image/');
+  const pdf = isPdfAttachmentMime(resource.mime);
+  const previewable = image || pdf || isPreviewableAttachmentMime(resource.mime);
+  const [downloadFilePreview] = useDownloadFilePreviewMutation();
   const [downloadError, setDownloadError] = useState(false);
   const [fullscreen, setFullscreen] = useState(false);
-  const [viewState, setViewState] = useState<{ attachmentId: string; mode: 'preview' | 'source' }>({
-    attachmentId: attachment.id,
+  const [viewState, setViewState] = useState<{ targetKey: string; mode: 'preview' | 'source' }>({
+    targetKey,
     mode: 'source'
   });
-  const viewMode = viewState.attachmentId === attachment.id ? viewState.mode : 'source';
-  const renderedKind = renderedFilePreviewKind(attachment);
+  const viewMode = viewState.targetKey === targetKey ? viewState.mode : 'source';
+  const renderedKind = renderedFilePreviewKind(resource);
   useEffect(() => {
     if (!fullscreen) return;
     const exitFullscreen = (event: KeyboardEvent) => {
@@ -310,18 +322,21 @@ export function FilePreviewPanel({
   const download = async () => {
     setDownloadError(false);
     try {
-      const { blob } = await downloadAttachment({ id: attachment.id }).unwrap();
+      const { blob } = await downloadFilePreview(target).unwrap();
       const blobUrl = URL.createObjectURL(blob);
       const anchor = document.createElement('a');
       anchor.href = blobUrl;
-      anchor.download = attachment.name;
+      anchor.download = resource.name;
       anchor.click();
       URL.revokeObjectURL(blobUrl);
     } catch {
       setDownloadError(true);
     }
   };
-  if (image) {
+  if (image && query.data) {
+    const slides = gallery.length
+      ? gallery.map((item) => ({ alt: item.name, src: filePreviewUrl({ attachmentId: item.id }, 'download') }))
+      : [{ alt: resource.name, src: filePreviewUrl(target, 'download') }];
     return (
       <ImageGalleryDialog
         index={galleryIndex}
@@ -335,10 +350,7 @@ export function FilePreviewPanel({
         onClose={onBack}
         onIndexChange={setGalleryIndex}
         open
-        slides={gallery.map((item) => ({
-          alt: item.name,
-          src: `/v1/attachments/${encodeURIComponent(item.id)}?download=1`
-        }))}
+        slides={slides}
       />
     );
   }
@@ -364,21 +376,21 @@ export function FilePreviewPanel({
         </button>
         <FileIcon
           className="size-4 shrink-0"
-          contentType={attachment.mime}
-          fileName={attachment.name}
+          contentType={resource.mime}
+          fileName={resource.name}
         />
         <div className="min-w-0 flex-1">
           <div
             className="truncate font-semibold text-sm"
-            title={attachment.path}
+            title={resource.path}
           >
-            {attachment.name}
+            {resource.name}
           </div>
           <div
             className="truncate font-mono text-[10px] text-muted-foreground"
-            title={attachment.path}
+            title={resource.path}
           >
-            {attachment.path}
+            {resource.path}
           </div>
         </div>
         {renderedKind ? (
@@ -389,7 +401,7 @@ export function FilePreviewPanel({
             data-file-view-mode={viewMode}
             onClick={() =>
               setViewState({
-                attachmentId: attachment.id,
+                targetKey,
                 mode: viewMode === 'source' ? 'preview' : 'source'
               })
             }
@@ -425,24 +437,24 @@ export function FilePreviewPanel({
           />
         </button>
       </header>
-      {downloadError || (!pdf && query.isError) ? (
+      {downloadError || query.isError ? (
         <div className="p-4 text-destructive text-sm">{t('web.workplace.attachmentLoadError')}</div>
+      ) : query.isLoading || !query.data ? (
+        <div className="p-4 text-muted-foreground text-sm">...</div>
       ) : pdf ? (
         <iframe
           className="min-h-0 flex-1 border-0 bg-background"
           data-pdf-preview="true"
           referrerPolicy="no-referrer"
-          src={`/v1/attachments/${encodeURIComponent(attachment.id)}?inline=1`}
-          title={`${attachment.name} · ${t('web.workplace.attachmentPreview')}`}
+          src={filePreviewUrl(target, 'inline')}
+          title={`${resource.name} · ${t('web.workplace.attachmentPreview')}`}
         />
       ) : !previewable ? (
         <div className="p-4 text-muted-foreground text-sm">{t('web.workplace.attachmentPreviewUnsupported')}</div>
-      ) : query.isLoading || !query.data ? (
-        <div className="p-4 text-muted-foreground text-sm">...</div>
       ) : renderedKind && viewMode === 'preview' ? (
         <>
           <RenderedFilePreview
-            attachment={attachment}
+            attachment={resource}
             content={query.data.text}
             kind={renderedKind}
             title={t('web.workplace.attachmentRenderPreview')}
@@ -455,7 +467,7 @@ export function FilePreviewPanel({
         </>
       ) : (
         <FilePreviewContent
-          attachment={attachment}
+          attachment={resource}
           content={query.data.text}
           focusLine={preview.line}
           truncated={query.data.truncated}

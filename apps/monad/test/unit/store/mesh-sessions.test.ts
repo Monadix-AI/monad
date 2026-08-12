@@ -2,7 +2,7 @@ import type { Event, MeshSessionId, ProjectId, Session, SessionId, WorkplaceProj
 import type { MeshSessionRow } from '#/store/db/index.ts';
 
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { mkdir, mkdtemp, rm, symlink, unlink, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, symlink, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -258,6 +258,42 @@ test('message attachments register a file reference snapshot, not content', () =
   });
 });
 
+test('message attachment reader previews the current contents after the referenced file grows', async () => {
+  const dir = await mkdtemp(join(tmpdir(), 'monad-attachment-current-size-'));
+  const file = join(dir, 'report.md');
+  try {
+    await writeFile(file, '');
+    const registeredPath = await realpath(file);
+    store.registerMessageAttachment({
+      id: 'att_100000000000',
+      sessionId: 'ses_project00000',
+      path: registeredPath,
+      name: 'report.md',
+      mime: 'text/markdown',
+      bytes: 0,
+      preview: '',
+      createdBy: 'codex',
+      createdAt: '2026-06-28T00:00:01.000Z'
+    });
+    await writeFile(file, '# Updated report\n');
+
+    const result = await createNativeAgentAttachmentReader(store).preview(
+      { attachmentId: 'att_100000000000' },
+      { download: false, inline: false }
+    );
+
+    expect(result).not.toBeInstanceOf(Response);
+    if (result instanceof Response) throw new Error('expected JSON preview');
+    expect({ snapshotBytes: result.resource.bytes, text: result.text, truncated: result.truncated }).toEqual({
+      snapshotBytes: 0,
+      text: '# Updated report\n',
+      truncated: false
+    });
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
+});
+
 test('message attachment reader rejects paths that changed after registration', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'monad-attachment-toctou-'));
   try {
@@ -282,7 +318,10 @@ test('message attachment reader rejects paths that changed after registration', 
     await symlink(outside, file);
 
     await expect(
-      createNativeAgentAttachmentReader(store).read('att_100000000000', { download: false, inline: false })
+      createNativeAgentAttachmentReader(store).preview(
+        { attachmentId: 'att_100000000000' },
+        { download: false, inline: false }
+      )
     ).rejects.toThrow('attachment path changed after registration');
   } finally {
     await rm(dir, { recursive: true, force: true });

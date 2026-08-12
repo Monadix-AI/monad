@@ -182,7 +182,7 @@ export const RESOURCE_ROUTES = [
   { method: 'POST', template: '/v1/atoms/skills/upload', owner: 'resource', capability: 'runtime.resource' },
   { method: 'POST', template: '/v1/atoms/skills/validate', owner: 'resource', capability: 'runtime.resource' },
   { method: 'GET', template: '/v1/atoms/workplace-experiences', owner: 'resource', capability: 'runtime.resource' },
-  { method: 'GET', template: '/v1/attachments/:id', owner: 'resource', capability: 'runtime.resource' },
+  { method: 'GET', template: '/v1/file-preview', owner: 'resource', capability: 'runtime.resource' },
   { method: 'POST', template: '/v1/channels/:id/messages', owner: 'resource', capability: 'runtime.resource' },
   { method: 'POST', template: '/v1/daemon/stop', owner: 'resource', capability: 'runtime.resource' },
   { method: 'POST', template: '/v1/delegation/output', owner: 'resource', capability: 'runtime.resource' },

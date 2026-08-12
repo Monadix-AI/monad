@@ -7,7 +7,10 @@ import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { NATIVE_AGENT_ATTACHMENTS_MAX } from '@monad/protocol';
 
-import { createNativeAgentAttachmentResolver } from '#/services/native-agent/attachments.ts';
+import {
+  createNativeAgentAttachmentReader,
+  createNativeAgentAttachmentResolver
+} from '#/services/native-agent/attachments.ts';
 import { parseNativeAgentFileReferences } from '#/services/native-agent/file-refs.ts';
 
 test('parseNativeAgentFileReferences extracts @file markers and removes them from visible text', () => {
@@ -152,4 +155,84 @@ test('createNativeAgentAttachmentResolver applies the attachment limit after par
   await expect(
     resolver({ text: markers.join('\n') }, { sessionId: 'ses_TEST00000000', createdBy: 'mesh-agent:test' }, [workspace])
   ).rejects.toThrow(`at most ${NATIVE_AGENT_ATTACHMENTS_MAX} file attachments per message`);
+});
+
+test('file preview reads a local path contained by the managed workspace roots', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'monad-file-preview-'));
+  const report = join(workspace, 'report.md');
+  await writeFile(report, '# Report\n');
+  const reader = createNativeAgentAttachmentReader({} as never);
+
+  const result = await reader.preview(
+    {
+      path: report,
+      sessionId: 'ses_TEST00000000',
+      projectMemberId: 'pmem_TEST0000000'
+    },
+    { download: false, inline: false },
+    [workspace]
+  );
+
+  expect(result).not.toBeInstanceOf(Response);
+  if (result instanceof Response) throw new Error('expected JSON preview');
+  expect({ path: result.resource.path, text: result.text }).toEqual({
+    path: await realpath(report),
+    text: '# Report\n'
+  });
+});
+
+test('file preview rejects a local path outside the managed workspace roots', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'monad-file-preview-root-'));
+  const outside = await mkdtemp(join(tmpdir(), 'monad-file-preview-outside-'));
+  const report = join(outside, 'secret.md');
+  await writeFile(report, 'secret\n');
+  const reader = createNativeAgentAttachmentReader({} as never);
+
+  await expect(
+    reader.preview(
+      {
+        path: report,
+        sessionId: 'ses_TEST00000000',
+        projectMemberId: 'pmem_TEST0000000'
+      },
+      { download: false, inline: false },
+      [workspace]
+    )
+  ).rejects.toThrow(`local file is outside accessible roots: ${report}`);
+});
+
+test('file preview accepts a registered Monad attachment id', async () => {
+  const workspace = await mkdtemp(join(tmpdir(), 'monad-attachment-preview-'));
+  const report = join(workspace, 'report.txt');
+  await writeFile(report, 'ready\n');
+  const resolved = await realpath(report);
+  const attachment = {
+    id: 'att_TEST00000000',
+    sessionId: 'ses_TEST00000000',
+    path: resolved,
+    name: 'report.txt',
+    mime: 'text/plain',
+    bytes: 6,
+    preview: 'ready\n',
+    createdBy: 'pmem_TEST0000000',
+    createdAt: '2026-08-12T00:00:00.000Z'
+  } as const;
+  const reader = createNativeAgentAttachmentReader({
+    getMessageAttachment: () => attachment
+  } as never);
+
+  const result = await reader.preview({ attachmentId: attachment.id }, { download: false, inline: false });
+
+  expect(result).not.toBeInstanceOf(Response);
+  if (result instanceof Response) throw new Error('expected JSON preview');
+  expect(result).toEqual({
+    resource: {
+      path: resolved,
+      name: 'report.txt',
+      mime: 'text/plain',
+      bytes: 6
+    },
+    text: 'ready\n',
+    truncated: false
+  });
 });

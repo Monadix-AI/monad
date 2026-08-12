@@ -4,7 +4,8 @@ import { daemonHttpContract, httpErrorSchema } from '../src/http.ts';
 import { PROJECT_MEMBER_ID_MAX_LENGTH } from '../src/ids.ts';
 import {
   attachmentPreviewText,
-  attachmentReadResponseSchema,
+  filePreviewReadResponseSchema,
+  filePreviewTargetSchema,
   isPdfAttachmentMime,
   managedProjectRuntimePromptInputSchema,
   managedProjectRuntimeSpecSchema,
@@ -1069,6 +1070,34 @@ test('attachment refs and direct messages carry the structured file reference', 
   expect(message.attachments?.[0]?.path).toBe('/tmp/project/report.md');
 });
 
+test('file previews accept either an attachment id or a session-scoped local path', () => {
+  expect(filePreviewTargetSchema.parse({ attachmentId: 'att_01ABC0000000' })).toEqual({
+    attachmentId: 'att_01ABC0000000'
+  });
+  expect(
+    filePreviewTargetSchema.parse({
+      path: '/tmp/project/report.md',
+      sessionId: 'ses_PROJECT00000',
+      projectMemberId: 'pmem_MEMBER000000'
+    })
+  ).toEqual({
+    path: '/tmp/project/report.md',
+    sessionId: 'ses_PROJECT00000',
+    projectMemberId: 'pmem_MEMBER000000'
+  });
+  expect(
+    filePreviewReadResponseSchema.parse({
+      resource: {
+        path: '/tmp/project/report.md',
+        name: 'report.md',
+        mime: 'text/markdown',
+        bytes: 5
+      },
+      text: 'ready'
+    }).resource.path
+  ).toBe('/tmp/project/report.md');
+});
+
 test('message attachment presentations allow metadata without claiming a readable file reference', () => {
   const presentation = {
     id: 'att_01ABC0000000' as const,
@@ -1103,7 +1132,6 @@ test('native agent HTTP endpoints are declared in the protocol daemon contract',
   expect(daemonHttpContract.nativeAgent.agentRead.body).toBe(nativeAgentReadRequestSchema);
   expect(daemonHttpContract.nativeAgent.agentRead.response[200]).toBe(nativeAgentReadResponseSchema);
   expect(daemonHttpContract.nativeAgent.runtimeInfo.response[200]).toBe(nativeAgentRuntimeInfoResponseSchema);
-  expect(daemonHttpContract.nativeAgent.attachmentRead.response[200]).toBe(attachmentReadResponseSchema);
 });
 
 // The workingPath schema is cross-platform: it travels over the wire from any client OS, so it must
