@@ -129,7 +129,7 @@ export function CodexFileChangeCard({
             deletions={view.deletions}
           />
         </div>
-        {timestamp ? <time className="shrink-0 font-mono text-[10px] text-muted-foreground">{timestamp}</time> : null}
+        {timestamp ? <time className="shrink-0 font-ui text-[10px] text-muted-foreground">{timestamp}</time> : null}
       </header>
       <div className="divide-y divide-border/70">
         {visibleFiles.map((file) => (
@@ -171,7 +171,7 @@ function CodexFileChangePath({ file }: { file: CodexFileChange }): React.ReactEl
   if (!file.movePath) {
     return (
       <CompactFilePath
-        className="flex-1 font-mono text-foreground text-xs"
+        className="flex-1 font-ui text-foreground text-xs"
         data-file-change-path="path"
         path={file.path}
       />
@@ -181,13 +181,13 @@ function CodexFileChangePath({ file }: { file: CodexFileChange }): React.ReactEl
   return (
     <span className="grid min-w-0 flex-1 grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-1">
       <CompactFilePath
-        className="font-mono text-foreground text-xs"
+        className="font-ui text-foreground text-xs"
         data-file-change-path="from"
         path={file.path}
       />
-      <span className="shrink-0 font-mono text-muted-foreground text-xs">→</span>
+      <span className="shrink-0 font-ui text-muted-foreground text-xs">→</span>
       <CompactFilePath
-        className="font-mono text-foreground text-xs"
+        className="font-ui text-foreground text-xs"
         data-file-change-path="to"
         path={file.movePath}
       />
@@ -241,7 +241,7 @@ function CodexFileChangeRow({ file }: { file: CodexFileChange }): React.ReactEle
 
 function FileChangeStats({ additions, deletions }: { additions: number; deletions: number }): React.ReactElement {
   return (
-    <span className="inline-flex shrink-0 gap-1.5 font-mono text-xs">
+    <span className="inline-flex shrink-0 gap-1.5 font-ui text-xs">
       <span className="text-success">+{additions}</span>
       <span className="text-destructive">-{deletions}</span>
     </span>

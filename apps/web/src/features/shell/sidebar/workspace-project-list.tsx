@@ -120,7 +120,7 @@ export const ProjectList = memo(function ProjectList({
                   border: '1px solid color-mix(in srgb, CanvasText 12%, transparent)',
                   borderRadius: '10px',
                   color: 'CanvasText',
-                  font: '500 13px system-ui',
+                  font: '500 13px var(--font-ui)',
                   maxWidth: '220px',
                   overflow: 'hidden',
                   padding: '8px 12px',

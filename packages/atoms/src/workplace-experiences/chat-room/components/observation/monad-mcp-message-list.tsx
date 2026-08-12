@@ -61,7 +61,7 @@ export function MonadMcpMessageList({
                 />
                 {time ? (
                   <time
-                    className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground"
+                    className="ml-auto shrink-0 font-ui text-[10px] text-muted-foreground"
                     dateTime={message.createdAt}
                     title={message.createdAt}
                   >

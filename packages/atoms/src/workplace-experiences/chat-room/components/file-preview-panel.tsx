@@ -232,7 +232,7 @@ function FilePreviewContent({
   return (
     <>
       <pre
-        className="min-h-0 flex-1 overflow-auto font-mono text-[12px] leading-[1.55]"
+        className="min-h-0 flex-1 overflow-auto font-code text-[12px] leading-[1.55]"
         data-language={language}
         data-selectable="true"
         style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
@@ -387,8 +387,8 @@ export function FilePreviewPanel({
             {resource.name}
           </div>
           <div
-            className="truncate font-mono text-[10px] text-muted-foreground"
-            title={resource.path}
+            className="truncate font-ui text-[10px] text-muted-foreground"
+            title={attachment.path}
           >
             {resource.path}
           </div>

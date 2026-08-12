@@ -55,7 +55,7 @@ export function ObservationMessageCard({
       isStreaming={reasoningState.streaming}
     >
       <ReasoningTrigger
-        className="min-h-6 min-w-0 overflow-hidden px-0 py-0 font-sans text-muted-foreground text-sm leading-5 disabled:pointer-events-none"
+        className="min-h-6 min-w-0 overflow-hidden px-0 py-0 font-ui text-muted-foreground text-sm leading-5 disabled:pointer-events-none"
         disabled={!hasReasoningContent}
         getThinkingMessage={
           reasoningTriggerTitle ? () => <p className="min-w-0 truncate">{reasoningTriggerTitle}</p> : undefined
@@ -98,7 +98,7 @@ export function ObservationMessageCard({
         data-message-presentation="plain"
         data-slot="observation-agent-message"
       >
-        <div className="w-full max-w-[min(72ch,100%)] font-sans text-foreground text-sm leading-6">{body}</div>
+        <div className="w-full max-w-[min(72ch,100%)] font-ui text-foreground text-sm leading-6">{body}</div>
         {timestampLabel ? (
           <footer className="mt-1 w-full max-w-[min(72ch,100%)] opacity-0 group-focus-within/observation-message:opacity-100 group-hover/observation-message:opacity-100">
             <time style={TIME_STYLE}>{timestampLabel}</time>

@@ -116,11 +116,10 @@ fully opaque.
 
 Use the existing app font stack:
 
-- `--font-sans`: the platform system stack (`-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, …) for UI text.
-- `--font-display` / `--font-heading`: currently aliases of `--font-sans` — headings differ by size and weight, not family.
-- `--font-mono`: the system mono stack (`ui-monospace`, `SF Mono`, `Menlo`, `Consolas`, …) for labels, telemetry, code, and compact metadata.
+- `--font-ui`: the platform system stack (`-apple-system`, `BlinkMacSystemFont`, `Segoe UI`, …) for all interface text.
+- `--font-code`: the system mono stack (`ui-monospace`, `SF Mono`, `Menlo`, `Consolas`, …) reserved for source code, terminals, commands, diffs, raw logs, and structured data editors.
 
-Headings should stay functional and compact. The product UI should not use oversized marketing hero typography inside app surfaces. Labels may use uppercase mono styling, but letter spacing stays conservative.
+Headings should stay functional and compact. The product UI should not use oversized marketing hero typography inside app surfaces. Labels, timestamps, counters, IDs, paths, metadata, buttons, and status text all use the UI family.
 
 ### App Density Reference
 
@@ -130,8 +129,8 @@ Use these values as the density target for Monad's app chrome and operational sc
 
 | Role | Reference value | Monad target |
 |---|---|---|
-| UI sans | `var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif)` | Use `--font-sans`; do not use display fonts in sidebar rows, toolbar controls, settings rows, or composer controls |
-| Code / telemetry | `ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace` | Use `--font-mono` only for code, terminal, compact badges, counters, and telemetry |
+| UI | `var(--vscode-font-family, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif)` | Use `--font-ui` for every component and text surface unless the content itself is code |
+| Code | `ui-monospace, "SFMono-Regular", "SF Mono", Menlo, Consolas, "Liberation Mono", monospace` | Use `--font-code` only for source code, terminals, commands, diffs, raw logs, and structured data editors |
 
 #### Type Scale
 

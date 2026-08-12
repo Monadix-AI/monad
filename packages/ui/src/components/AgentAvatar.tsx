@@ -3,7 +3,10 @@ import type { ProductIconId } from './ProductIcon';
 
 import { createElement } from 'react';
 
+import { uiFontFamily } from '../typography';
 import { isProductIconId, ProductIcon } from './ProductIcon';
+
+export { codeFontFamily, uiFontFamily } from '../typography';
 
 export type AgentAvatarIcon = ProductIconId | 'monad' | string;
 export type AgentAvatarKind = 'human' | 'agent';
@@ -17,12 +20,10 @@ export type AgentPresence =
   | 'failed'
   | 'stopped';
 
-export const workspaceSans = 'var(--font-sans), ui-sans-serif, system-ui, sans-serif';
-export const workspaceMono = 'var(--font-mono), ui-monospace, monospace';
 export const workspaceBoxRadius = '12px';
 
 export const workspaceSectionLabelStyle: CSSProperties = {
-  fontFamily: workspaceMono,
+  fontFamily: uiFontFamily,
   fontSize: 11,
   fontWeight: 600,
   letterSpacing: 1.2,
@@ -70,7 +71,7 @@ export function Avatar({
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'center',
-    fontFamily: workspaceMono,
+    fontFamily: uiFontFamily,
     fontSize: Math.max(9, Math.round(size * 0.33)),
     overflow: 'hidden',
     position: 'relative'
@@ -153,7 +154,7 @@ export function TagChip({ tag }: { tag: string }): React.ReactElement {
     'span',
     {
       style: {
-        fontFamily: workspaceMono,
+        fontFamily: uiFontFamily,
         fontSize: 9,
         color: isAgent ? 'var(--foreground)' : 'var(--muted-foreground)',
         border: `1px solid ${isAgent ? 'var(--accent-blue)' : 'var(--border)'}`,
@@ -171,7 +172,7 @@ export function MiniTag({ tag }: { tag: string }): React.ReactElement {
     'span',
     {
       style: {
-        fontFamily: workspaceMono,
+        fontFamily: uiFontFamily,
         fontSize: 8,
         color: 'var(--foreground)',
         border: `1px solid ${'var(--accent-blue)'}`,
@@ -257,7 +258,7 @@ export function inkButtonStyle(extra?: CSSProperties): CSSProperties {
     borderRadius: workspaceBoxRadius,
     background: 'var(--accent-blue)',
     color: 'var(--primary-foreground)',
-    fontFamily: workspaceSans,
+    fontFamily: uiFontFamily,
     fontWeight: 600,
     ...extra
   };
@@ -269,7 +270,7 @@ export function ghostButtonStyle(extra?: CSSProperties): CSSProperties {
     borderRadius: workspaceBoxRadius,
     background: 'var(--card)',
     color: 'var(--foreground)',
-    fontFamily: workspaceSans,
+    fontFamily: uiFontFamily,
     fontWeight: 500,
     ...extra
   };

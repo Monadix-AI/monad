@@ -2,7 +2,7 @@ import type { DeveloperLogRecord, Event, ProjectId } from '@monad/protocol';
 
 import { BugIcon, Cancel01Icon, ClipboardIcon, Delete02Icon, PauseIcon, PlayIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
+import { codeFontFamily as codeFont, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 
 import { useMonadRuntime } from '#/lib/monad-runtime-context';
@@ -192,7 +192,7 @@ export function ProjectDebugConsole({
         />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={{ fontSize: 13, fontWeight: 600 }}>Developer Mode</div>
-          <div style={{ fontFamily: mono, fontSize: 10, color: 'var(--muted-foreground)' }}>
+          <div style={{ fontFamily: uiFont, fontSize: 10, color: 'var(--muted-foreground)' }}>
             {projectId ?? 'No project'} · {visibleEntries.length}/{entries.length}
           </div>
         </div>
@@ -258,7 +258,7 @@ export function ProjectDebugConsole({
               background: filter === item ? 'color-mix(in srgb, var(--accent-blue) 16%, transparent)' : 'var(--card)',
               borderRadius: 999,
               color: 'var(--foreground)',
-              fontFamily: mono,
+              fontFamily: uiFont,
               fontSize: 10,
               padding: '4px 8px'
             }}
@@ -277,7 +277,7 @@ export function ProjectDebugConsole({
             padding: '8px 12px',
             borderBottom: '1px solid var(--border)',
             color: 'var(--muted-foreground)',
-            fontFamily: mono,
+            fontFamily: uiFont,
             fontSize: 11
           }}
         >
@@ -314,7 +314,7 @@ export function ProjectDebugConsole({
                   gridTemplateColumns: '82px 64px 88px 1fr',
                   gap: 8,
                   alignItems: 'center',
-                  fontFamily: mono,
+                  fontFamily: uiFont,
                   fontSize: 11
                 }}
               >
@@ -330,7 +330,7 @@ export function ProjectDebugConsole({
                   margin: '8px 0 0',
                   whiteSpace: 'pre-wrap',
                   wordBreak: 'break-word',
-                  fontFamily: mono,
+                  fontFamily: codeFont,
                   fontSize: 11,
                   lineHeight: 1.45,
                   color: 'var(--muted-foreground)'

@@ -244,7 +244,7 @@ export function SandboxDefaults() {
               <div className="flex flex-col gap-1.5 py-2.5">
                 <Label htmlFor="sandbox-domains">{t('web.studio.sandboxAllowedDomains')}</Label>
                 <textarea
-                  className="min-h-[64px] w-full resize-y rounded-md border bg-transparent px-3 py-2 font-mono text-xs"
+                  className="min-h-[64px] w-full resize-y rounded-md border bg-transparent px-3 py-2 font-ui text-xs"
                   id="sandbox-domains"
                   onChange={(e) => setAllowedDomains(e.target.value)}
                   placeholder={t('web.studio.domainPlaceholder')}

@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@monad/ui';
-import { workspaceSans as sans, workspaceSectionLabelStyle as sectionLabel } from '@monad/ui/components/AgentAvatar';
+import { workspaceSectionLabelStyle as sectionLabel, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '#/components/I18nProvider';
 import { SessionMembersSection } from './SessionMembersSection';
@@ -37,10 +37,10 @@ export function SessionSettings({
       >
         <DialogHeader>
           <div style={{ ...sectionLabel, marginBottom: 6 }}>{t('web.workplace.sessionSettingsLabel')}</div>
-          <DialogTitle style={{ fontFamily: sans, fontSize: 18, fontWeight: 650, lineHeight: 1.25 }}>
+          <DialogTitle style={{ fontFamily: uiFont, fontSize: 18, fontWeight: 650, lineHeight: 1.25 }}>
             {t('web.workplace.sessionSettingsTitle')}
           </DialogTitle>
-          <DialogDescription style={{ marginTop: 5, maxWidth: 600, fontFamily: sans, fontSize: 13 }}>
+          <DialogDescription style={{ marginTop: 5, maxWidth: 600, fontFamily: uiFont, fontSize: 13 }}>
             {t('web.workplace.sessionSettingsDescription')}
           </DialogDescription>
         </DialogHeader>

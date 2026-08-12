@@ -104,7 +104,7 @@ function ProviderConfigErrorRenderer({ data, text }: RichRendererProps) {
       {text && (
         <details className="text-muted-foreground text-xs">
           <summary className="cursor-pointer select-none">{t('web.providerConfigError.detailsLabel')}</summary>
-          <pre className="mt-1 whitespace-pre-wrap break-words font-mono">{text}</pre>
+          <pre className="mt-1 whitespace-pre-wrap break-words font-code">{text}</pre>
         </details>
       )}
     </div>

@@ -379,11 +379,11 @@ function CommandMenuItemIcon({ item }: { item: SessionCommandMenuItem }) {
 
 function HighlightedCommandLabel({ label, matches }: { label: string; matches?: number[] }) {
   if (!matches?.length) {
-    return <span className="min-w-0 truncate font-medium font-mono text-[12.5px] leading-[18px]">{label}</span>;
+    return <span className="min-w-0 truncate font-medium font-ui text-[12.5px] leading-[18px]">{label}</span>;
   }
   const matchSet = new Set(matches);
   return (
-    <span className="min-w-0 truncate font-medium font-mono text-[12.5px] leading-[18px]">
+    <span className="min-w-0 truncate font-medium font-ui text-[12.5px] leading-[18px]">
       {Array.from(label).map((char, index) => {
         const key = `${label.slice(0, index)}${char}`;
         return (

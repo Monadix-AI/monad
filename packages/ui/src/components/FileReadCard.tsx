@@ -35,7 +35,7 @@ export function FileReadCard({
       showLineNumbers={fileReadShowsGeneratedLineNumbers(view.provider)}
     >
       <div
-        className="group/file-read-path relative flex min-w-0 items-center gap-2 border-border/70 border-b px-3 py-2 font-mono text-[11px] text-muted-foreground"
+        className="group/file-read-path relative flex min-w-0 items-center gap-2 border-border/70 border-b px-3 py-2 font-ui text-[11px] text-muted-foreground"
         data-file-read-copy-target="path"
       >
         <FileIcon

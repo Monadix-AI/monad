@@ -105,7 +105,7 @@ export function RawInspectableCard({
           id={panelId}
         >
           <div className="mb-2 flex items-center justify-between gap-2">
-            <span className="font-mono text-[10px] text-muted-foreground uppercase tracking-wider">JSONL</span>
+            <span className="font-ui text-[10px] text-muted-foreground uppercase tracking-wider">JSONL</span>
             {onCopy ? (
               <Tooltip>
                 <TooltipTrigger asChild>

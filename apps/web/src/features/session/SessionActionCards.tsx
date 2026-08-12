@@ -49,7 +49,7 @@ export const ClarifyPrompt = memo(function ClarifyPrompt({
       )}
       {urlElicitation && (
         <div className="flex flex-col gap-2 rounded-md border border-border bg-background/70 p-2.5">
-          <span className="truncate font-mono text-muted-foreground text-xs">{urlElicitation.origin}</span>
+          <span className="truncate font-ui text-muted-foreground text-xs">{urlElicitation.origin}</span>
           <div className="flex flex-wrap gap-2">
             <Button
               onClick={() => window.open(urlElicitation.url, '_blank', 'noopener,noreferrer')}

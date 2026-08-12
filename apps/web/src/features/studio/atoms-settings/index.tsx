@@ -83,7 +83,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
               className="text-muted-foreground"
               key={e.file}
             >
-              <span className="font-mono">{e.file}</span>: {e.error}
+              <span className="font-ui">{e.file}</span>: {e.error}
             </span>
           ))}
         </div>

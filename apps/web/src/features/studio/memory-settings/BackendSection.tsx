@@ -196,8 +196,8 @@ export function BackendSection() {
             />
           ) : (
             <p className="text-muted-foreground text-xs">
-              {t('web.memory.qdrantLocal')} <code className="font-mono">memory.mem0.vectorStore</code>{' '}
-              {t('web.memory.qdrantConfigJoin')} <code className="font-mono">config.json</code>.
+              {t('web.memory.qdrantLocal')} <code className="font-code">memory.mem0.vectorStore</code>{' '}
+              {t('web.memory.qdrantConfigJoin')} <code className="font-code">config.json</code>.
             </p>
           )}
 

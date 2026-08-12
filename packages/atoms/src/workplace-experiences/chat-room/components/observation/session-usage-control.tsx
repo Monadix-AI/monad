@@ -1,6 +1,6 @@
 import type { ObservationSessionUsageMeter } from './session-usage-meter.ts';
 
-import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { workplaceExperienceT } from '../../../i18n.ts';
@@ -53,7 +53,7 @@ function UsageRow({
       <span
         style={{
           color: 'var(--foreground, #111827)',
-          fontFamily: `${mono}, ui-monospace, monospace`,
+          fontFamily: uiFont,
           fontVariantNumeric: 'tabular-nums',
           fontSize: emphasis ? 12 : 14,
           fontWeight: emphasis ? 650 : 600,
@@ -121,7 +121,7 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
             borderRadius: 12,
             boxShadow: '0 14px 34px color-mix(in srgb, black 14%, transparent)',
             boxSizing: 'border-box',
-            fontFamily: `${sans}, ui-sans-serif, system-ui, sans-serif`,
+            fontFamily: uiFont,
             padding: 12,
             pointerEvents: 'auto',
             position: 'fixed',
@@ -148,7 +148,7 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
                   background: 'color-mix(in srgb, var(--primary, #2563eb) 10%, transparent)',
                   borderRadius: 999,
                   color: 'var(--primary, #2563eb)',
-                  fontFamily: `${mono}, ui-monospace, monospace`,
+                  fontFamily: uiFont,
                   fontSize: 11,
                   fontVariantNumeric: 'tabular-nums',
                   fontWeight: 600,
@@ -161,7 +161,7 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
             <span
               style={{
                 color: 'var(--muted-foreground, #6b7280)',
-                fontFamily: `${mono}, ui-monospace, monospace`,
+                fontFamily: uiFont,
                 fontSize: 11,
                 fontVariantNumeric: 'tabular-nums'
               }}
@@ -289,7 +289,7 @@ export function ObservationSessionUsageControl({ meter }: { meter: ObservationSe
         <span
           aria-hidden="true"
           style={{
-            fontFamily: `${mono}, ui-monospace, monospace`,
+            fontFamily: uiFont,
             fontSize: 10,
             fontVariantNumeric: 'tabular-nums',
             fontWeight: 600,

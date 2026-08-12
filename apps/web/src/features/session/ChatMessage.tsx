@@ -116,7 +116,7 @@ const ReasoningBubble = memo(function ReasoningBubble({ text, streaming }: { tex
       isStreaming={streaming}
     >
       <ReasoningTrigger
-        className="min-h-7 w-fit max-w-full justify-start gap-2 p-0.5 font-sans text-[0.95rem] leading-6"
+        className="min-h-7 w-fit max-w-full justify-start gap-2 p-0.5 font-ui text-[0.95rem] leading-6"
         iconClassName="size-4 shrink-0"
         labels={{
           thinking: t('web.reasoning.thinking'),
@@ -254,7 +254,7 @@ export const Message = memo(function Message({
     return (
       <div className="flex items-center gap-3 self-stretch py-1 text-[10px] text-muted-foreground/50">
         <span className="h-px flex-1 bg-border/40" />
-        <span className="label-mono flex items-center gap-1">
+        <span className="label-ui flex items-center gap-1">
           <HugeiconsIcon
             className="size-2.5"
             icon={ComputerTerminal01Icon}
@@ -274,7 +274,7 @@ export const Message = memo(function Message({
       {!isUser ? (
         <span
           aria-live={msg.pending ? 'polite' : undefined}
-          className={cn('label-mono px-1', msg.pending && 'agent-name-shimmer')}
+          className={cn('label-ui px-1', msg.pending && 'agent-name-shimmer')}
           data-pending={msg.pending || undefined}
         >
           {label}
@@ -407,7 +407,7 @@ export const Message = memo(function Message({
           )}
         >
           {isUser && timeLabel ? (
-            <span className="self-center whitespace-nowrap px-1 font-mono text-[10px] text-muted-foreground/70">
+            <span className="self-center whitespace-nowrap px-1 font-ui text-[10px] text-muted-foreground/70">
               {timeLabel}
             </span>
           ) : null}
@@ -486,7 +486,7 @@ export const Message = memo(function Message({
             />
           ) : null}
           {!isUser && timeLabel ? (
-            <span className="self-center whitespace-nowrap px-1 font-mono text-[10px] text-muted-foreground/70">
+            <span className="self-center whitespace-nowrap px-1 font-ui text-[10px] text-muted-foreground/70">
               {timeLabel}
             </span>
           ) : null}

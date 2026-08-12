@@ -83,7 +83,7 @@ export function HookEditorDialog({
                       <Label className="text-xs">{t('web.hooks.filterLabel')}</Label>
                       <Input
                         aria-invalid={filterErr ? true : undefined}
-                        className="h-8 font-mono text-xs aria-[invalid=true]:border-destructive"
+                        className="h-8 font-code text-xs aria-[invalid=true]:border-destructive"
                         onChange={(e) => onUpdateMatcherFilter(event, matcher._id, e.target.value)}
                         placeholder={t('web.hooks.filterPlaceholder')}
                         value={matcher.matcher ?? ''}
@@ -102,13 +102,13 @@ export function HookEditorDialog({
                         key={hook._id}
                       >
                         <Input
-                          className="h-8 font-mono text-xs"
+                          className="h-8 font-code text-xs"
                           onChange={(e) => onUpdateCommand(event, matcher._id, hook._id, 'command', e.target.value)}
                           placeholder={t('web.hooks.commandPlaceholder')}
                           value={hook.command}
                         />
                         <Input
-                          className="h-8 font-mono text-xs"
+                          className="h-8 font-ui text-xs"
                           min={1}
                           onChange={(e) => onUpdateCommand(event, matcher._id, hook._id, 'timeoutMs', e.target.value)}
                           placeholder={t('web.hooks.timeoutPlaceholder')}

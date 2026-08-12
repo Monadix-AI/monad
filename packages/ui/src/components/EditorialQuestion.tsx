@@ -14,7 +14,7 @@ export function EditorialQuestion({ answer, options, question }: EditorialQuesti
       className="min-w-0 max-w-[65ch]"
       data-editorial-question="true"
     >
-      <p className="m-0 text-pretty font-sans font-semibold text-[17px] text-foreground leading-[1.45]">{question}</p>
+      <p className="m-0 text-pretty font-semibold font-ui text-[17px] text-foreground leading-[1.45]">{question}</p>
       {answer ? (
         <div className="mt-3 flex min-w-0 items-start gap-2.5 border-border/60 border-t pt-3">
           <span
@@ -23,7 +23,7 @@ export function EditorialQuestion({ answer, options, question }: EditorialQuesti
           >
             ✓
           </span>
-          <p className="m-0 min-w-0 text-pretty break-words font-sans text-[14px] text-foreground leading-[1.55]">
+          <p className="m-0 min-w-0 text-pretty break-words font-ui text-[14px] text-foreground leading-[1.55]">
             {answer}
           </p>
         </div>

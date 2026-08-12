@@ -182,7 +182,7 @@ function InspectorNodeView({ data }: NodeProps<InspectorNode>) {
           />
           {data.status}
         </span>
-        {data.meta ? <span className="truncate font-mono text-muted-foreground">{data.meta}</span> : null}
+        {data.meta ? <span className="truncate font-ui text-muted-foreground">{data.meta}</span> : null}
       </div>
       <Handle
         className="opacity-0"
@@ -354,7 +354,7 @@ function InspectorDetails({ data, t }: { data: InspectorNodeData | null; t: TFn 
           </p>
         </div>
         {data.meta ? (
-          <span className="shrink-0 rounded-full border px-2 py-1 font-mono text-muted-foreground text-xs">
+          <span className="shrink-0 rounded-full border px-2 py-1 font-ui text-muted-foreground text-xs">
             {data.meta}
           </span>
         ) : null}
@@ -366,7 +366,7 @@ function InspectorDetails({ data, t }: { data: InspectorNodeData | null; t: TFn 
           </div>
         ) : null}
         {data.detail ? <p className="mb-3 text-muted-foreground text-xs">{data.detail}</p> : null}
-        <pre className="wrap-break-word whitespace-pre-wrap rounded-md bg-muted/45 p-3 font-mono text-[11px] leading-relaxed">
+        <pre className="wrap-break-word whitespace-pre-wrap rounded-md bg-muted/45 p-3 font-code text-[11px] leading-relaxed">
           {safeJson(data.item)}
         </pre>
       </div>

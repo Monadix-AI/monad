@@ -3,8 +3,7 @@ import type { TypingIndicator } from '../../experience/types.ts';
 import {
   AgentInstanceAvatar,
   workspaceBoxRadius as boxR,
-  workspaceMono as mono,
-  workspaceSans as sans
+  uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
 
 const SKELETON_CSS = `
@@ -36,8 +35,8 @@ export function TypingRow({ typing }: { typing: TypingIndicator }): React.ReactE
         size={34}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>
-        <span style={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}>{typing.name}</span>
-        <span style={{ fontFamily: mono, fontSize: 13, color: 'var(--muted-foreground)' }}>{typing.detail}</span>
+        <span style={{ fontFamily: uiFont, fontSize: 14, fontWeight: 600 }}>{typing.name}</span>
+        <span style={{ fontFamily: uiFont, fontSize: 13, color: 'var(--muted-foreground)' }}>{typing.detail}</span>
         <span style={{ display: 'inline-flex', gap: 3 }}>
           {[0, 0.2, 0.4].map((d) => (
             <span

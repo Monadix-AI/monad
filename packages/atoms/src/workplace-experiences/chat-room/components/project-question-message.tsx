@@ -19,7 +19,7 @@ export function ProjectQuestionMessage({
         question={presentation.question}
       />
       {pending && waitingLabel ? (
-        <p className="mt-3 mb-0 font-mono text-[12px] text-muted-foreground leading-5">{waitingLabel}</p>
+        <p className="mt-3 mb-0 font-ui text-[12px] text-muted-foreground leading-5">{waitingLabel}</p>
       ) : null}
     </div>
   );

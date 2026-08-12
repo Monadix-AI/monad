@@ -9,8 +9,7 @@ import {
   AgentIdentity,
   AgentInstanceAvatar,
   workspaceBoxRadius as boxR,
-  workspaceMono as mono,
-  workspaceSans as sans
+  uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useState } from 'react';
 
@@ -86,7 +85,7 @@ export function ProjectMembersSection({
         <div>
           <h3
             id="project-members-heading"
-            style={{ margin: 0, fontFamily: sans, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
+            style={{ margin: 0, fontFamily: uiFont, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
           >
             {t('web.workplace.projectMembersTitle')}
           </h3>
@@ -94,7 +93,7 @@ export function ProjectMembersSection({
             style={{
               margin: '3px 0 0',
               maxWidth: 560,
-              fontFamily: sans,
+              fontFamily: uiFont,
               fontSize: 12,
               lineHeight: 1.45,
               color: 'var(--muted-foreground)'
@@ -119,7 +118,7 @@ export function ProjectMembersSection({
               borderRadius: 999,
               background: 'var(--secondary)',
               color: 'var(--muted-foreground)',
-              fontFamily: mono,
+              fontFamily: uiFont,
               fontSize: 10,
               fontWeight: 600,
               padding: '4px 8px'
@@ -132,7 +131,7 @@ export function ProjectMembersSection({
       <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
         {loading ? <ProjectMembersListSkeleton /> : null}
         {empty ? (
-          <div style={{ padding: '18px 16px', fontFamily: sans }}>
+          <div style={{ padding: '18px 16px', fontFamily: uiFont }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>
               {t('web.workplace.noProjectMembers')}
             </div>
@@ -244,7 +243,7 @@ function ProjectMemberRow({
           }
           badgeGap={4}
           name={name}
-          nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
+          nameStyle={{ fontFamily: uiFont, fontSize: 14, fontWeight: 600 }}
         />
       </div>
       <button

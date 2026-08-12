@@ -64,7 +64,7 @@ export function AtomPackUpdateDialog(props: AtomPackUpdateDialogProps): React.Re
     >
       <div className="min-w-0 rounded-md border bg-muted/40 p-3">
         <p className="mb-1 text-muted-foreground text-xs">{t('web.atoms.updateSource')}</p>
-        <p className="break-all font-mono text-xs">{props.update.source}</p>
+        <p className="break-all font-ui text-xs">{props.update.source}</p>
         <p className="mt-2 text-muted-foreground text-xs">
           {t('web.atoms.updateVersions', {
             current: props.update.currentVersion,

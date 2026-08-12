@@ -6,12 +6,12 @@ import type { MessageRowLabels } from './message-row.tsx';
 import { InformationCircleIcon, Mail01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Tooltip, TooltipContent, TooltipTrigger, WorkspaceSystemEventCard } from '@monad/ui';
-import { AgentInstanceAvatar, workspaceMono as mono, TagChip } from '@monad/ui/components/AgentAvatar';
+import { AgentInstanceAvatar, TagChip, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { MemberIdentity } from '@monad/ui/components/MemberIdentity';
 
 import { AgentProviderBadge } from '../../components/agent-provider-badge.tsx';
 
-export const TIME_STYLE: React.CSSProperties = { fontFamily: mono, fontSize: 11, color: 'var(--muted-foreground)' };
+export const TIME_STYLE: React.CSSProperties = { fontFamily: uiFont, fontSize: 11, color: 'var(--muted-foreground)' };
 
 export function SystemMessageRow({
   actions,

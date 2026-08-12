@@ -521,7 +521,7 @@ export function ProviderDialog({
                       >
                         <StatusDot status={c.lastStatus} />
                         <span className="inline-flex items-center font-medium leading-none">{c.label}</span>
-                        <span className="inline-flex items-center font-mono text-muted-foreground text-xs leading-none">
+                        <span className="inline-flex items-center font-ui text-muted-foreground text-xs leading-none">
                           {c.configured ? '••••' : ''}
                         </span>
                         <span className="ml-auto inline-flex items-center text-muted-foreground text-xs leading-none">

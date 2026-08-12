@@ -58,7 +58,7 @@ export function FactsView() {
           </Select>
         ) : scopeKind === 'agent' || scopeKind === 'session' ? (
           <Input
-            className="h-8 w-56 font-mono text-xs"
+            className="h-8 w-56 font-ui text-xs"
             onChange={(event) => setScopeId(event.target.value)}
             placeholder={scopeKind === 'agent' ? 'agt_…' : 'ses_…'}
             value={scopeId}

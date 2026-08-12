@@ -4,7 +4,7 @@ import type { MessageRowLabels } from './message-row.tsx';
 
 import { TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { lazy, Suspense } from 'react';
 
 import { requestSpawnAgentMemberDialog, useWorkplaceExperienceHost } from '../../host-context.tsx';
@@ -115,12 +115,12 @@ export function ChatTranscript({
               />
             </div>
             <div style={{ minWidth: 0 }}>
-              <div style={{ fontFamily: sans, fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 7 }}>
+              <div style={{ fontFamily: uiFont, fontSize: 18, fontWeight: 700, lineHeight: 1.3, marginBottom: 7 }}>
                 Set up Codex, Claude, or another agent.
               </div>
               <div
                 style={{
-                  fontFamily: sans,
+                  fontFamily: uiFont,
                   fontSize: 14,
                   lineHeight: 1.55,
                   color: 'var(--muted-foreground)',
@@ -141,7 +141,7 @@ export function ChatTranscript({
                   borderRadius: 999,
                   background: 'var(--card)',
                   color: provider === 'More providers' ? 'var(--muted-foreground)' : 'var(--foreground)',
-                  fontFamily: sans,
+                  fontFamily: uiFont,
                   fontSize: 12,
                   fontWeight: 650,
                   lineHeight: 1,
@@ -165,7 +165,7 @@ export function ChatTranscript({
                 borderRadius: 10,
                 background: 'var(--accent-blue)',
                 color: 'var(--primary-foreground)',
-                fontFamily: sans,
+                fontFamily: uiFont,
                 fontSize: 14,
                 fontWeight: 650,
                 padding: '0 14px'
@@ -187,7 +187,7 @@ export function ChatTranscript({
                 borderRadius: 10,
                 background: 'var(--card)',
                 color: 'var(--foreground)',
-                fontFamily: sans,
+                fontFamily: uiFont,
                 fontSize: 14,
                 fontWeight: 650,
                 padding: '0 14px'

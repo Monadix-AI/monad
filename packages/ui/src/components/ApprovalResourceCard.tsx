@@ -19,7 +19,7 @@ export function ApprovalResourceCard({
         {resourceLabel}
         {operation ? <span className="text-muted-foreground"> · {operation}</span> : null}
       </div>
-      {subject ? <div className="mt-1 break-all font-mono text-muted-foreground">{subject}</div> : null}
+      {subject ? <div className="mt-1 break-all font-ui text-muted-foreground">{subject}</div> : null}
       {defaultScope ? (
         <div className="mt-2 text-muted-foreground">
           {defaultScopeLabel}: {defaultScope}

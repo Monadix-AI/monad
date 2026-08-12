@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@monad/ui';
-import { Avatar, workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { Avatar, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { acquireGlobalKeyboardInput } from '#/lib/global-keyboard-input-capture';
@@ -64,7 +64,7 @@ function statusPill(
             ? 'rgb(185 180 255 / 0.18)'
             : 'color-mix(in srgb, var(--accent-blue) 16%, transparent)';
   return {
-    fontFamily: mono,
+    fontFamily: uiFont,
     fontSize: 10,
     color: tone === 'default' ? 'var(--foreground)' : '#eef3ff',
     border: `1px solid ${color}`,
@@ -156,7 +156,7 @@ export function CliTerminalModal({
                 <DialogTitle
                   className="truncate"
                   style={{
-                    fontFamily: sans,
+                    fontFamily: uiFont,
                     fontSize: 'clamp(1.05rem, calc(var(--p-scale, 1) * 1.2rem), 1.38rem)',
                     lineHeight: 1.16,
                     fontWeight: 680,
@@ -173,7 +173,7 @@ export function CliTerminalModal({
           </div>
           <DialogDescription
             className="text-[#c4cede]"
-            style={{ fontFamily: sans, fontSize: 13, lineHeight: 1.5 }}
+            style={{ fontFamily: uiFont, fontSize: 13, lineHeight: 1.5 }}
           >
             {subtitle}
           </DialogDescription>

@@ -81,7 +81,7 @@ function ApprovalSummary({ approval }: { approval: PendingApproval }) {
     return (
       <div className="flex items-baseline gap-1.5 text-muted-foreground">
         <span className="shrink-0">{t('web.chat.pathAccessDir')}:</span>
-        <code className="min-w-0 break-all font-mono">{approval.key}</code>
+        <code className="min-w-0 break-all font-code">{approval.key}</code>
       </div>
     );
   }

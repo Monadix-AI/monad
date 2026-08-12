@@ -82,7 +82,7 @@ export function ApprovalsSettings(_props: Props) {
                   <span className={r.decision === 'deny' ? 'font-medium text-destructive' : 'font-medium text-success'}>
                     {r.decision}
                   </span>
-                  <code className="truncate font-mono">{approvalRuleLabel(r, t)}</code>
+                  <code className="truncate font-code">{approvalRuleLabel(r, t)}</code>
                   <span className="text-muted-foreground text-xs">
                     {r.scope === 'agent' ? `agent:${r.agentId ?? '?'}` : r.scope}
                   </span>

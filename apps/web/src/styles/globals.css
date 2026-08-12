@@ -576,7 +576,7 @@
   .pv-table .pv-id {
     overflow: hidden;
     text-overflow: ellipsis;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-ui);
     font-size: 11px;
     color: var(--muted-foreground);
   }
@@ -591,7 +591,7 @@
   .pv-table .pv-host {
     overflow: hidden;
     text-overflow: ellipsis;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-family: var(--font-ui);
     font-size: 10.5px;
     color: color-mix(in srgb, var(--muted-foreground) 78%, transparent);
     white-space: nowrap;
@@ -1193,7 +1193,7 @@
     max-height: 180px;
     padding: 0;
     overflow-y: auto;
-    font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+    font-family: var(--font-ui);
     font-size: 14px;
     line-height: 1.45;
     color: var(--foreground);

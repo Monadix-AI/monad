@@ -75,7 +75,7 @@ export function UnifiedDiff({
         <div className="border-warning/20 border-b bg-warning/5 px-3 py-2 text-[11px] text-warning">{warning}</div>
       ) : null}
       <pre
-        className="max-h-80 overflow-auto font-mono text-[12px] leading-[1.55]"
+        className="max-h-80 overflow-auto font-code text-[12px] leading-[1.55]"
         data-selectable="true"
         style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
       >
@@ -263,11 +263,11 @@ function FileHeader({
         className="size-3.5"
         fileName={path}
       />
-      <span className="min-w-0 truncate font-mono">{path}</span>
+      <span className="min-w-0 truncate font-ui">{path}</span>
       {warning ? (
-        <span className="shrink-0 rounded bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] text-warning">warning</span>
+        <span className="shrink-0 rounded bg-warning/10 px-1.5 py-0.5 font-ui text-[10px] text-warning">warning</span>
       ) : null}
-      <span className="ml-auto shrink-0 font-mono text-[11px]">
+      <span className="ml-auto shrink-0 font-ui text-[11px]">
         <span className="text-success">+{added}</span>
         <span className="ml-2 text-destructive">-{removed}</span>
       </span>

@@ -25,7 +25,7 @@ export function ProjectCwdChip({
       className="group relative inline-flex h-8 w-fit max-w-full items-center justify-center rounded-full border border-border bg-secondary px-3 py-0.5 text-foreground"
       title={path}
     >
-      <span className="min-w-0 truncate text-center font-mono text-xs">{cwdName(path)}</span>
+      <span className="min-w-0 truncate text-center font-ui text-xs">{cwdName(path)}</span>
       {removable ? (
         <button
           aria-label={removeLabel}

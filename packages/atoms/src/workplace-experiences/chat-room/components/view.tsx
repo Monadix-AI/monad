@@ -319,7 +319,7 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
                 background: 'color-mix(in srgb, var(--background) 62%, transparent)',
                 border: '1px solid color-mix(in srgb, var(--accent-blue) 48%, var(--border))',
                 color: 'var(--foreground)',
-                fontFamily: 'var(--font-sans), ui-sans-serif, system-ui, sans-serif',
+                fontFamily: 'var(--font-ui)',
                 fontSize: 18,
                 fontWeight: 650
               }

@@ -29,7 +29,7 @@ export function ComposerContextUsagePanel({
         <span>
           {percent}% {contextUsedLabel}
         </span>
-        <span className="font-mono text-muted-foreground">
+        <span className="font-ui text-muted-foreground">
           {formatCompact(used)} / {formatCompact(limit)}
           {approximate ? ' ~' : ''}
         </span>
@@ -48,7 +48,7 @@ export function ComposerContextUsagePanel({
                 />
                 <span className="truncate">{segment.label}</span>
               </span>
-              <span className="shrink-0 font-mono tabular-nums">{segment.tokens.toLocaleString()}</span>
+              <span className="shrink-0 font-ui tabular-nums">{segment.tokens.toLocaleString()}</span>
             </div>
           ))}
         </div>
@@ -56,7 +56,7 @@ export function ComposerContextUsagePanel({
       {reclaimed && reclaimed > 0 ? (
         <div className="flex items-center justify-between gap-3 border-t p-3 text-muted-foreground text-xs">
           <span>{reclaimedLabel}</span>
-          <span className="shrink-0 font-mono tabular-nums">{formatCompact(reclaimed)}</span>
+          <span className="shrink-0 font-ui tabular-nums">{formatCompact(reclaimed)}</span>
         </div>
       ) : null}
     </>

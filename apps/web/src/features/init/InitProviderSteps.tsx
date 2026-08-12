@@ -118,9 +118,7 @@ function ProviderCard({
       <div className="mb-2 flex items-center gap-2">
         {Logo && <Logo className={cn('h-4 w-4 shrink-0', meta.color)} />}
         <span className="font-medium text-sm">{meta.label ?? provider.type}</span>
-        {provider.baseUrl && (
-          <span className="truncate font-mono text-muted-foreground text-xs">{provider.baseUrl}</span>
-        )}
+        {provider.baseUrl && <span className="truncate font-ui text-muted-foreground text-xs">{provider.baseUrl}</span>}
       </div>
       <div className="flex flex-col gap-1.5">
         {provider.keys.map((key) => (
@@ -128,7 +126,7 @@ function ProviderCard({
             className="flex items-center justify-between gap-2"
             key={key.id}
           >
-            <span className="font-mono text-muted-foreground text-xs">
+            <span className="font-ui text-muted-foreground text-xs">
               {'••••••••'}
               {key.saved ? '····' : key.accessToken.slice(-4)}
             </span>

@@ -3,11 +3,7 @@ import type { ProjectController } from '../use-project';
 
 import { Delete02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import {
-  workspaceBoxRadius as boxR,
-  workspaceMono as mono,
-  workspaceSans as sans
-} from '@monad/ui/components/AgentAvatar';
+import { workspaceBoxRadius as boxR, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -95,12 +91,12 @@ export function ProjectSettings({
                 padding: '10px 12px'
               }}
             >
-              <div style={{ fontFamily: sans, fontSize: 13, fontWeight: 650, color: 'var(--foreground)' }}>
+              <div style={{ fontFamily: uiFont, fontSize: 13, fontWeight: 650, color: 'var(--foreground)' }}>
                 {initialIntent === 'spawn-agent'
                   ? t('web.workplace.emptySpawnHintTitle')
                   : t('web.workplace.emptyConnectHintTitle')}
               </div>
-              <p style={{ margin: '3px 0 0', fontFamily: sans, fontSize: 12, color: 'var(--muted-foreground)' }}>
+              <p style={{ margin: '3px 0 0', fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
                 {initialIntent === 'spawn-agent'
                   ? t('web.workplace.emptySpawnHint')
                   : t('web.workplace.emptyConnectHint')}
@@ -144,7 +140,7 @@ export function ProjectSettings({
               <div>
                 <h3
                   id="agent-providers-heading"
-                  style={{ margin: 0, fontFamily: sans, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
+                  style={{ margin: 0, fontFamily: uiFont, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
                 >
                   {t('web.workplace.agentProvidersTitle')}
                 </h3>
@@ -152,7 +148,7 @@ export function ProjectSettings({
                   style={{
                     margin: '3px 0 0',
                     maxWidth: 600,
-                    fontFamily: sans,
+                    fontFamily: uiFont,
                     fontSize: 12,
                     lineHeight: 1.45,
                     color: 'var(--muted-foreground)'
@@ -180,7 +176,7 @@ export function ProjectSettings({
           </section>
 
           <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontFamily: sans, fontSize: 12, fontWeight: 600, color: 'var(--destructive)' }}>
+            <div style={{ fontFamily: uiFont, fontSize: 12, fontWeight: 600, color: 'var(--destructive)' }}>
               {t('web.workplace.dangerZone')}
             </div>
             <div
@@ -196,10 +192,10 @@ export function ProjectSettings({
               }}
             >
               <div style={{ minWidth: 0 }}>
-                <div style={{ fontFamily: sans, fontSize: 14, fontWeight: 650, color: 'var(--foreground)' }}>
+                <div style={{ fontFamily: uiFont, fontSize: 14, fontWeight: 650, color: 'var(--foreground)' }}>
                   {t('web.workplace.deleteProject')}
                 </div>
-                <p style={{ margin: '4px 0 0', fontFamily: sans, fontSize: 12, color: 'var(--muted-foreground)' }}>
+                <p style={{ margin: '4px 0 0', fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
                   {t('web.workplace.deleteProjectHint')}
                 </p>
               </div>
@@ -217,7 +213,7 @@ export function ProjectSettings({
                   borderRadius: 8,
                   background: 'transparent',
                   color: 'var(--destructive)',
-                  fontFamily: mono,
+                  fontFamily: uiFont,
                   fontSize: 11,
                   padding: '5px 10px',
                   whiteSpace: 'nowrap'

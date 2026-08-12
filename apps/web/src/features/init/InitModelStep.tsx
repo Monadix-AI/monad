@@ -68,7 +68,7 @@ export function InitModelStep({
               {Logo && <Logo className={cn('size-4 shrink-0', meta.color)} />}
               <span className="min-w-0 flex-1 truncate text-sm">{meta.label ?? provider.type}</span>
               {provider.models.length > 0 ? (
-                <span className="font-mono text-[10px] text-muted-foreground">{provider.models.length}</span>
+                <span className="font-ui text-[10px] text-muted-foreground">{provider.models.length}</span>
               ) : null}
             </button>
           );

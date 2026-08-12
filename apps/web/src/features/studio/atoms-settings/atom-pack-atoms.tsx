@@ -189,7 +189,7 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
       <div className="flex flex-wrap gap-1">
         {atoms.map((atom) => (
           <Badge
-            className="font-mono text-[10px]"
+            className="font-ui text-[10px]"
             key={atom.id}
             title={atom.name ?? atom.description}
             variant="outline"
@@ -206,7 +206,7 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
       <dl className="grid grid-cols-[auto_minmax(0,1fr)] items-baseline gap-x-3 gap-y-1.5">
         {atoms.map((atom) => (
           <Fragment key={atom.id}>
-            <dt className="whitespace-nowrap font-mono text-[color:var(--link)] text-xs">/{atom.id}</dt>
+            <dt className="whitespace-nowrap font-ui text-[color:var(--link)] text-xs">/{atom.id}</dt>
             <dd className="min-w-0 truncate text-[11px] text-muted-foreground/80">
               {atom.description ?? atom.name ?? ''}
             </dd>
@@ -259,7 +259,7 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
             />
             <div className="min-w-0">
               <div className="truncate font-medium text-xs">{atom.name ?? atom.id}</div>
-              <div className="truncate font-mono text-[10px] text-muted-foreground">{atom.id}</div>
+              <div className="truncate font-ui text-[10px] text-muted-foreground">{atom.id}</div>
             </div>
           </li>
         ))}
@@ -277,7 +277,7 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
             <AtomMark atom={atom} />
             <div className="min-w-0">
               <div className="truncate font-medium text-xs">{atom.name ?? atom.id}</div>
-              <div className="truncate font-mono text-[10px] text-muted-foreground">{atom.id}</div>
+              <div className="truncate font-ui text-[10px] text-muted-foreground">{atom.id}</div>
             </div>
           </li>
         ))}
@@ -292,7 +292,7 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
           key={atom.id}
         >
           <div className="flex min-w-0 items-baseline gap-2">
-            <span className="truncate font-mono text-foreground/90 text-xs">{atom.id}</span>
+            <span className="truncate font-ui text-foreground/90 text-xs">{atom.id}</span>
             {atom.name ? <span className="truncate text-[11px] text-muted-foreground">{atom.name}</span> : null}
           </div>
           {atom.description ? (

@@ -264,7 +264,7 @@ export function ComposerAskSheet({
             style={{
               color: 'var(--muted-foreground)',
               flex: 'none',
-              fontFamily: 'var(--font-mono), ui-monospace, SFMono-Regular, monospace',
+              fontFamily: 'var(--font-ui)',
               fontSize: 11
             }}
           >
@@ -381,7 +381,7 @@ export function ComposerAskSheet({
                 borderRadius: multiple ? 4 : 999,
                 color: 'var(--muted-foreground)',
                 display: 'inline-flex',
-                fontFamily: 'var(--font-mono), ui-monospace, SFMono-Regular, monospace',
+                fontFamily: 'var(--font-ui)',
                 fontSize: 10,
                 height: 16,
                 justifyContent: 'center',
@@ -428,10 +428,7 @@ export function ComposerAskSheet({
           }}
           type="button"
         >
-          {dismissLabel}{' '}
-          <span style={{ fontFamily: 'var(--font-mono), ui-monospace, SFMono-Regular, monospace', opacity: 0.72 }}>
-            ESC
-          </span>
+          {dismissLabel} <span style={{ fontFamily: 'var(--font-ui)', opacity: 0.72 }}>ESC</span>
         </button>
         {questionIndex > 0 ? (
           <button
@@ -469,7 +466,7 @@ export function ComposerAskSheet({
           type="button"
         >
           {onLastQuestion ? submitLabel : nextLabel}
-          <span style={{ fontFamily: 'var(--font-mono), ui-monospace, SFMono-Regular, monospace' }}>↵</span>
+          <span style={{ fontFamily: 'var(--font-ui)' }}>↵</span>
         </button>
       </div>
     </fieldset>

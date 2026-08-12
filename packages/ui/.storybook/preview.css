@@ -17,7 +17,7 @@ body,
 .sb-show-main,
 .docs-story,
 [data-radix-popper-content-wrapper] {
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--text-base);
   line-height: var(--text-base--line-height);
 }

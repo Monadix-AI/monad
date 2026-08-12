@@ -69,12 +69,12 @@ const LINE_NUMBER_CLASSES = cn(
   'before:mr-3',
   'before:text-right',
   'before:text-muted-foreground/50',
-  'before:font-mono',
+  'before:font-code',
   'before:tabular-nums',
   'before:select-none'
 );
 const EXPLICIT_LINE_NUMBER_CLASSES =
-  'mr-3 inline-block w-[3ch] select-none text-right font-mono tabular-nums text-muted-foreground/50';
+  'mr-3 inline-block w-[3ch] select-none text-right font-code tabular-nums text-muted-foreground/50';
 
 // Line rendering component
 const LineSpan = ({
@@ -269,7 +269,7 @@ const CodeBlockBody = memo(
         data-selectable="true"
         style={preStyle}
       >
-        <code className={cn('font-mono text-sm', showLineNumbers && '[counter-increment:line_0] [counter-reset:line]')}>
+        <code className={cn('font-code text-sm', showLineNumbers && '[counter-increment:line_0] [counter-reset:line]')}>
           {keyedLines.map((keyedLine, index) => (
             <LineSpan
               key={keyedLine.key}
@@ -332,7 +332,7 @@ const _CodeBlockTitle = ({ children, className, ...props }: HTMLAttributes<HTMLD
 
 const _CodeBlockFilename = ({ children, className, ...props }: HTMLAttributes<HTMLSpanElement>) => (
   <span
-    className={cn('font-mono', className)}
+    className={cn('font-code', className)}
     {...props}
   >
     {children}
@@ -477,7 +477,7 @@ export const CodeInline = ({
 
   return (
     <code
-      className={cn('font-mono', className)}
+      className={cn('font-code', className)}
       data-selectable="true"
     >
       {tokens.map(({ key, token }) => (

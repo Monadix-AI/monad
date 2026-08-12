@@ -48,7 +48,7 @@ function MessageHeader({ label, meta }: { label: string; meta: string }) {
   return (
     <div className="mb-1 flex items-center gap-2 text-xs">
       <span className="font-semibold">{label}</span>
-      <span className="font-mono text-muted-foreground">{meta}</span>
+      <span className="font-ui text-muted-foreground">{meta}</span>
     </div>
   );
 }
@@ -104,7 +104,7 @@ export function SystemEventExample({ developer = false }: { developer?: boolean 
       actor={<span className="font-semibold text-foreground">Codex</span>}
       badge={developer ? <span className="rounded-full bg-info/15 px-2 py-0.5 text-info text-xs">DEV</span> : undefined}
       body={<span>{developer ? 'updated the runtime directive' : 'joined the project'}</span>}
-      timestamp={<span className="font-mono text-[11px]">10:32</span>}
+      timestamp={<span className="font-ui text-[11px]">10:32</span>}
     />
   );
 }

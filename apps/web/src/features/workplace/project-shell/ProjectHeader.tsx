@@ -41,7 +41,7 @@ function SessionMemberRoster({ room }: { room: ProjectController }): React.React
       <HoverCardTrigger asChild>
         <Button
           aria-label={countLabel}
-          className="h-7 gap-1.5 px-2 font-mono text-xs tabular-nums"
+          className="h-7 gap-1.5 px-2 font-ui text-xs tabular-nums"
           size="sm"
           type="button"
           variant="ghost"
@@ -148,7 +148,7 @@ function WorkdirControl({
       <DropdownMenuTrigger asChild>
         <Button
           aria-label={label}
-          className="max-w-[280px] gap-1.5 font-mono text-xs max-md:size-6 max-md:p-0"
+          className="max-w-[280px] gap-1.5 font-ui text-xs max-md:size-6 max-md:p-0"
           size="sm"
           title={workdir.path ?? t('web.workplace.workdirSettingsUnset')}
           type="button"

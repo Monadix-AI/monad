@@ -140,7 +140,7 @@ export function ScopedFactsView({ readOnly, scope }: { readOnly: boolean; scope:
           {rawOpen ? (
             <div className="mt-2 flex flex-col gap-2">
               <Textarea
-                className="min-h-48 font-mono text-xs"
+                className="min-h-48 font-code text-xs"
                 onChange={(event) => setRawDraft(event.target.value)}
                 value={rawValue}
               />

@@ -198,13 +198,13 @@ export function ConnectionSettings() {
       <div className="overflow-hidden rounded-md border text-xs">
         <div className="grid grid-cols-[minmax(9rem,0.4fr)_minmax(0,1fr)] border-b">
           <div className="bg-muted px-3 py-2 text-muted-foreground">{t('web.conn.localEndpoint')}</div>
-          <code className="min-w-0 break-all px-3 py-2 font-mono text-foreground">
+          <code className="min-w-0 break-all px-3 py-2 font-code text-foreground">
             {daemonScheme}://{daemonHost}:{network.settings?.port ?? 52749}
           </code>
         </div>
         <div className="grid grid-cols-[minmax(9rem,0.4fr)_minmax(0,1fr)]">
           <div className="bg-muted px-3 py-2 text-muted-foreground">{t('web.settings.system.localHttpEndpoint')}</div>
-          <code className="min-w-0 break-all px-3 py-2 font-mono text-foreground">{fallbackLabel}</code>
+          <code className="min-w-0 break-all px-3 py-2 font-code text-foreground">{fallbackLabel}</code>
         </div>
       </div>
 
@@ -219,7 +219,7 @@ export function ConnectionSettings() {
           <span className="text-muted-foreground text-xs">{t('web.settings.system.hostDesc')}</span>
         </div>
         <Input
-          className="font-mono text-xs"
+          className="font-ui text-xs"
           defaultValue={network.settings?.host ?? '127.0.0.1'}
           disabled={networkBusy}
           id="daemon-bind-host"
@@ -309,7 +309,7 @@ export function ConnectionSettings() {
           </Label>
           <div className="flex gap-2">
             <Input
-              className="font-mono text-xs [-webkit-text-security:disc]"
+              className="font-ui text-xs [-webkit-text-security:disc]"
               id="local-remote-token"
               readOnly
               value={network.settings.remoteAccess.token ?? ''}
@@ -381,13 +381,13 @@ export function ConnectionSettings() {
     <div className={className}>
       <div className="flex min-w-0 flex-col gap-1">
         <span className="font-semibold text-sm">{t('web.conn.localEndpoint')}</span>
-        <code className="min-w-0 break-all font-mono text-foreground text-xs">
+        <code className="min-w-0 break-all font-code text-foreground text-xs">
           {daemonScheme}://{daemonHost}:{network.settings?.port ?? 52749}
         </code>
       </div>
       <div className="flex min-w-0 flex-col gap-1">
         <span className="font-semibold text-sm">{t('web.settings.system.localHttpEndpoint')}</span>
-        <code className="min-w-0 break-all font-mono text-foreground text-xs">{fallbackLabel}</code>
+        <code className="min-w-0 break-all font-code text-foreground text-xs">{fallbackLabel}</code>
       </div>
     </div>
   );

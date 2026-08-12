@@ -243,7 +243,7 @@ export function SessionTranscript({ model }: { model: SessionTranscriptModel }) 
     return state === 'empty' ? (
       <div className={cn('session-content-column', 'pt-5')}>
         <div className="gradient-spotlight-card flex flex-col items-start gap-2.5 px-5 py-5">
-          <span className="label-mono">{t('web.chat.sessionReady')}</span>
+          <span className="label-ui">{t('web.chat.sessionReady')}</span>
           <p className="poster-heading text-foreground text-xl">{t('web.chat.start')}</p>
           <p className="max-w-xl text-muted-foreground text-sm">{t('web.chat.hint')}</p>
         </div>
@@ -472,7 +472,7 @@ export function SummaryTranscriptTurn({
       open={expanded}
     >
       <summary className="flex w-full cursor-pointer list-none items-center gap-1 border-b py-2 [&::-webkit-details-marker]:hidden">
-        <span className="font-mono text-muted-foreground text-xs uppercase">
+        <span className="font-ui text-muted-foreground text-xs uppercase">
           {running ? 'Running' : 'Completed'} for {item.durationLabel}
           {running ? '…' : ''}
         </span>

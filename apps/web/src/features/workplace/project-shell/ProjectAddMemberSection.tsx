@@ -4,7 +4,7 @@ import { PlusSignIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { meshAgentProductDisplayName } from '@monad/protocol';
 import { Button } from '@monad/ui';
-import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
 import { BrandIcon } from '#/components/BrandIcon';
@@ -125,7 +125,7 @@ function ProviderRow({
             overflow: 'hidden',
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
-            fontFamily: sans,
+            fontFamily: uiFont,
             fontSize: 14,
             fontWeight: 620,
             color: 'var(--foreground)'
@@ -134,7 +134,7 @@ function ProviderRow({
         >
           {group.label}
         </div>
-        <div style={{ marginTop: 2, fontFamily: sans, fontSize: 12, color: 'var(--muted-foreground)' }}>
+        <div style={{ marginTop: 2, fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
           {providerMeta} · {group.enabled ? t('web.workplace.available') : t('web.workplace.disabledInStudio')}
         </div>
       </div>
@@ -155,7 +155,7 @@ function ProviderRow({
               background: group.enabled ? 'var(--accent-blue-soft)' : 'var(--secondary)',
               color: group.enabled ? 'var(--accent-blue)' : 'var(--muted-foreground)',
               cursor: group.enabled ? 'pointer' : 'not-allowed',
-              fontFamily: mono,
+              fontFamily: uiFont,
               fontSize: 11,
               fontWeight: 600,
               opacity: group.enabled ? 1 : 0.68,
@@ -190,7 +190,7 @@ function ProviderRow({
                 background: candidate.enabled ? 'var(--accent-blue-soft)' : 'var(--secondary)',
                 color: candidate.enabled ? 'var(--accent-blue)' : 'var(--muted-foreground)',
                 cursor: candidate.enabled ? 'pointer' : 'not-allowed',
-                fontFamily: mono,
+                fontFamily: uiFont,
                 fontSize: 11,
                 fontWeight: 600,
                 opacity: candidate.enabled ? 1 : 0.68,
@@ -259,7 +259,7 @@ export function ProjectAddMemberSection({
       >
         {loading ? <ProjectProvidersListSkeleton /> : null}
         {isResolvedEmptyList({ isLoading: loading, itemCount: groups.length }) ? (
-          <div style={{ padding: '18px 16px', fontFamily: sans }}>
+          <div style={{ padding: '18px 16px', fontFamily: uiFont }}>
             <div style={{ fontSize: 13, fontWeight: 600, color: 'var(--foreground)' }}>
               {t('web.workplace.noAvailableProviders')}
             </div>
@@ -332,7 +332,7 @@ export function ProjectAddMemberSection({
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        fontFamily: sans,
+                        fontFamily: uiFont,
                         fontSize: 13,
                         fontWeight: 620,
                         color: 'var(--foreground)'

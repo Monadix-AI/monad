@@ -52,7 +52,7 @@ export function InitAgentStep({
       </div>
       {savedModelAlias && (
         <p className="text-muted-foreground text-xs">
-          {t('web.init.usingProfile')} <span className="font-mono">{savedModelAlias}</span>
+          {t('web.init.usingProfile')} <span className="font-ui">{savedModelAlias}</span>
         </p>
       )}
 

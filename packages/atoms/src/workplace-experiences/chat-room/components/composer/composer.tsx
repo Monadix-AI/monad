@@ -21,7 +21,7 @@ import {
   ComposerVoiceButton,
   UnifiedComposer
 } from '@monad/ui';
-import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useWorkplaceExperienceHost } from '../../../host-context.tsx';
@@ -373,7 +373,7 @@ export function Composer({
                         width: '100%',
                         textAlign: 'left',
                         border: 'none',
-                        fontFamily: sans,
+                        fontFamily: uiFont,
                         fontSize: 14,
                         fontWeight: 500,
                         padding: '6px 10px',
@@ -592,7 +592,7 @@ function VoiceDebugPanel({
         border: '1px solid var(--border)',
         borderRadius: 8,
         color: 'var(--muted-foreground)',
-        fontFamily: sans,
+        fontFamily: uiFont,
         fontSize: 11,
         margin: '0 12px 12px',
         padding: '8px 10px'
@@ -612,10 +612,10 @@ function VoiceDebugPanel({
             key={label}
             style={{ display: 'contents' }}
           >
-            <dt style={{ color: 'color-mix(in srgb, var(--muted-foreground) 74%, transparent)', fontFamily: mono }}>
+            <dt style={{ color: 'color-mix(in srgb, var(--muted-foreground) 74%, transparent)', fontFamily: uiFont }}>
               {label}
             </dt>
-            <dd style={{ color: 'var(--foreground)', fontFamily: mono, margin: 0, overflowWrap: 'anywhere' }}>
+            <dd style={{ color: 'var(--foreground)', fontFamily: uiFont, margin: 0, overflowWrap: 'anywhere' }}>
               {value}
             </dd>
           </div>

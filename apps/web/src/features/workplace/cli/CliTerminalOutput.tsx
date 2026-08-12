@@ -89,7 +89,7 @@ export function CliTerminalOutput({
         convertEol: true,
         cursorBlink: false,
         disableStdin: !onInputRef.current,
-        fontFamily: readColor('--font-mono', 'ui-monospace, SFMono-Regular, Menlo, monospace'),
+        fontFamily: readColor('--font-code', 'ui-monospace, SFMono-Regular, Menlo, monospace'),
         fontSize: 11,
         rows: 12,
         scrollback: 3000,
@@ -202,7 +202,7 @@ export function CliTerminalOutput({
             alignItems: 'flex-start',
             padding: '1px 2px',
             color: '#9aa4b5',
-            fontFamily: 'var(--font-mono), ui-monospace, monospace',
+            fontFamily: 'var(--font-code)',
             fontSize: 11,
             pointerEvents: 'none'
           }}

@@ -894,7 +894,7 @@ function McpTaskProgressCard({ progress }: { progress: NonNullable<ReturnType<ty
       </div>
       {progress.statusMessage && <p className="text-muted-foreground text-sm leading-5">{progress.statusMessage}</p>}
       <div className="flex flex-wrap items-end justify-between gap-2">
-        <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 font-mono text-[11px] text-muted-foreground">
+        <dl className="flex min-w-0 flex-wrap gap-x-4 gap-y-1 font-ui text-[11px] text-muted-foreground">
           <div className="flex min-w-0 gap-1.5">
             <dt>{t('web.tools.taskId')}</dt>
             <dd className="truncate">{progress.taskId}</dd>
@@ -1256,13 +1256,13 @@ function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pend
               className="size-3.5"
               icon={ComputerTerminal01Icon}
             />
-            <span className="font-mono">{language ?? 'code'}</span>
-            <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-[10px]">{backendLabel(backend)}</span>
+            <span className="font-ui">{language ?? 'code'}</span>
+            <span className="rounded bg-zinc-700/60 px-1.5 py-0.5 font-ui text-[10px]">{backendLabel(backend)}</span>
             {isHost && (
-              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-mono text-[10px] text-amber-300">host</span>
+              <span className="rounded bg-amber-500/15 px-1.5 py-0.5 font-ui text-[10px] text-amber-300">host</span>
             )}
           </div>
-          <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] leading-relaxed">
+          <pre className="max-h-64 overflow-auto whitespace-pre-wrap p-3 font-code text-[12px] leading-relaxed">
             {code}
           </pre>
         </div>
@@ -1274,14 +1274,14 @@ function CodeExecDetails({ step, pendingLabel, isError }: { step: ToolItem; pend
           <div className="flex items-center border-zinc-800 border-b bg-zinc-900 px-3 py-2 text-[11px]">
             <span
               className={cn(
-                'ml-auto rounded-full px-2 py-0.5 font-mono',
+                'ml-auto rounded-full px-2 py-0.5 font-ui',
                 output.exitCode === 0 ? 'bg-emerald-500/15 text-emerald-300' : 'bg-red-500/15 text-red-300'
               )}
             >
               exit {output.exitCode}
             </span>
           </div>
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] leading-relaxed">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 font-code text-[12px] leading-relaxed">
             {hasStdout || hasStderr ? (
               <>
                 {hasStdout && <AnsiText segments={stdoutSegments} />}
@@ -1355,14 +1355,14 @@ function ShellOutputBlock({
           className="size-3.5"
           icon={ComputerTerminal01Icon}
         />
-        {command ? <ShellCommand command={command} /> : <span className="min-w-0 truncate font-mono">terminal</span>}
+        {command ? <ShellCommand command={command} /> : <span className="min-w-0 truncate font-ui">terminal</span>}
         {output.mode && (
-          <span className="shrink-0 rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
+          <span className="shrink-0 rounded bg-zinc-700/60 px-1.5 py-0.5 font-ui text-[10px] text-zinc-300">
             {output.mode}
           </span>
         )}
         {output.pid !== undefined && (
-          <span className="shrink-0 rounded bg-zinc-700/60 px-1.5 py-0.5 font-mono text-[10px] text-zinc-300">
+          <span className="shrink-0 rounded bg-zinc-700/60 px-1.5 py-0.5 font-ui text-[10px] text-zinc-300">
             pid {output.pid}
           </span>
         )}
@@ -1383,12 +1383,10 @@ function ShellOutputBlock({
             />
           </Button>
         )}
-        <span className={cn(onStop ? '' : 'ml-auto', 'rounded-full px-2 py-0.5 font-mono', badgeClass)}>
-          {badgeText}
-        </span>
+        <span className={cn(onStop ? '' : 'ml-auto', 'rounded-full px-2 py-0.5 font-ui', badgeClass)}>{badgeText}</span>
       </div>
       {(output.cwd || output.startedAt || limitLabels.length > 0) && (
-        <div className="flex flex-wrap gap-x-3 gap-y-1 border-zinc-800 border-b bg-zinc-950 px-3 py-2 font-mono text-[10px] text-zinc-500">
+        <div className="flex flex-wrap gap-x-3 gap-y-1 border-zinc-800 border-b bg-zinc-950 px-3 py-2 font-ui text-[10px] text-zinc-500">
           {output.cwd && <span className="min-w-0 truncate">cwd {output.cwd}</span>}
           {output.startedAt && <span>started {output.startedAt}</span>}
           {limitLabels.map((label) => (
@@ -1396,7 +1394,7 @@ function ShellOutputBlock({
           ))}
         </div>
       )}
-      <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] leading-relaxed">
+      <pre className="max-h-72 overflow-auto whitespace-pre-wrap p-3 font-code text-[12px] leading-relaxed">
         {hasStdout || hasStderr ? (
           <>
             {hasStdout && <AnsiText segments={stdout} />}
@@ -1474,7 +1472,7 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
             ? `, ${t('web.workplace.fileChange.warnings', { count: summary.warnings ?? 0 })}`
             : ''}
         </span>
-        <span className="ml-auto shrink-0 font-mono text-[11px]">
+        <span className="ml-auto shrink-0 font-ui text-[11px]">
           <span className="text-emerald-500">+{summary.added}</span>
           <span className="mx-1 text-muted-foreground/50">/</span>
           <span className="text-red-500">-{summary.removed}</span>
@@ -1496,10 +1494,10 @@ function MultiFileDiffOutputBlock({ display }: { display: MultiDiffDisplay }) {
                 className="size-3.5"
                 fileName={file.path}
               />
-              <span className="min-w-0 truncate font-mono">{file.path}</span>
-              {file.operation && <span className="ml-auto shrink-0 font-mono text-[11px]">{file.operation}</span>}
+              <span className="min-w-0 truncate font-ui">{file.path}</span>
+              {file.operation && <span className="ml-auto shrink-0 font-ui text-[11px]">{file.operation}</span>}
             </div>
-            <pre className="max-h-32 overflow-auto whitespace-pre-wrap p-3 font-mono text-[12px] text-destructive leading-relaxed">
+            <pre className="max-h-32 overflow-auto whitespace-pre-wrap p-3 font-code text-[12px] text-destructive leading-relaxed">
               {file.error ?? 'operation failed'}
             </pre>
           </div>

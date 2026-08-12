@@ -49,7 +49,7 @@ export function AttachmentCard({
     const open = previewable && onPreview ? onPreview : undefined;
     return open ? (
       <button
-        className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted px-3 py-2 font-sans text-[13px] text-foreground transition-[background-color,border-color] hover:border-foreground/15 hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35"
+        className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted px-3 py-2 font-ui text-[13px] text-foreground transition-[background-color,border-color] hover:border-foreground/15 hover:bg-accent focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-ring/35"
         data-attachment-card="true"
         data-attachment-tone="human"
         onClick={open}
@@ -59,7 +59,7 @@ export function AttachmentCard({
       </button>
     ) : (
       <div
-        className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted px-3 py-2 font-sans text-[13px] text-foreground"
+        className="mt-2 inline-flex max-w-full items-center gap-2 rounded-full border border-border bg-muted px-3 py-2 font-ui text-[13px] text-foreground"
         data-attachment-card="true"
         data-attachment-tone="human"
       >
@@ -69,7 +69,7 @@ export function AttachmentCard({
   }
   return (
     <div
-      className="group/attachment relative mt-2 inline-flex max-w-full font-sans text-[13px] text-foreground"
+      className="group/attachment relative mt-2 inline-flex max-w-full font-ui text-[13px] text-foreground"
       data-attachment-card="true"
       data-attachment-tone="agent"
     >

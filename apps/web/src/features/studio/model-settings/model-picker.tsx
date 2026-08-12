@@ -101,7 +101,7 @@ function ModelOptionContent({ model, query }: { model: ModelInfo; query: string 
       {model.label && (
         <span className="min-w-0">
           <HighlightedModelText
-            className="truncate font-mono text-[10px] text-muted-foreground"
+            className="truncate font-ui text-[10px] text-muted-foreground"
             query={query}
             text={model.id}
           />

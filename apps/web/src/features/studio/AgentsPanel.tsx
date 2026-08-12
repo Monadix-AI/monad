@@ -171,7 +171,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
                 </div>
                 <p className="text-muted-foreground text-xs">{t('web.studio.importHint')}</p>
                 <Textarea
-                  className="min-h-40 font-mono text-[13px]"
+                  className="min-h-40 font-ui text-[13px]"
                   onChange={(e) => setImportText(e.target.value)}
                   placeholder={'---\nname: code-reviewer\ndescription: ...\n---\nYou are ...'}
                   value={importText}
@@ -270,7 +270,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
                       {a.visibility?.public && <Badge variant="secondary">{t('web.studio.badgePublic')}</Badge>}
                     </span>
                     <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-                      <span className="max-w-full truncate rounded-md bg-muted/70 px-1.5 py-0.5 font-mono">
+                      <span className="max-w-full truncate rounded-md bg-muted/70 px-1.5 py-0.5 font-ui">
                         {a.model ?? a.modelAlias ?? t('web.studio.modelInherit')}
                       </span>
                       {a.hasPrompt && <span className="whitespace-nowrap">· {t('web.studio.hasPrompt')}</span>}

@@ -44,7 +44,7 @@ export function IdentityPanel(props: IdentityPanelProps) {
               aria-controls={`instruction-panel-${file}`}
               aria-selected={activeFile === file}
               className={cn(
-                'min-h-9 rounded-md px-3 font-mono text-xs transition-colors',
+                'min-h-9 rounded-md px-3 font-ui text-xs transition-colors',
                 activeFile === file ? 'bg-secondary text-foreground' : 'text-muted-foreground hover:bg-accent'
               )}
               key={file}
@@ -62,7 +62,7 @@ export function IdentityPanel(props: IdentityPanelProps) {
         >
           <Textarea
             aria-label={filename}
-            className="min-h-52 resize-y font-mono text-sm leading-relaxed"
+            className="min-h-52 resize-y font-ui text-sm leading-relaxed"
             name={`instruction-${activeFile}`}
             onChange={(event) => updateFile(event.target.value)}
             placeholder={t(`web.studio.agentEditor.identity.${activeFile}Placeholder`)}

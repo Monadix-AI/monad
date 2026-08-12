@@ -329,7 +329,7 @@ export function ModelHoverCardBody({ model }: { model: ModelInfo | undefined }) 
         <div className="flex min-w-0 items-center gap-1.5">
           <Tooltip>
             <TooltipTrigger asChild>
-              <p className="min-w-0 flex-1 truncate font-mono text-[11px] text-muted-foreground leading-snug">
+              <p className="min-w-0 flex-1 truncate font-ui text-[11px] text-muted-foreground leading-snug">
                 {model.id}
               </p>
             </TooltipTrigger>

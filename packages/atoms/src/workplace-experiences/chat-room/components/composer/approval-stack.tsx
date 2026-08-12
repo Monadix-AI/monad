@@ -5,7 +5,7 @@ import type { ApprovalView } from '../../../experience/types.ts';
 import { TerminalIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ComposerApprovalSheet } from '@monad/ui';
-import { workspaceMono as mono } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 
 import { workplaceExperienceT } from '../../../i18n.ts';
 
@@ -40,7 +40,7 @@ export function ApprovalStack({ room }: { room: ApprovalStackRoom }): React.Reac
         <code
           className="block min-w-0 overflow-x-auto whitespace-pre-wrap break-words"
           data-selectable="true"
-          style={{ fontFamily: mono }}
+          style={{ fontFamily: uiFont }}
         >
           {top.meta}
         </code>

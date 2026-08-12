@@ -18,8 +18,8 @@ import {
 } from '@monad/ui';
 import {
   AgentInstanceAvatar,
-  workspaceMono as mono,
-  workspaceSectionLabelStyle as sectionLabel
+  workspaceSectionLabelStyle as sectionLabel,
+  uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
 import { useEffect, useState } from 'react';
 
@@ -61,7 +61,7 @@ export function MeshAgentMemberDialog({
     borderRadius: 8,
     background: 'var(--card)',
     color: 'var(--foreground)',
-    fontFamily: mono,
+    fontFamily: uiFont,
     padding: '6px 8px'
   };
   const updateDraft = (draft: Partial<MeshAgentDraft>) => {
@@ -193,7 +193,7 @@ export function MeshAgentMemberDialog({
               <Popover>
                 <PopoverTrigger asChild>
                   <Button
-                    className="w-fit gap-1.5 px-2 font-mono text-xs"
+                    className="w-fit gap-1.5 px-2 font-ui text-xs"
                     type="button"
                     variant="ghost"
                   >

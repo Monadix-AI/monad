@@ -150,7 +150,7 @@ export function SystemSettings() {
                 </>
               ) : (
                 <>
-                  <span className="font-mono text-sm">{version}</span>
+                  <span className="font-ui text-sm">{version}</span>
                   {hasUpgrade ? (
                     <Badge
                       className="gap-1 text-xs"
@@ -261,7 +261,7 @@ export function SystemSettings() {
                 <>
                   <span>{t('web.settings.system.developerModeDesc')}</span>
                   {developer?.logsDir ? (
-                    <code className="mt-1 block truncate rounded bg-muted px-1.5 py-0.5 font-mono text-[11px]">
+                    <code className="mt-1 block truncate rounded bg-muted px-1.5 py-0.5 font-code text-[11px]">
                       {developer.logsDir}
                     </code>
                   ) : null}

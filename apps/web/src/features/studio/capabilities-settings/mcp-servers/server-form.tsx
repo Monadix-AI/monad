@@ -156,8 +156,8 @@ export function ServerForm({
   const controlClassName = variant === 'dialog' ? 'bg-card' : undefined;
   const textareaClassName =
     variant === 'dialog'
-      ? 'min-h-[88px] rounded-md border bg-card px-2.5 py-2 font-mono text-xs leading-normal'
-      : 'min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs';
+      ? 'min-h-[88px] rounded-md border bg-card px-2.5 py-2 font-code text-xs leading-normal'
+      : 'min-h-16 rounded-md border bg-transparent px-2 py-1 font-code text-xs';
   const FormContainer = variant === 'dialog' ? DialogBody : 'div';
 
   return (

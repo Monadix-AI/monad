@@ -44,7 +44,7 @@ export function WorkspaceMessageCard({
       {tone === 'human' ? attachmentStack : null}
       <div
         className={cn(
-          'overflow-wrap-anywhere max-w-full break-words px-3.5 py-2.5 font-sans text-[15px] leading-[1.55]',
+          'overflow-wrap-anywhere max-w-full break-words px-3.5 py-2.5 font-ui text-[15px] leading-[1.55]',
           tone === 'agent'
             ? 'rounded-md bg-(--message-agent-surface) text-foreground'
             : 'rounded-[12px_12px_4px_12px] bg-(--message-human-surface) text-foreground',
@@ -83,7 +83,7 @@ export interface WorkspaceSystemEventCardProps {
 export function WorkspaceSystemEventCard({ actor, badge, body, fanout, timestamp }: WorkspaceSystemEventCardProps) {
   return (
     <div className="mb-3 flex justify-center">
-      <div className="inline-grid max-w-[min(620px,100%)] grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-[7px] rounded-xl bg-card px-2 py-1.5 font-sans text-[13px] text-muted-foreground leading-[1.35]">
+      <div className="inline-grid max-w-[min(620px,100%)] grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-[7px] rounded-xl bg-card px-2 py-1.5 font-ui text-[13px] text-muted-foreground leading-[1.35]">
         {badge}
         {actor}
         {fanout}

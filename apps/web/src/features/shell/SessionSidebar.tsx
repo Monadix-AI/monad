@@ -405,7 +405,7 @@ export function SessionSidebar({ daemon, responsive, surfaces, workspace }: Prop
     <>
       <aside
         className={cn(
-          'panel-nav sidebar-no-hover-transition group/sidebar flex h-full min-h-0 flex-col overflow-hidden font-sans text-foreground',
+          'panel-nav sidebar-no-hover-transition group/sidebar flex h-full min-h-0 flex-col overflow-hidden font-ui text-foreground',
           responsive.narrow && 'absolute inset-y-0 left-0 z-30 shadow-xl',
           !responsive.narrow && (effectiveCollapsed || effectiveOverlay) && 'panel-nav-overlay',
           resizing

@@ -93,9 +93,9 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
   const body = (
     <>
       <p className="text-muted-foreground text-xs">
-        {t('web.api.descPrefix')} <code className="font-mono">/openai/v1/models</code> and{' '}
-        <code className="font-mono">/openai/v1/chat/completions</code>). {t('web.api.descSuffix')}{' '}
-        <code className="font-mono">base_url</code> {t('web.api.descTail')}
+        {t('web.api.descPrefix')} <code className="font-code">/openai/v1/models</code> and{' '}
+        <code className="font-code">/openai/v1/chat/completions</code>). {t('web.api.descSuffix')}{' '}
+        <code className="font-code">base_url</code> {t('web.api.descTail')}
       </p>
 
       {loading ? (
@@ -136,7 +136,7 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
             <p className="text-muted-foreground text-xs">{t('web.api.bearerHint')}</p>
             <div className="flex gap-2">
               <Input
-                className="font-mono text-xs [-webkit-text-security:disc]"
+                className="font-ui text-xs [-webkit-text-security:disc]"
                 disabled={busy}
                 id="openai-compat-token"
                 onChange={(e) => setToken(e.target.value)}
@@ -207,9 +207,9 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
       )}
 
       <p className="px-4 py-3.5 text-muted-foreground text-xs leading-relaxed">
-        {t('web.api.descPrefix')} <code className="font-mono">/openai/v1/models</code> and{' '}
-        <code className="font-mono">/openai/v1/chat/completions</code>). {t('web.api.descSuffix')}{' '}
-        <code className="font-mono">base_url</code> {t('web.api.descTail')}
+        {t('web.api.descPrefix')} <code className="font-code">/openai/v1/models</code> and{' '}
+        <code className="font-code">/openai/v1/chat/completions</code>). {t('web.api.descSuffix')}{' '}
+        <code className="font-code">base_url</code> {t('web.api.descTail')}
       </p>
 
       {!loading && settings?.enabled && (
@@ -226,7 +226,7 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
             </div>
             <div className="flex gap-2">
               <Input
-                className="h-8 font-mono text-xs [-webkit-text-security:disc]"
+                className="h-8 font-ui text-xs [-webkit-text-security:disc]"
                 id="openai-compat-token"
                 placeholder={t('web.api.tokenPlaceholder')}
                 readOnly
@@ -369,7 +369,7 @@ function TestPanel({ bare = false, baseUrl, token, t }: { bare?: boolean; baseUr
       <p className="font-medium text-xs">{t('web.api.test')}</p>
 
       <Textarea
-        className="min-h-16 resize-none font-mono text-xs"
+        className="min-h-16 resize-none font-ui text-xs"
         disabled={sending}
         onChange={(e) => setInput(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -404,11 +404,11 @@ function TestPanel({ bare = false, baseUrl, token, t }: { bare?: boolean; baseUr
         <div className="flex flex-col gap-2">
           <div className="rounded bg-muted px-3 py-2">
             <p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">{t('web.common.input')}</p>
-            <p className="whitespace-pre-wrap font-mono text-xs">{result.input}</p>
+            <p className="whitespace-pre-wrap font-ui text-xs">{result.input}</p>
           </div>
           <div className="rounded bg-muted px-3 py-2">
             <p className="mb-1 text-[10px] text-muted-foreground uppercase tracking-wide">{t('web.common.output')}</p>
-            <p className="whitespace-pre-wrap font-mono text-xs">{result.output}</p>
+            <p className="whitespace-pre-wrap font-ui text-xs">{result.output}</p>
           </div>
         </div>
       )}

@@ -67,7 +67,7 @@ export function ToolCard({
       </div>
       <p className="text-muted-foreground text-xs leading-relaxed">{description}</p>
       <div className="mt-auto flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-[11px] text-muted-foreground/60">{summary}</span>
+        <span className="truncate font-ui text-[11px] text-muted-foreground/60">{summary}</span>
         {onConfigure && (
           <HugeiconsIcon
             className="size-3.5 shrink-0 text-muted-foreground/40"

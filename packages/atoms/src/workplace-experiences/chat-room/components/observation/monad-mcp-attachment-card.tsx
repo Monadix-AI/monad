@@ -54,7 +54,7 @@ function MonadMcpAttachmentCard({
       label: t('web.workplace.monadMcp.attachmentPath'),
       value: (
         <CompactFilePath
-          className="font-mono text-foreground"
+          className="font-ui text-foreground"
           path={attachment.path}
         />
       )
@@ -100,7 +100,7 @@ function MonadMcpAttachmentCard({
         />
         <span className="min-w-0 flex-1 truncate font-medium text-foreground">{name}</span>
         {summaryMeta ? (
-          <span className="max-w-[45%] truncate font-mono text-[10px] text-muted-foreground">{summaryMeta}</span>
+          <span className="max-w-[45%] truncate font-ui text-[10px] text-muted-foreground">{summaryMeta}</span>
         ) : null}
         <HugeiconsIcon
           aria-hidden="true"
@@ -119,7 +119,7 @@ function MonadMcpAttachmentCard({
             key={entry.key}
           >
             <dt className="text-muted-foreground">{entry.label}</dt>
-            <dd className="wrap-anywhere min-w-0 font-mono text-foreground">{entry.value}</dd>
+            <dd className="wrap-anywhere min-w-0 font-ui text-foreground">{entry.value}</dd>
           </div>
         ))}
       </dl>

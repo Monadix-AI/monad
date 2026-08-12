@@ -40,7 +40,7 @@ export function ObservationCard({ children, className, header, timestamp, visual
         {header ? <div className="min-w-0 flex-1">{header}</div> : <span className="min-w-0 flex-1" />}
         {timestamp ? (
           <time
-            className="shrink-0 font-mono text-[10px] text-muted-foreground"
+            className="shrink-0 font-ui text-[10px] text-muted-foreground"
             dateTime={timestamp}
           >
             {timestamp}
@@ -80,8 +80,8 @@ export function ObservationMeta({
   return (
     <div
       className={cn(
-        'flex flex-wrap items-center gap-1.5 font-mono text-[10px] uppercase leading-tight',
-        quiet && 'min-w-0 flex-nowrap gap-1.5 font-sans text-muted-foreground text-sm normal-case leading-5',
+        'flex flex-wrap items-center gap-1.5 font-ui text-[10px] uppercase leading-tight',
+        quiet && 'min-w-0 flex-nowrap gap-1.5 font-ui text-muted-foreground text-sm normal-case leading-5',
         !compact && 'mb-2',
         className
       )}
@@ -145,7 +145,7 @@ export function ObservationText({
       className={cn(
         'wrap-break-word whitespace-pre-wrap leading-relaxed',
         observationRole === 'system' ? 'text-muted-foreground' : 'text-foreground',
-        observationRole === 'tool' ? 'font-mono text-[11px]' : 'text-[13px]',
+        observationRole === 'tool' ? 'font-ui text-[11px]' : 'text-[13px]',
         compact && 'text-xs',
         contained && 'max-h-64 overflow-auto rounded-md border border-border/70 bg-secondary/55 p-2',
         className
@@ -164,7 +164,7 @@ function inlineCodeParts(text: string): ReactNode {
     if (!(part.startsWith('`') && part.endsWith('`'))) return <span key={key}>{part}</span>;
     return (
       <code
-        className="rounded-md border border-border/80 bg-secondary/75 px-1 py-px font-mono text-[0.94em]"
+        className="rounded-md border border-border/80 bg-secondary/75 px-1 py-px font-ui text-[0.94em]"
         key={key}
       >
         {part.slice(1, -1)}

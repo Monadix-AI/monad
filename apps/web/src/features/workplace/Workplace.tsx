@@ -3,11 +3,7 @@ import type { CSSProperties } from 'react';
 import type { ProjectExperienceDefinition } from './experiences/types';
 import type { ProjectController } from './use-project';
 
-import {
-  workspaceBoxRadius as boxR,
-  workspaceMono as mono,
-  workspaceSans as sans
-} from '@monad/ui/components/AgentAvatar';
+import { workspaceBoxRadius as boxR, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { memo, useCallback, useEffect } from 'react';
 
 import { MonadLoading } from '#/components/MonadLoading';
@@ -118,7 +114,7 @@ export const Workplace = memo(function Workplace({
           overflow: embedded ? 'hidden' : undefined,
           display: 'flex',
           flexDirection: 'column',
-          fontFamily: sans,
+          fontFamily: uiFont,
           color: 'var(--foreground)',
           WebkitFontSmoothing: 'antialiased'
         } as CSSProperties
@@ -143,7 +139,7 @@ export const Workplace = memo(function Workplace({
                 fontWeight: 600,
                 letterSpacing: 1.2,
                 textTransform: 'uppercase',
-                fontFamily: mono,
+                fontFamily: uiFont,
                 color: 'var(--muted-foreground)'
               }}
             >
@@ -156,7 +152,7 @@ export const Workplace = memo(function Workplace({
           <ShellLink
             href="/"
             style={{
-              fontFamily: mono,
+              fontFamily: uiFont,
               fontSize: 11,
               color: 'var(--muted-foreground)',
               textDecoration: 'none',

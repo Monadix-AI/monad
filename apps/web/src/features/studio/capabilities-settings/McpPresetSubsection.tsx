@@ -421,7 +421,7 @@ function ObscuraDialog({ open, onClose }: { open: boolean; onClose: () => void }
                 <div className="flex flex-wrap gap-1">
                   {status.tools.map((tool) => (
                     <Badge
-                      className="font-mono text-[10px]"
+                      className="font-ui text-[10px]"
                       key={tool}
                       variant="secondary"
                     >
@@ -555,7 +555,7 @@ function PresetCard({
       </div>
       <p className="text-muted-foreground text-xs leading-relaxed">{description}</p>
       <div className="mt-auto flex items-center justify-between gap-2">
-        <span className="truncate font-mono text-[11px] text-muted-foreground/60">{summary}</span>
+        <span className="truncate font-ui text-[11px] text-muted-foreground/60">{summary}</span>
         <HugeiconsIcon
           className="size-3.5 shrink-0 text-muted-foreground/40"
           icon={Settings02Icon}

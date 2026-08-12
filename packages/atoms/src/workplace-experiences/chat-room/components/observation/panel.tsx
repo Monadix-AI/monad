@@ -17,9 +17,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   AgentIdentity,
   AgentInstanceAvatar,
-  workspaceMono as mono,
   agentPresenceColor as presenceColor,
-  workspaceSans as sans
+  uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
 import { VirtualList, type VirtualListHandle } from '@monad/ui/components/VirtualList';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -242,7 +241,7 @@ export function MeshAgentObservationPanel({
             borderRadius: 999,
             background: 'var(--secondary)',
             color: 'var(--foreground)',
-            fontFamily: sans,
+            fontFamily: uiFont,
             fontSize: 12,
             fontWeight: 650,
             lineHeight: 1,
@@ -261,7 +260,7 @@ export function MeshAgentObservationPanel({
             alignItems: 'center',
             color: 'var(--muted-foreground)',
             display: 'flex',
-            fontFamily: sans,
+            fontFamily: uiFont,
             fontSize: 11,
             gap: 8,
             lineHeight: '30px'
@@ -290,7 +289,7 @@ export function MeshAgentObservationPanel({
           role="status"
           style={{
             color: 'var(--muted-foreground)',
-            fontFamily: sans,
+            fontFamily: uiFont,
             fontSize: 11,
             lineHeight: '30px',
             textAlign: 'center'
@@ -401,7 +400,7 @@ export function MeshAgentObservationPanel({
               alignItems: 'center',
               justifyContent: 'center',
               flex: 'none',
-              fontFamily: mono,
+              fontFamily: uiFont,
               fontSize: 15
             }}
             type="button"
@@ -438,7 +437,7 @@ export function MeshAgentObservationPanel({
                 overflow: 'hidden',
                 textOverflow: 'ellipsis',
                 whiteSpace: 'nowrap',
-                fontFamily: sans,
+                fontFamily: uiFont,
                 fontSize: 14,
                 fontWeight: 700
               }}
@@ -523,7 +522,7 @@ export function MeshAgentObservationPanel({
             className="mt-0.5 size-4 shrink-0 text-muted-foreground"
             icon={InformationCircleIcon}
           />
-          <div className="min-w-0 font-sans">
+          <div className="min-w-0 font-ui">
             <div className="font-medium text-foreground text-xs">
               {t('web.workplace.nativeSessionUnavailableTitle')}
             </div>
@@ -583,7 +582,7 @@ export function MeshAgentObservationPanel({
               color: 'var(--muted-foreground)',
               display: 'flex',
               flexDirection: 'column',
-              fontFamily: sans,
+              fontFamily: uiFont,
               fontSize: 13,
               height: '100%',
               justifyContent: eventsHeader ? 'flex-start' : 'center',
@@ -762,7 +761,7 @@ function UsageLimitPopover({ meter }: { meter: MeshAgentUsageLimitMeter }): Reac
         background: 'color-mix(in srgb, var(--background) 96%, var(--card))',
         boxShadow: '0 16px 34px color-mix(in srgb, black 24%, transparent)',
         padding: '10px 11px 11px',
-        fontFamily: sans
+        fontFamily: uiFont
       }}
     >
       <div
@@ -775,7 +774,7 @@ function UsageLimitPopover({ meter }: { meter: MeshAgentUsageLimitMeter }): Reac
         }}
       >
         <span style={{ color: 'var(--foreground)', fontSize: 13, fontWeight: 650 }}>{meter.title}</span>
-        <span style={{ color: 'var(--muted-foreground)', fontFamily: mono, fontSize: 10 }}>{meter.rows.length}</span>
+        <span style={{ color: 'var(--muted-foreground)', fontFamily: uiFont, fontSize: 10 }}>{meter.rows.length}</span>
       </div>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
         {meter.rows.map((row) => (

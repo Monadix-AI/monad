@@ -57,7 +57,7 @@ function GitHubMetadataRow({ icon, label, value }: { icon: ReactNode; label: str
     <div className="grid min-w-0 grid-cols-[1rem_5.5rem_minmax(0,1fr)] items-start gap-2 text-[11px] leading-5">
       <span className="mt-0.5 grid size-4 place-items-center text-muted-foreground">{icon}</span>
       <span className="text-muted-foreground">{label}</span>
-      <span className="min-w-0 break-all font-mono text-popover-foreground">{value}</span>
+      <span className="min-w-0 break-all font-ui text-popover-foreground">{value}</span>
     </div>
   );
 }
@@ -71,7 +71,7 @@ function GitHubRepositoryRow({ address, label, openLabel }: { address: string; l
       <span className="text-muted-foreground">{label}</span>
       <span className="flex min-w-0 items-center gap-1.5">
         <span
-          className="min-w-0 truncate font-mono text-popover-foreground"
+          className="min-w-0 truncate font-ui text-popover-foreground"
           title={address}
         >
           {address}
@@ -240,7 +240,7 @@ export function SkillCard({
                                 />
                               }
                               label={t('web.skills.githubInstalledAt')}
-                              value={<span className="font-sans">{installedAt}</span>}
+                              value={<span className="font-ui">{installedAt}</span>}
                             />
                           ) : null}
                         </div>

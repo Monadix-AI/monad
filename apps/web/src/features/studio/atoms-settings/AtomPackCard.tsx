@@ -33,7 +33,7 @@ export function ConflictRow({ conflict: c }: { conflict: AtomConflict }) {
       >
         {c.kind}
       </Badge>
-      <span className="font-mono">{c.bareId}</span>
+      <span className="font-ui">{c.bareId}</span>
       <span>
         - <span className="font-medium text-foreground">{c.winner}</span> {t('web.atoms.conflictActive')}
       </span>
@@ -226,21 +226,21 @@ function formatInstalledAt(iso: string): string {
 
 function AtomPackMeta({ pack, placement = 'footer' }: { pack: InstalledAtomPack; placement?: 'footer' | 'header' }) {
   const t = useT();
-  const mono = (value: string) => <span className="font-mono">{value}</span>;
+  const codeText = (value: string) => <span className="font-ui">{value}</span>;
   const items: { key: string; label: string; value: ReactNode }[] = [];
   if (pack.displayName && pack.name !== pack.displayName)
-    items.push({ key: 'id', label: t('web.atoms.packId'), value: mono(pack.name) });
+    items.push({ key: 'id', label: t('web.atoms.packId'), value: codeText(pack.name) });
   if (pack.author) items.push({ key: 'author', label: t('web.atoms.author'), value: pack.author });
   if (pack.monadVersion)
-    items.push({ key: 'compat', label: t('web.atoms.compatibility'), value: mono(pack.monadVersion) });
-  if (pack.sdkVersion) items.push({ key: 'sdk', label: t('web.atoms.sdkVersion'), value: mono(pack.sdkVersion) });
+    items.push({ key: 'compat', label: t('web.atoms.compatibility'), value: codeText(pack.monadVersion) });
+  if (pack.sdkVersion) items.push({ key: 'sdk', label: t('web.atoms.sdkVersion'), value: codeText(pack.sdkVersion) });
   if (pack.repository)
     items.push({
       key: 'repo',
       label: t('web.atoms.repository'),
-      value: mono(`${pack.repository.repo}@${pack.repository.commit.slice(0, 7)}`)
+      value: codeText(`${pack.repository.repo}@${pack.repository.commit.slice(0, 7)}`)
     });
-  if (pack.source) items.push({ key: 'source', label: t('web.atoms.source'), value: mono(pack.source) });
+  if (pack.source) items.push({ key: 'source', label: t('web.atoms.source'), value: codeText(pack.source) });
   if (pack.installedAt)
     items.push({ key: 'installed', label: t('web.atoms.installedAt'), value: formatInstalledAt(pack.installedAt) });
   if (items.length === 0) return null;

@@ -94,7 +94,7 @@ export function ObservationToolCardShell({
       }}
       open={open}
     >
-      <summary className="group/tool-trigger flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-0 py-0 text-left font-sans text-muted-foreground text-sm leading-5 transition-colors hover:bg-secondary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
+      <summary className="group/tool-trigger flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-0 py-0 text-left font-ui text-muted-foreground text-sm leading-5 transition-colors hover:bg-secondary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
         {resolvedStatus === 'running' ? (
           <ThinkingOrb
             aria-hidden="true"
@@ -125,7 +125,7 @@ export function ObservationToolCardShell({
           size={14}
         />
         {timestamp ? (
-          <time className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground/70">{timestamp}</time>
+          <time className="ml-auto shrink-0 font-ui text-[10px] text-muted-foreground/70">{timestamp}</time>
         ) : null}
       </summary>
       <div className="ml-3 border-border/50 border-l py-2 pr-2 pl-5">{children}</div>

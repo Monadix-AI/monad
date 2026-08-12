@@ -1,7 +1,7 @@
 import type { ProjectController } from '../use-project';
 
 import { Button, Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@monad/ui';
-import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '#/components/I18nProvider';
 import { useMeshAgentSettings } from '#/hooks/use-mesh-agent-settings';
@@ -19,12 +19,12 @@ function MemberSettings({ member, room }: { member: ProjectMember; room: Project
     borderRadius: 8,
     background: 'var(--card)',
     color: 'var(--foreground)',
-    fontFamily: mono,
+    fontFamily: uiFont,
     fontSize: 12,
     padding: '6px 8px'
   };
   const label: React.CSSProperties = {
-    fontFamily: mono,
+    fontFamily: uiFont,
     fontSize: 10,
     color: 'var(--muted-foreground)'
   };
@@ -33,7 +33,7 @@ function MemberSettings({ member, room }: { member: ProjectMember; room: Project
     borderRadius: 999,
     background: active ? 'var(--accent-blue-soft)' : 'transparent',
     color: active ? 'var(--accent-blue)' : 'var(--muted-foreground)',
-    fontFamily: mono,
+    fontFamily: uiFont,
     fontSize: 11,
     padding: '4px 9px'
   });
@@ -151,7 +151,7 @@ export function ProjectMemberSettingsDialog({
         size="md"
       >
         <DialogHeader>
-          <DialogTitle style={{ fontFamily: sans, fontSize: 18, fontWeight: 650 }}>
+          <DialogTitle style={{ fontFamily: uiFont, fontSize: 18, fontWeight: 650 }}>
             {t('web.workplace.memberSettings')}
           </DialogTitle>
         </DialogHeader>

@@ -204,11 +204,11 @@ function SkillEditorForm({
                     fileName="SKILL.md"
                     preview="text"
                   />
-                  <span className="truncate font-mono text-xs">SKILL.md</span>
+                  <span className="truncate font-ui text-xs">SKILL.md</span>
                 </>
               )}
               {attachmentPreview ? (
-                <span className="min-w-0 truncate font-mono text-muted-foreground text-xs">
+                <span className="min-w-0 truncate font-ui text-muted-foreground text-xs">
                   / {attachmentPreview.file.path}
                 </span>
               ) : null}
@@ -276,7 +276,7 @@ function SkillEditorForm({
               )
             ) : view === 'edit' ? (
               <Textarea
-                className="h-[44vh] min-h-[280px] resize-none overflow-auto border-0 font-mono text-xs shadow-none focus-visible:ring-0"
+                className="h-[44vh] min-h-[280px] resize-none overflow-auto border-0 font-code text-xs shadow-none focus-visible:ring-0"
                 onChange={(event) => setContent(event.target.value)}
                 spellCheck={false}
                 value={content}
@@ -320,7 +320,7 @@ function SkillEditorForm({
                           preview={file.preview}
                         />
                       )}
-                      <span className="min-w-0 flex-1 truncate font-mono text-xs">{fileName}</span>
+                      <span className="min-w-0 flex-1 truncate font-ui text-xs">{fileName}</span>
                       <span className="shrink-0 text-[10px] text-muted-foreground">
                         {formatAttachmentSize(file.size)}
                       </span>

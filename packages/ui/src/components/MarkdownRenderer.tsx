@@ -15,7 +15,7 @@ const MARKDOWN_CLASSES = [
   '[&_ul]:list-disc [&_ol]:list-decimal [&_li]:my-1 [&_li>p]:my-1',
   '[&_a]:text-link [&_a]:underline-offset-4 hover:[&_a]:underline',
   '[&_strong]:font-semibold [&_em]:text-foreground',
-  '[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-[0.9em]',
+  '[&_code]:rounded [&_code]:bg-muted [&_code]:px-1 [&_code]:py-0.5 [&_code]:font-code [&_code]:text-[0.9em]',
   '[&_pre]:my-3 [&_pre]:overflow-auto [&_pre]:rounded-md [&_pre]:border [&_pre]:bg-muted/35 [&_pre]:p-3 [&_pre]:text-xs',
   '[&_pre_code]:bg-transparent [&_pre_code]:p-0',
   '[&_blockquote]:my-3 [&_blockquote]:border-l-2 [&_blockquote]:border-border [&_blockquote]:pl-3 [&_blockquote]:text-muted-foreground',

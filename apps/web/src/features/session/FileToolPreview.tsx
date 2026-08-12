@@ -138,7 +138,7 @@ export function FileReadPreview({ output, path, offset }: { output: string; path
     >
       <FileHeader path={path ?? 'file'} />
       <pre
-        className="max-h-80 overflow-auto font-mono text-[12px] leading-normal"
+        className="max-h-80 overflow-auto font-code text-[12px] leading-normal"
         data-selectable="true"
         style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
       >
@@ -205,12 +205,12 @@ function FileHeader({
         className="size-3.5"
         fileName={path}
       />
-      <span className="min-w-0 truncate font-mono">{path}</span>
+      <span className="min-w-0 truncate font-ui">{path}</span>
       {warning && (
-        <span className="shrink-0 rounded bg-warning/10 px-1.5 py-0.5 font-mono text-[10px] text-warning">warning</span>
+        <span className="shrink-0 rounded bg-warning/10 px-1.5 py-0.5 font-ui text-[10px] text-warning">warning</span>
       )}
       {added !== undefined && removed !== undefined && (
-        <span className="ml-auto shrink-0 font-mono text-[11px]">
+        <span className="ml-auto shrink-0 font-ui text-[11px]">
           <span className="text-emerald-500">+{added}</span>
           <span className="mx-1 text-muted-foreground/50">/</span>
           <span className="text-red-500">-{removed}</span>

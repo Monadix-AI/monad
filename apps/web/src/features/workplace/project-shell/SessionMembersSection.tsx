@@ -16,9 +16,8 @@ import {
   AgentIdentity,
   AgentInstanceAvatar,
   workspaceBoxRadius as boxR,
-  workspaceMono as mono,
-  workspaceSans as sans,
-  workspaceSectionLabelStyle as sectionLabel
+  workspaceSectionLabelStyle as sectionLabel,
+  uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
@@ -121,7 +120,7 @@ function MemberRow({
             ) : undefined
           }
           name={name}
-          nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
+          nameStyle={{ fontFamily: uiFont, fontSize: 14, fontWeight: 600 }}
         />
       </div>
       <button
@@ -215,12 +214,12 @@ export function SessionMembersSection({
     <section style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
       <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
         <div style={sectionLabel}>{t('web.workplace.sessionMembersTitle')}</div>
-        <p style={{ margin: 0, fontFamily: sans, fontSize: 12, color: 'var(--muted-foreground)' }}>
+        <p style={{ margin: 0, fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
           {t('web.workplace.sessionMembersDescription')}
         </p>
       </div>
       {!activeSessionId ? (
-        <p style={{ margin: 0, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
+        <p style={{ margin: 0, fontFamily: uiFont, fontSize: 13, color: 'var(--muted-foreground)' }}>
           {t('web.workplace.noActiveSession')}
         </p>
       ) : (
@@ -228,7 +227,7 @@ export function SessionMembersSection({
           <div style={{ border: `1px solid ${'var(--border)'}`, borderRadius: boxR, background: 'var(--card)' }}>
             {rosterPending ? <ProjectMembersListSkeleton /> : null}
             {isResolvedEmptyList({ isLoading: rosterPending, itemCount: members.length }) ? (
-              <p style={{ margin: 0, padding: 12, fontFamily: sans, fontSize: 13, color: 'var(--muted-foreground)' }}>
+              <p style={{ margin: 0, padding: 12, fontFamily: uiFont, fontSize: 13, color: 'var(--muted-foreground)' }}>
                 {t('web.workplace.noSessionMembersHint')}
               </p>
             ) : null}
@@ -310,7 +309,7 @@ export function SessionMembersSection({
                             ) : undefined
                           }
                           name={name}
-                          nameStyle={{ fontFamily: sans, fontSize: 14, fontWeight: 600 }}
+                          nameStyle={{ fontFamily: uiFont, fontSize: 14, fontWeight: 600 }}
                         />
                       </div>
                       <button
@@ -330,7 +329,7 @@ export function SessionMembersSection({
                           borderRadius: 8,
                           background: 'var(--accent-blue-soft)',
                           color: 'var(--accent-blue)',
-                          fontFamily: mono,
+                          fontFamily: uiFont,
                           fontSize: 11,
                           padding: '5px 9px',
                           whiteSpace: 'nowrap'

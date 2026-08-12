@@ -417,7 +417,7 @@ export function LiveEventReplay(): React.ReactElement {
           </ReplayColumn>
           <ReplayColumn title={t('web.developerReplay.normalized')}>
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 divide-y overflow-auto font-mono text-xs">
+              <div className="min-h-0 flex-1 divide-y overflow-auto font-ui text-xs">
                 {projection.events.map((event, index) => (
                   <div
                     className="flex h-9 min-w-0 items-center gap-2 px-3"
@@ -439,7 +439,7 @@ export function LiveEventReplay(): React.ReactElement {
           </ReplayColumn>
           <ReplayColumn title={t('web.developerReplay.rawFrame')}>
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="min-h-0 flex-1 divide-y overflow-auto font-mono text-xs">
+              <div className="min-h-0 flex-1 divide-y overflow-auto font-ui text-xs">
                 {frames.map((frame, index) => (
                   <button
                     className={`flex h-9 w-full min-w-0 items-center gap-2 px-3 text-left ${index < step ? 'opacity-100' : 'opacity-40'} ${index === step - 1 ? 'bg-accent' : ''}`}

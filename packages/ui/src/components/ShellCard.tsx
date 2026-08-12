@@ -40,7 +40,7 @@ export function ShellCard({
       >
         <span
           aria-hidden="true"
-          className="shrink-0 select-none font-mono text-muted-foreground"
+          className="shrink-0 select-none font-ui text-muted-foreground"
         >
           $
         </span>
@@ -68,7 +68,7 @@ export function ShellCard({
             value={view.output}
           />
           <pre
-            className="m-0 max-h-72 overflow-auto whitespace-pre font-mono text-[11px] text-foreground"
+            className="m-0 max-h-72 overflow-auto whitespace-pre font-ui text-[11px] text-foreground"
             data-selectable="true"
           >
             {view.output}

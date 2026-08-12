@@ -95,7 +95,7 @@ const PAGE = /* html */ `<!doctype html>
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; font: 13px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; background: #0e1116; color: #d7dde5; }
+  body { margin: 0; font: 13px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0e1116; color: #d7dde5; }
   header { display: flex; align-items: center; gap: 12px; padding: 10px 16px; background: #161b22; border-bottom: 1px solid #232a33; }
   header h1 { font-size: 14px; margin: 0; font-weight: 600; }
   header .dot { width: 8px; height: 8px; border-radius: 50%; background: #f85149; }
@@ -113,7 +113,7 @@ const PAGE = /* html */ `<!doctype html>
   tr.clickable:hover td { background: #161b22; }
   .muted { color: #59636e; }
   .pill { display: inline-block; padding: 0 6px; border-radius: 4px; background: #1f6feb22; color: #58a6ff; font-size: 11px; }
-  #mon { white-space: pre-wrap; font-size: 12px; }
+  #mon { white-space: pre-wrap; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; }
   #mon .row { padding: 1px 0; border-bottom: 1px solid #141a21; }
   #mon .ts { color: #59636e; }
   #mon .cmd { color: #58a6ff; }

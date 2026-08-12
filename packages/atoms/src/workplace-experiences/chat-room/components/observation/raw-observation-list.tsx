@@ -3,7 +3,7 @@ import type { RawDisplayMode, RawFrameRow } from './raw-view.ts';
 
 import { CheckIcon, Copy01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { workspaceMono as mono, workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { Button } from '@monad/ui/components/Button';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui/components/Tooltip';
@@ -153,7 +153,7 @@ function RawObservationCard({
           style={{
             color: 'var(--muted-foreground)',
             flex: 'none',
-            fontFamily: mono,
+            fontFamily: uiFont,
             fontSize: 10,
             fontWeight: 700,
             textTransform: 'uppercase'
@@ -174,7 +174,7 @@ function RawObservationCard({
           <span
             style={{
               color: 'var(--muted-foreground)',
-              fontFamily: mono,
+              fontFamily: uiFont,
               fontSize: 10,
               minWidth: 0,
               overflow: 'hidden',
@@ -215,7 +215,7 @@ function RawObservationCard({
             boxSizing: 'border-box',
             color: 'var(--foreground)',
             display: 'block',
-            fontFamily: mono,
+            fontFamily: uiFont,
             fontSize: 12,
             lineHeight: 1.5,
             margin: 0,
@@ -280,7 +280,7 @@ export function RawObservationList({
           boxSizing: 'border-box',
           color: 'var(--muted-foreground)',
           display: 'flex',
-          fontFamily: sans,
+          fontFamily: uiFont,
           fontSize: 13,
           height: '100%',
           justifyContent: 'center',
@@ -300,7 +300,7 @@ export function RawObservationList({
       style={{
         boxSizing: 'border-box',
         color: 'var(--muted-foreground)',
-        fontFamily: sans,
+        fontFamily: uiFont,
         fontSize: 11,
         padding: '12px 14px 10px',
         textAlign: 'center'

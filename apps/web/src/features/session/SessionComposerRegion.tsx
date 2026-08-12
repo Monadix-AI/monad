@@ -97,7 +97,7 @@ export function SessionComposerRegion({
     <div className="session-content-column pointer-events-auto pt-2 pb-3">
       {identity.isReadOnly ? (
         <div className="flex items-center justify-center gap-2 py-2 text-muted-foreground text-sm">
-          <span className="rounded border bg-muted px-1.5 py-0.5 font-mono text-[10px] uppercase tracking-wide">
+          <span className="rounded border bg-muted px-1.5 py-0.5 font-ui text-[10px] uppercase tracking-wide">
             {identity.currentSession?.origin?.client ?? identity.currentSession?.origin?.surface}
           </span>
           <span>{t('web.chat.readOnly')}</span>

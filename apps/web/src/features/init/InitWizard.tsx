@@ -516,7 +516,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
               </summary>
               <div className="flex flex-col gap-2 border-t px-3 py-3">
                 <Label htmlFor="home-path">{t('web.init.homeLabel')}</Label>
-                <p className="break-all font-mono text-muted-foreground text-xs">{homePath ?? '~/.monad'}</p>
+                <p className="break-all font-ui text-muted-foreground text-xs">{homePath ?? '~/.monad'}</p>
                 <Input
                   id="home-path"
                   onChange={(e) => setCustomHome(e.target.value)}
@@ -594,7 +594,7 @@ export function InitWizard({ homePath }: { homePath?: string }) {
                 </div>
               )}
               {addingExistingProvider?.baseUrl && (
-                <p className="font-mono text-muted-foreground text-xs">{addingExistingProvider.baseUrl}</p>
+                <p className="font-ui text-muted-foreground text-xs">{addingExistingProvider.baseUrl}</p>
               )}
 
               {extraFields.map((f) => (

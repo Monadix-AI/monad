@@ -18,9 +18,8 @@ import {
   AgentIdentity,
   AgentInstanceAvatar,
   Avatar,
-  workspaceMono as mono,
-  workspaceSans as sans,
-  TagChip
+  TagChip,
+  uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
 import { FileIcon } from '@monad/ui/components/FileIcon';
 import { type Components, Markdown } from '@monad/ui/components/Markdown';
@@ -62,7 +61,7 @@ export type MessageAttachmentComponent = ComponentType<{
   tone: 'agent' | 'human';
 }>;
 
-const NAME_STYLE: React.CSSProperties = { fontFamily: sans, fontSize: 14, fontWeight: 600 };
+const NAME_STYLE: React.CSSProperties = { fontFamily: uiFont, fontSize: 14, fontWeight: 600 };
 const RETRY_BUTTON_STYLE: React.CSSProperties = {
   alignItems: 'center',
   background: 'var(--destructive)',
@@ -71,7 +70,7 @@ const RETRY_BUTTON_STYLE: React.CSSProperties = {
   color: 'var(--destructive-foreground)',
   display: 'inline-flex',
   flex: 'none',
-  fontFamily: mono,
+  fontFamily: uiFont,
   fontSize: 12,
   fontWeight: 800,
   height: 22,
@@ -108,7 +107,7 @@ const MESSAGE_MARKDOWN_CSS = `
     background: color-mix(in srgb, currentColor 10%, transparent);
     box-decoration-break: clone;
     padding: 0.08em 0.42em;
-    font-family: ${mono};
+    font-family: ${uiFont};
     font-size: 0.9em;
     font-weight: 500;
     overflow-wrap: break-word;
@@ -440,7 +439,7 @@ function MessageBubbleContent({
           ) : null}
         </span>
       ) : msg.streaming ? (
-        <span style={{ color: 'var(--muted-foreground)', fontFamily: mono, fontSize: 13 }}>
+        <span style={{ color: 'var(--muted-foreground)', fontFamily: uiFont, fontSize: 13 }}>
           {labels?.working ?? 'Working'}
         </span>
       ) : null}
@@ -600,7 +599,7 @@ export const MessageRow = memo(function MessageRow({
           {canReply ? (
             <button
               aria-label={labels?.reply}
-              className="workplace-action flex h-6 items-center gap-1 rounded-md px-1.5 font-mono text-[11px] text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+              className="workplace-action flex h-6 items-center gap-1 rounded-md px-1.5 font-ui text-[11px] text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
               onClick={() => onReply?.(msg)}
               title={labels?.reply}
               type="button"

@@ -295,7 +295,7 @@ function LicenseRow({ icon, name, subtitle, badge, linkUrl, linkLabel }: License
           />
         </span>
         <div className="min-w-0">
-          <span className="licenses-name block truncate font-mono text-sm">{name}</span>
+          <span className="licenses-name block truncate font-ui text-sm">{name}</span>
           <span className="licenses-version block truncate text-muted-foreground text-xs">{subtitle}</span>
         </div>
       </div>

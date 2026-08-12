@@ -284,11 +284,11 @@ function BrowsePanel() {
               </div>
               {e.description ? <p className="text-muted-foreground text-xs">{e.description}</p> : null}
               {e.command ? (
-                <span className="truncate font-mono text-[10px] text-muted-foreground">
+                <span className="truncate font-ui text-[10px] text-muted-foreground">
                   {e.command} {(e.args ?? []).join(' ')}
                 </span>
               ) : e.url ? (
-                <span className="truncate font-mono text-[10px] text-muted-foreground">{e.url}</span>
+                <span className="truncate font-ui text-[10px] text-muted-foreground">{e.url}</span>
               ) : null}
               {e.env.length > 0 ? (
                 <div className="flex flex-wrap gap-1">
@@ -380,7 +380,7 @@ function McpAtomCard({ server }: { server: InstalledMcpAtom }) {
           {t('web.mcp.sourceAtomPack')}
         </Badge>
         {!server.enabled ? <span className="text-muted-foreground text-xs">{t('web.mcp.disabled')}</span> : null}
-        <span className="truncate font-mono text-[10px] text-muted-foreground">{server.command ?? server.url}</span>
+        <span className="truncate font-ui text-[10px] text-muted-foreground">{server.command ?? server.url}</span>
         <div className="ml-auto flex items-center gap-1">
           <Button
             className="gap-1.5"

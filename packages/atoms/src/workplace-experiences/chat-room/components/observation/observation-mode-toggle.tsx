@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 import type { ObservationMode } from './panel-state.ts';
 import type { RawDisplayMode } from './raw-view.ts';
 
-import { workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 
 const OPTIONS: { mode: ObservationMode; label: string }[] = [
   { mode: 'convenience', label: 'Activity' },
@@ -94,7 +94,7 @@ function optionStyle(active: boolean): CSSProperties {
     borderRadius: 999,
     background: active ? 'color-mix(in srgb, var(--primary) 16%, var(--background))' : 'transparent',
     color: active ? 'var(--primary)' : 'var(--muted-foreground)',
-    fontFamily: sans,
+    fontFamily: uiFont,
     fontSize: 11,
     fontWeight: 650,
     lineHeight: 1,

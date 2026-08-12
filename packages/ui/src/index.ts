@@ -22,6 +22,8 @@ export type { OrbState, ThinkingOrbProps } from 'thinking-orbs';
 
 export { ThinkingOrb } from 'thinking-orbs';
 
+export { codeFontFamily, uiFontFamily } from './typography';
+
 import type { ApprovalResourceCardProps } from './components/ApprovalResourceCard';
 import type { AttachmentCardProps } from './components/AttachmentCard';
 import type { BrandGlyphIcon } from './components/BrandGlyph';

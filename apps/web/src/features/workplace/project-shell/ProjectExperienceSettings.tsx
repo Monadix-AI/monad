@@ -1,6 +1,6 @@
 import type { ProjectExperienceDefinition } from '../experiences/types';
 
-import { workspaceSans as sans } from '@monad/ui/components/AgentAvatar';
+import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '#/components/I18nProvider';
 
@@ -35,7 +35,7 @@ export function ProjectExperienceSettings({
         <div style={{ minWidth: 0, flex: 1 }}>
           <h3
             id="project-experience-heading"
-            style={{ margin: 0, fontFamily: sans, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
+            style={{ margin: 0, fontFamily: uiFont, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
           >
             {t('web.workplace.experienceSettingsTitle')}
           </h3>
@@ -43,7 +43,7 @@ export function ProjectExperienceSettings({
             style={{
               margin: '3px 0 0',
               maxWidth: 600,
-              fontFamily: sans,
+              fontFamily: uiFont,
               fontSize: 12,
               lineHeight: 1.45,
               color: 'var(--muted-foreground)'
@@ -64,7 +64,7 @@ export function ProjectExperienceSettings({
             borderRadius: 8,
             background: 'var(--background)',
             color: 'var(--foreground)',
-            fontFamily: sans,
+            fontFamily: uiFont,
             fontSize: 13,
             padding: '6px 10px'
           }}

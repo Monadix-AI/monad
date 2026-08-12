@@ -122,7 +122,7 @@ function CommandCodeSection({
             : 'flex min-w-0 flex-col gap-1.5 border-border/70 border-t bg-warning/5 p-2.5'
       }
     >
-      <div className="font-bold font-mono text-[10px] text-foreground uppercase">{label}</div>
+      <div className="font-bold font-ui text-[10px] text-foreground uppercase">{label}</div>
       <CodeBlock
         className="[&>div]:scrollbar-none rounded-md border-0 bg-transparent text-[11px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-72 [&>div]:overflow-auto [&_pre]:p-0"
         code={code}

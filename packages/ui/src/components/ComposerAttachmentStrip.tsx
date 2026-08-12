@@ -85,7 +85,7 @@ export function ComposerAttachmentStrip({
         const details = (
           <span className="min-w-0">
             <span className="block truncate font-semibold text-xs">{attachment.name}</span>
-            <span className="block font-mono text-[10px] text-muted-foreground">{attachment.sizeLabel}</span>
+            <span className="block font-ui text-[10px] text-muted-foreground">{attachment.sizeLabel}</span>
           </span>
         );
         const contentClassName = [

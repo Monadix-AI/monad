@@ -36,7 +36,7 @@ export function CredentialCard({
             <p className="mt-1 max-w-[72ch] break-words text-muted-foreground text-sm">{credential.description}</p>
           ) : null}
           <div className="mt-3 flex flex-wrap gap-2 text-xs">
-            <code className="rounded-md bg-muted px-2 py-1 font-mono">{credential.environmentVariable}</code>
+            <code className="rounded-md bg-muted px-2 py-1 font-code">{credential.environmentVariable}</code>
             {credential.allowedHosts.map((host) => (
               <span
                 className="rounded-md border px-2 py-1 text-muted-foreground"

@@ -134,7 +134,7 @@ function MonadMcpInbox({ emptyLabel, output }: { emptyLabel: string; output: unk
               </span>
             )}
             {message.meta ? (
-              <span className="ml-auto shrink-0 font-mono text-[10px] text-muted-foreground">{message.meta}</span>
+              <span className="ml-auto shrink-0 font-ui text-[10px] text-muted-foreground">{message.meta}</span>
             ) : null}
           </div>
           <div className="wrap-anywhere mt-0.5 ml-[2.375rem] whitespace-pre-wrap text-foreground leading-5">
@@ -143,7 +143,7 @@ function MonadMcpInbox({ emptyLabel, output }: { emptyLabel: string; output: unk
         </article>
       ))}
       {typeof record?.cursor === 'number' ? (
-        <div className="border-border/60 border-t px-3 py-1.5 text-right font-mono text-[10px] text-muted-foreground">
+        <div className="border-border/60 border-t px-3 py-1.5 text-right font-ui text-[10px] text-muted-foreground">
           {friendlyOutputKey('cursor')} {record.cursor}
         </div>
       ) : null}
@@ -254,7 +254,7 @@ function MetadataFields({ className, fields }: { className?: string; fields: { k
             {friendlyOutputKey(field.key)}
           </dt>
           <dd
-            className="wrap-anywhere min-w-0 font-mono text-foreground text-xs"
+            className="wrap-anywhere min-w-0 font-ui text-foreground text-xs"
             data-slot="monad-mcp-semantic-field-value"
           >
             {field.value}

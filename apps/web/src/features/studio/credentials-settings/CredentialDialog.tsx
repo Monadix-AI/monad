@@ -106,7 +106,7 @@ export function CredentialDialog({
             <Label htmlFor="credential-env">{t('web.credentials.environmentVariable')}</Label>
             <Input
               aria-invalid={Boolean(fieldError('environmentVariable'))}
-              className="font-mono"
+              className="font-ui"
               id="credential-env"
               name="credential-environment-variable"
               onChange={(event) => set('environmentVariable', event.target.value)}
@@ -122,7 +122,7 @@ export function CredentialDialog({
             <Label htmlFor="credential-hosts">{t('web.credentials.allowedHosts')}</Label>
             <Textarea
               aria-invalid={Boolean(fieldError('allowedHosts'))}
-              className="font-mono"
+              className="font-ui"
               id="credential-hosts"
               name="credential-allowed-hosts"
               onChange={(event) => set('allowedHosts', event.target.value)}

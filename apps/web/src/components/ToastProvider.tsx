@@ -208,7 +208,7 @@ function DetailPanel({ detail }: { detail: unknown }) {
 
   return (
     <div className="relative mt-1.5">
-      <pre className="max-h-36 overflow-auto rounded-md border border-border bg-popover p-2.5 pr-8 font-mono text-[11px] text-popover-foreground leading-relaxed shadow-xs">
+      <pre className="max-h-36 overflow-auto rounded-md border border-border bg-popover p-2.5 pr-8 font-code text-[11px] text-popover-foreground leading-relaxed shadow-xs">
         {isObj ? <JsonHighlight value={detail} /> : <span className="text-popover-foreground">{text}</span>}
       </pre>
       <CopyButton text={text} />

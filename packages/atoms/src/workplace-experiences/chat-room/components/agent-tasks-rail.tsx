@@ -32,7 +32,7 @@ import {
   AgentIdentity,
   AgentInstanceAvatar,
   agentPresenceColor as presenceColor,
-  workspaceSans as sans
+  uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
@@ -289,7 +289,7 @@ const agentStatusRingCss = `
   box-sizing: border-box;
   background: rgb(var(--backgroundColor-surface-container) / 0.36);
   color: var(--sidebar-foreground);
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
   font-size: 13px;
   line-height: 1;
   text-align: left;
@@ -363,7 +363,7 @@ const agentStatusRingCss = `
   position: absolute;
   z-index: 4;
   pointer-events: none;
-  font-family: var(--font-mono), ui-monospace, monospace;
+  font-family: var(--font-ui);
 }
 
 .workplace-agent-status-sleep {
@@ -547,7 +547,7 @@ const agentStatusRingCss = `
   display: grid;
   gap: 5px;
   padding: 8px 10px;
-  font-family: var(--font-sans), ui-sans-serif, system-ui, sans-serif;
+  font-family: var(--font-ui);
 }
 
 .workplace-agent-status-tooltip-row {
@@ -1204,7 +1204,7 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
             {agents.length === 0 ? (
               <div
                 style={{
-                  fontFamily: sans,
+                  fontFamily: uiFont,
                   fontSize: 13,
                   color: 'var(--sidebar-foreground)',
                   padding: '2px 0',

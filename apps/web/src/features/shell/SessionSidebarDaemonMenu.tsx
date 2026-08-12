@@ -119,7 +119,7 @@ function DaemonConnectionItem({
               {statusText}
             </span>
           ) : null}
-          {version ? <span className="font-mono text-[10px] leading-none">v{version}</span> : null}
+          {version ? <span className="font-ui text-[10px] leading-none">v{version}</span> : null}
         </span>
       ) : null}
       {active ? (
@@ -342,7 +342,7 @@ export function DaemonMenu({
                 <span className="min-w-0 flex-1">
                   <span className="block truncate font-medium text-base">{upgradeLabel}</span>
                   {upgradeStatus?.latestVersion ? (
-                    <span className="block truncate font-mono text-muted-foreground text-xs">
+                    <span className="block truncate font-ui text-muted-foreground text-xs">
                       v{upgradeStatus.latestVersion}
                     </span>
                   ) : null}

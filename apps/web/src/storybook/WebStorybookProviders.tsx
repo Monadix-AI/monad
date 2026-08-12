@@ -12,7 +12,7 @@ function WebStorybookProviders({ children }: { children: ReactNode }) {
       <I18nProvider>
         <ToastProvider>
           <TooltipProvider delayDuration={200}>
-            <div className="min-h-screen bg-background font-sans text-foreground">{children}</div>
+            <div className="min-h-screen bg-background font-ui text-foreground">{children}</div>
           </TooltipProvider>
         </ToastProvider>
       </I18nProvider>

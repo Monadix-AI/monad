@@ -159,7 +159,7 @@ export function AgentForm({
             <div className="flex flex-col gap-1">
               <Label className="text-xs">{t('web.meshAgent.modelOptions')}</Label>
               <textarea
-                className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+                className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-code text-xs"
                 onChange={(e) => setModelOptions(e.target.value)}
                 placeholder={t('web.meshAgent.modelOptionsPlaceholder')}
                 value={modelOptions}
@@ -375,7 +375,7 @@ function AdapterSettingsFields({
             <Label className="text-xs">{setting.label}</Label>
             {setting.multiline ? (
               <textarea
-                className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+                className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-ui text-xs"
                 onChange={(e) => setStringValue(setting.key, e.target.value)}
                 placeholder={setting.placeholder}
                 value={stringValue(setting.key)}
@@ -421,7 +421,7 @@ function ArgsEnvFields({
       <div className="flex flex-col gap-1">
         <Label className="text-xs">{t('web.acp.env')}</Label>
         <textarea
-          className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-mono text-xs"
+          className="min-h-16 rounded-md border bg-transparent px-2 py-1 font-code text-xs"
           onChange={(e) => setEnv(e.target.value)}
           placeholder={t('web.acp.envPlaceholder')}
           value={env}
