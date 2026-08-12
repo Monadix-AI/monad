@@ -14,7 +14,14 @@ test('the interactive PowerShell installer starts Monad, skips automation, and p
     const stubSource = join(root, 'stub.ts');
     await Bun.write(
       stubSource,
-      `await Bun.write(Bun.env.MONAD_TEST_LOG!, Bun.argv.slice(2).join(' ') + '\\n');
+      `const args = Bun.argv.slice(2);
+if (args[0] === 'status') {
+  if (!Bun.env.MONAD_STUB_DAEMON_VERSION) process.exit(1);
+  console.log(JSON.stringify({ status: 'ok', version: Bun.env.MONAD_STUB_DAEMON_VERSION }));
+  process.exit(0);
+}
+const previous = await Bun.file(Bun.env.MONAD_TEST_LOG!).text().catch(() => '');
+await Bun.write(Bun.env.MONAD_TEST_LOG!, previous + args.join(' ') + '\\n');
 process.exit(Number(Bun.env.MONAD_STUB_EXIT ?? 0));
 `
     );
@@ -36,6 +43,7 @@ function Write-MonadStep($message) { Write-Output "STEP $message" }
 function Write-MonadDone($message) { Write-Output "DONE $message" }
 function Get-ExceptionMessage($exception) { return $exception.Message }
 ${POWERSHELL_INSTALLER_AUTO_START}
+Stop-MonadBeforeInstall $args[0]
 Start-MonadAfterInstall $args[0]
 `
     );
@@ -49,6 +57,30 @@ Start-MonadAfterInstall $args[0]
       code: 0,
       invocation: 'up\n',
       output: 'STEP Starting Monad\r\nDONE Monad started\r\n'
+    });
+
+    const currentLog = join(root, 'current.log');
+    const current = await runPowerShell(runner, installDir, {
+      MONAD_STUB_DAEMON_VERSION: '1.2.3',
+      MONAD_TEST_INTERACTIVE: '1',
+      MONAD_TEST_LOG: currentLog
+    });
+    expect({ code: current.code, invocation: await Bun.file(currentLog).text(), output: current.output }).toEqual({
+      code: 0,
+      invocation: 'stop\nup\n',
+      output: 'STEP Stopping Monad\r\nSTEP Restarting Monad\r\nDONE Monad started\r\n'
+    });
+
+    const staleLog = join(root, 'stale.log');
+    const stale = await runPowerShell(runner, installDir, {
+      MONAD_STUB_DAEMON_VERSION: '1.2.2',
+      MONAD_TEST_INTERACTIVE: '1',
+      MONAD_TEST_LOG: staleLog
+    });
+    expect({ code: stale.code, invocation: await Bun.file(staleLog).text(), output: stale.output }).toEqual({
+      code: 0,
+      invocation: 'stop\nup\n',
+      output: 'STEP Stopping Monad\r\nSTEP Restarting Monad\r\nDONE Monad started\r\n'
     });
 
     const automatedLog = join(root, 'automated.log');

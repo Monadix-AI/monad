@@ -138,8 +138,8 @@ export function resolveDaemonPresentation(options: DaemonLifecycleOptions = {}):
 
 export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise<{ alreadyRunning: boolean }> {
   const presentation = resolveDaemonPresentation(options);
-  // The installer stops any running daemon before overwriting the binary, so a reachable daemon
-  // here is an intentional one the caller is reusing — report it and leave it running.
+  // Reuse a reachable daemon. Installers handle upgrade ownership before calling this path: Unix
+  // restarts a stale version, while Windows stops the daemon before replacing its locked executable.
   if (await isDaemonReachable()) {
     const pid = (await readPid()) ?? (await getPortPid());
     if (presentation.reportLifecycle) {

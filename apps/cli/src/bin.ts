@@ -42,10 +42,9 @@ async function dispatch(): Promise<void> {
     return; // Bun.serve keeps the process alive
   }
   if (sub === 'up' || sub === undefined) {
-    // Ensure the daemon is up and current: startDaemon starts it when stopped and replaces a
-    // stale build after an upgrade, relaying the ready banner. This is the installer's entrypoint
-    // (it runs bare `monad`), so the whole start/upgrade/launch flow stays owned by monad — not
-    // duplicated in install.sh. Then open the browser so first-run setup happens there.
+    // Ensure the daemon is up, relaying the ready banner, then open the browser so first-run setup
+    // happens there. Installers refresh a reachable daemon around upgrades: Unix restarts a stale
+    // version after replacement, while Windows stops it first so the executable can be replaced.
     const { initCliI18n } = await import('./lib/i18n.ts');
     await initCliI18n();
     const { runUp } = await import('./lib/up.ts');

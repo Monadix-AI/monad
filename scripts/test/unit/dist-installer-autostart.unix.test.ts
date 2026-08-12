@@ -11,12 +11,14 @@ test('the interactive shell installer starts Monad, skips automation, and preser
     callsShellStartup: enhancer.includes('monad_start_after_install "$_install_dir"'),
     callsWindowsStartup: enhancer.includes('Start-MonadAfterInstall $dest_dir'),
     injectsPowerShellRuntime: enhancer.includes(`${'$'}{POWERSHELL_INSTALLER_AUTO_START}`),
-    injectsShellRuntime: enhancer.includes(`${'$'}{SHELL_INSTALLER_AUTO_START}`)
+    injectsShellRuntime: enhancer.includes(`${'$'}{SHELL_INSTALLER_AUTO_START}`),
+    stopsWindowsBeforeInstall: enhancer.includes('Stop-MonadBeforeInstall $dest_dir\\n  Start-MonadActivity')
   }).toEqual({
     callsShellStartup: true,
     callsWindowsStartup: true,
     injectsPowerShellRuntime: true,
-    injectsShellRuntime: true
+    injectsShellRuntime: true,
+    stopsWindowsBeforeInstall: true
   });
   const root = await mkdtemp(join(tmpdir(), 'monad-installer-autostart-'));
   try {
@@ -25,6 +27,11 @@ test('the interactive shell installer starts Monad, skips automation, and preser
     await Bun.write(
       binary,
       `#!/bin/sh
+if [ "$1" = "status" ]; then
+  [ -n "\${MONAD_STUB_DAEMON_VERSION:-}" ] || exit 1
+  printf '{"status":"ok","version":"%s"}\\n' "$MONAD_STUB_DAEMON_VERSION"
+  exit 0
+fi
 printf '%s\\n' "$*" >> "$MONAD_TEST_LOG"
 exit "\${MONAD_STUB_EXIT:-0}"
 `
@@ -36,6 +43,7 @@ exit "\${MONAD_STUB_EXIT:-0}"
       `#!/bin/sh
 PRINT_QUIET=0
 NO_COLOR=1
+APP_VERSION=1.2.3
 monad_is_interactive() { [ "\${MONAD_TEST_INTERACTIVE:-0}" = "1" ]; }
 monad_step() { printf 'STEP %s\\n' "$1" >&2; }
 monad_done() { printf 'DONE %s\\n' "$1" >&2; }
@@ -54,6 +62,30 @@ monad_start_after_install "$1"
       code: 0,
       invocation: 'up\n',
       stderr: 'STEP Starting Monad\nDONE Monad started\n'
+    });
+
+    const currentLog = join(root, 'current.log');
+    const current = await runShell(runner, installDir, {
+      MONAD_STUB_DAEMON_VERSION: '1.2.3',
+      MONAD_TEST_INTERACTIVE: '1',
+      MONAD_TEST_LOG: currentLog
+    });
+    expect({ code: current.code, invocation: await Bun.file(currentLog).text(), stderr: current.stderr }).toEqual({
+      code: 0,
+      invocation: 'up\n',
+      stderr: 'STEP Starting Monad\nDONE Monad started\n'
+    });
+
+    const staleLog = join(root, 'stale.log');
+    const stale = await runShell(runner, installDir, {
+      MONAD_STUB_DAEMON_VERSION: '1.2.2',
+      MONAD_TEST_INTERACTIVE: '1',
+      MONAD_TEST_LOG: staleLog
+    });
+    expect({ code: stale.code, invocation: await Bun.file(staleLog).text(), stderr: stale.stderr }).toEqual({
+      code: 0,
+      invocation: 'restart\nup\n',
+      stderr: 'STEP Restarting Monad\nDONE Monad started\n'
     });
 
     const automatedLog = join(root, 'automated.log');

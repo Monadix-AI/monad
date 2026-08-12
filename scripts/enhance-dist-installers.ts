@@ -694,7 +694,7 @@ function Invoke-MonadDownloadFileOnce($client, $url, $path) {
   source = replaceOnce(
     source,
     '  Write-Information "installing to $dest_dir"',
-    '  Start-MonadActivity "Installing to $dest_dir"'
+    '  Stop-MonadBeforeInstall $dest_dir\n  Start-MonadActivity "Installing to $dest_dir"'
   );
   source = replaceEvery(
     source,
