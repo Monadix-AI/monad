@@ -56,7 +56,7 @@
   --foreground: rgb(var(--textColor-primary));
   --card: rgb(var(--backgroundColor-surface-container));
   --card-foreground: rgb(var(--textColor-primary));
-  --popover: rgb(var(--backgroundColor-surface-container));
+  --popover: rgb(var(--backgroundColor-surface-container) / 0.7);
   --popover-foreground: rgb(var(--textColor-primary));
   --primary: rgb(var(--backgroundColor-surface-inverse));
   --primary-foreground: rgb(var(--textColor-inverse-primary));
@@ -98,6 +98,7 @@
   --sidebar-border: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
   --sidebar-ring: rgb(var(--outlineColor-focus-ring));
   --radius: 0.5rem;
+  --popup-surface-blur: 8px;
 
   --accent-blue: var(--link);
   --accent-blue-soft: rgb(var(--backgroundColor-accent) / 0.2);
@@ -189,7 +190,7 @@
   --foreground: rgb(var(--textColor-primary));
   --card: rgb(var(--backgroundColor-surface-container) / 0.5);
   --card-foreground: rgb(var(--textColor-primary));
-  --popover: rgb(var(--backgroundColor-secondary));
+  --popover: rgb(var(--backgroundColor-surface-container) / 0.7);
   --popover-foreground: rgb(var(--textColor-primary));
   --primary: rgb(var(--backgroundColor-surface-inverse));
   --primary-foreground: rgb(var(--textColor-inverse-primary));
@@ -504,7 +505,15 @@
     box-shadow: 0 10px 24px rgb(var(--backgroundColor-transparent) / 0.08);
   }
 
-  .glass-surface
+  .popup-surface {
+    background: var(--popover);
+    border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
+    border-radius: var(--radius-md);
+    box-shadow: 0 10px 24px rgb(var(--backgroundColor-transparent) / 0.08);
+    backdrop-filter: blur(var(--popup-surface-blur));
+  }
+
+  :is(.glass-surface, .popup-surface)
     :where(
       input,
       textarea,
@@ -517,7 +526,7 @@
   }
 
   .dark
-    .glass-surface
+    :is(.glass-surface, .popup-surface)
     :where(
       input,
       textarea,
@@ -529,11 +538,11 @@
     background: rgb(var(--backgroundColor-state-enabled) / 0.55);
   }
 
-  .glass-surface .glass-foreground {
+  :is(.glass-surface, .popup-surface) .glass-foreground {
     background: var(--card);
   }
 
-  .dark .glass-surface .glass-foreground {
+  .dark :is(.glass-surface, .popup-surface) .glass-foreground {
     background: var(--card);
   }
 
@@ -1268,10 +1277,6 @@
   color: var(--foreground);
   text-align: left;
   pointer-events: none;
-  background: var(--popover, var(--background));
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  box-shadow: 0 12px 24px -20px rgb(0 0 0 / 0.5);
   transform: translateY(-50%);
 }
 

@@ -383,7 +383,7 @@ function ToastCard({
       <div
         aria-hidden={isHidden ? true : undefined}
         className={cn(
-          'pointer-events-auto absolute right-0 left-0 origin-top overflow-hidden rounded-(--radius-lg) border border-border bg-popover text-popover-foreground shadow-lg',
+          'popup-surface pointer-events-auto absolute right-0 left-0 origin-top overflow-hidden rounded-(--radius-lg) text-popover-foreground shadow-lg',
           'transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)]',
           isClosing ? 'duration-[180ms]' : 'duration-300'
         )}
@@ -425,7 +425,7 @@ function ToastCard({
     <div
       aria-hidden={isHidden ? true : undefined}
       className={cn(
-        'glass-surface pointer-events-auto absolute right-0 left-0 grid origin-top grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5 px-3 py-3 pr-10 text-popover-foreground shadow-lg',
+        'popup-surface pointer-events-auto absolute right-0 left-0 grid origin-top grid-cols-[1rem_minmax(0,1fr)] items-start gap-2.5 px-3 py-3 pr-10 text-popover-foreground shadow-lg',
         'transition-[transform,opacity] ease-[cubic-bezier(0.32,0.72,0,1)]',
         isClosing ? 'duration-[180ms]' : 'duration-300',
         item.variant === 'error' && 'border-destructive/35',

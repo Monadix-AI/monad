@@ -1,5 +1,5 @@
 export const dialogSurfaceClassName =
-  'glass-surface data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 flex max-h-[min(42rem,calc(100dvh-2rem))] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden rounded-2xl p-0 outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in';
+  'popup-surface data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 fixed top-[50%] left-[50%] z-50 flex max-h-[min(42rem,calc(100dvh-2rem))] w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] flex-col gap-0 overflow-hidden rounded-2xl p-0 outline-none duration-200 data-[state=closed]:animate-out data-[state=open]:animate-in';
 
 export const dialogHeaderClassName = 'flex shrink-0 flex-col gap-2 px-6 pt-6 pb-3 text-left';
 

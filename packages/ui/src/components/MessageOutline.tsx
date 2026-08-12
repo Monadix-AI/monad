@@ -163,7 +163,7 @@ export function MessageOutline<T extends MessageOutlineItem>({
       </div>
       {hoveredItem ? (
         <div
-          className="chat-message-outline__preview"
+          className="popup-surface chat-message-outline__preview"
           style={{ top: previewTop }}
         >
           <span className="chat-message-outline__preview-time">{hoveredItem.time}</span>

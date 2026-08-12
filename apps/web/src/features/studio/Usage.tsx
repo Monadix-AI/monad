@@ -119,7 +119,7 @@ function Heatmap({ stats }: { stats?: GetStatsResponse }) {
           )}
         </HeatGraph.Grid>
         <HeatGraph.Tooltip
-          className="z-50 rounded-md border bg-popover px-2.5 py-1.5 text-popover-foreground text-xs shadow-md"
+          className="popup-surface z-50 rounded-md px-2.5 py-1.5 text-popover-foreground text-xs shadow-md"
           sideOffset={6}
         >
           {({ cell }) => (

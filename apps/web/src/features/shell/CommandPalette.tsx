@@ -7,7 +7,7 @@ import { useMemo } from 'react';
 
 import { commandPaletteSearch, highlightedCommandPaletteParts } from './command-palette';
 
-const commandPaletteSurfaceStyle = { backdropFilter: 'none' };
+const commandPaletteOverlayStyle = { backdropFilter: 'none' };
 
 interface CommandPaletteProps {
   onOpenChange: (open: boolean) => void;
@@ -27,11 +27,10 @@ export function CommandPaletteDialog({ onOpenChange, onSearchChange, open, searc
       open={open}
     >
       <DialogContent
-        className="command-palette-dialog top-[10vh] z-[80] block w-[min(560px,calc(100vw-28px))] max-w-none translate-y-0 gap-0 overflow-hidden rounded-xl bg-popover p-0 text-popover-foreground shadow-2xl sm:max-w-none"
+        className="command-palette-dialog top-[10vh] z-[80] block w-[min(560px,calc(100vw-28px))] max-w-none translate-y-0 gap-0 overflow-hidden rounded-xl p-0 text-popover-foreground shadow-2xl sm:max-w-none"
         overlayClassName="command-palette-overlay z-[70] bg-black/20 dark:bg-black/45"
-        overlayStyle={commandPaletteSurfaceStyle}
+        overlayStyle={commandPaletteOverlayStyle}
         showCloseButton={false}
-        style={commandPaletteSurfaceStyle}
       >
         <DialogTitle className="sr-only">Command palette</DialogTitle>
         <Command

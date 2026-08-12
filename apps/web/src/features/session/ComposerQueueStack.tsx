@@ -38,7 +38,7 @@ export function ComposerQueueStack({
       <div className="absolute right-0 bottom-5 grid w-full bg-transparent transition-opacity group-hover:invisible group-hover:opacity-0">
         {stackedCards.map((card) => (
           <div
-            className="pointer-events-auto col-start-1 row-start-1 w-full self-end rounded-md border bg-popover px-3 py-2 pr-7 text-popover-foreground text-xs shadow-lg transition-transform"
+            className="popup-surface pointer-events-auto col-start-1 row-start-1 w-full self-end rounded-md px-3 py-2 pr-7 text-popover-foreground text-xs shadow-lg transition-transform"
             data-slot="composer-queue-stack-card"
             key={`${card.queueIndex}:${card.text}`}
             style={{
@@ -62,7 +62,7 @@ export function ComposerQueueStack({
       >
         {expandedCards.map((card) => (
           <div
-            className="relative w-full shrink-0 rounded-md border bg-popover px-3 py-2 pr-7 text-popover-foreground text-xs"
+            className="popup-surface relative w-full shrink-0 rounded-md px-3 py-2 pr-7 text-popover-foreground text-xs"
             data-slot="composer-queue-expanded-card"
             key={`${card.queueIndex}:${card.text}`}
           >

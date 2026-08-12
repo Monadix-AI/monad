@@ -16,8 +16,6 @@ export const COMMAND_MENU_EDGE_PADDING = 4;
 const COMMAND_MENU_STICKY_HEADER_HEIGHT = COMMAND_MENU_EDGE_PADDING + COMMAND_MENU_ITEM_HEIGHT;
 const MENU_VISIBLE_ITEM_COUNT = 7;
 const MENU_MAX_HEIGHT = commandMenuPanelHeight(MENU_VISIBLE_ITEM_COUNT);
-const COMMAND_MENU_SURFACE_BACKGROUND = 'color-mix(in srgb, var(--popover) 84%, transparent)';
-
 type CommandMenuLayout = {
   bottom: number;
   detailSide: 'left' | 'right';
@@ -145,12 +143,10 @@ export function CommandMenu({
   return (
     <div ref={anchorRef}>
       <div
-        className="glass-surface fixed z-50 overflow-visible rounded-[10px] border text-popover-foreground"
+        className="popup-surface fixed z-50 overflow-visible rounded-[10px] border text-popover-foreground"
         ref={menuRef}
         style={{
           ...menuStyle,
-          backdropFilter: 'blur(18px) saturate(1.15)',
-          background: COMMAND_MENU_SURFACE_BACKGROUND,
           borderColor: 'rgb(var(--borderColor-secondary) / 0.12)',
           boxShadow: '0 1px 0 rgb(var(--borderColor-secondary) / 0.05), 0 18px 42px -28px rgb(0 0 0 / 0.42)'
         }}
@@ -158,13 +154,11 @@ export function CommandMenu({
         {activeItem?.hint ? (
           <div
             className={cn(
-              'glass-surface absolute hidden w-[17.5rem] overflow-y-auto p-3 text-popover-foreground shadow-xl [scrollbar-width:none] md:block [&::-webkit-scrollbar]:hidden',
+              'popup-surface absolute hidden w-[17.5rem] overflow-y-auto p-3 text-popover-foreground shadow-xl [scrollbar-width:none] md:block [&::-webkit-scrollbar]:hidden',
               detailSideClass
             )}
             ref={detailRef}
             style={{
-              backdropFilter: 'blur(18px) saturate(1.15)',
-              background: COMMAND_MENU_SURFACE_BACKGROUND,
               maxHeight: Math.max(80, layout.maxHeight - detailTop),
               scrollbarWidth: 'none',
               top: detailTop
