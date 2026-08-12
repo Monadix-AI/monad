@@ -22,12 +22,17 @@ test('release daemon supervisor launches outside the short-lived CLI process', (
 
   const windows = releaseDaemonSupervisorLauncherArgv(
     'win32',
-    'C:\\monad\\monad.exe',
-    'C:\\state\\daemon.log',
-    'C:\\state\\startup.log'
+    "C:\\Monad O'Brien\\monad.exe",
+    "C:\\Monad O'Brien\\daemon.log",
+    "C:\\Monad O'Brien\\startup.log"
   );
-  expect(windows.slice(0, 5)).toEqual(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command']);
-  expect(windows.slice(-3)).toEqual(['C:\\monad\\monad.exe', 'C:\\state\\daemon.log', 'C:\\state\\startup.log']);
+  expect(windows.slice(0, 5)).toEqual(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand']);
+  expect(windows).toHaveLength(6);
+  expect(Buffer.from(windows[5] ?? '', 'base64').toString('utf16le')).toBe(
+    "$proc = Start-Process -FilePath 'C:\\Monad O''Brien\\monad.exe' " +
+      "-ArgumentList @('daemon-supervisor', '\"C:\\Monad O''Brien\\daemon.log\"') " +
+      "-RedirectStandardOutput 'C:\\Monad O''Brien\\startup.log' -WindowStyle Hidden -PassThru; $proc.Id"
+  );
 });
 
 test('daemon supervisor relays only the first child startup output', () => {

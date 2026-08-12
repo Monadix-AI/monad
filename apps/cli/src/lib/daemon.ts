@@ -92,19 +92,18 @@ export function releaseDaemonSupervisorLauncherArgv(
 ): string[] {
   const supervisorPath = roleExecPath(execPath, 'restart', platform);
   if (platform === 'win32') {
+    const literal = (value: string) => `'${value.replaceAll("'", "''")}'`;
     const script =
-      "$proc = Start-Process -FilePath $args[0] -ArgumentList @('daemon-supervisor', $args[1]) " +
-      '-RedirectStandardOutput $args[2] -WindowStyle Hidden -PassThru; $proc.Id';
+      `$proc = Start-Process -FilePath ${literal(supervisorPath)} ` +
+      `-ArgumentList @('daemon-supervisor', ${literal(`"${logPath}"`)}) ` +
+      `-RedirectStandardOutput ${literal(startupOutputPath)} -WindowStyle Hidden -PassThru; $proc.Id`;
     return [
       'powershell',
       '-NoProfile',
       '-ExecutionPolicy',
       'Bypass',
-      '-Command',
-      script,
-      supervisorPath,
-      logPath,
-      startupOutputPath
+      '-EncodedCommand',
+      Buffer.from(script, 'utf16le').toString('base64')
     ];
   }
   return [
