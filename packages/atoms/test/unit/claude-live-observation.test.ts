@@ -125,3 +125,28 @@ test('Claude live projection replaces partial thinking and text with the final S
     ]
   });
 });
+
+test('Claude empty thinking deltas keep a non-expandable reasoning placeholder', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  if (!adapter) throw new Error('Claude adapter is required');
+  const output = [
+    { type: 'stream_event', event: { type: 'message_start', message: { id: 'msg_empty_thinking' } } },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_start', index: 0, content_block: { type: 'thinking', thinking: '' } }
+    },
+    {
+      type: 'stream_event',
+      event: { type: 'content_block_delta', index: 0, delta: { type: 'thinking_delta', thinking: '   ' } }
+    },
+    { type: 'stream_event', event: { type: 'content_block_stop', index: 0 } }
+  ]
+    .map((record) => JSON.stringify(record))
+    .join('\n');
+
+  expect(
+    meshAgentNeutralStreamItems({ id: 'mesh_empty_thinking', provider: 'claude-code', adapter, output }).map(
+      ({ hasContent, kind, streaming, text }) => ({ hasContent, kind, streaming, text })
+    )
+  ).toEqual([{ hasContent: false, kind: 'reasoning', streaming: false, text: 'Thinking…' }]);
+});

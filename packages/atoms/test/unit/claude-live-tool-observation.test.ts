@@ -251,6 +251,56 @@ test('Claude live tool argument deltas settle into one canonical tool card', () 
   });
 });
 
+test('Claude history and live tool envelopes share the call identity', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  if (!adapter) throw new Error('claude-code adapter is unavailable');
+  const callId = 'toolu_shared_history_live';
+  const history = adapter.events.projectLive({
+    id: 'history_tool',
+    mode: 'events',
+    output: JSON.stringify({
+      type: 'assistant',
+      uuid: 'history_assistant',
+      message: { content: [{ type: 'tool_use', id: callId, name: 'Write', input: { file_path: '/tmp/a.md' } }] }
+    })
+  }).events;
+  const live = adapter.events.projectLive({
+    id: 'live_tool',
+    mode: 'live',
+    output: [
+      {
+        type: 'stream_event',
+        uuid: 'live_start',
+        event: { type: 'message_start', message: { id: 'live_message' } }
+      },
+      {
+        type: 'stream_event',
+        uuid: 'live_tool_start',
+        event: {
+          type: 'content_block_start',
+          index: 0,
+          content_block: { type: 'tool_use', id: callId, name: 'Write', input: {} }
+        }
+      },
+      {
+        type: 'assistant',
+        uuid: 'live_assistant',
+        message: { id: 'live_message', content: [{ type: 'tool_use', id: callId, name: 'Write', input: {} }] }
+      }
+    ]
+      .map((record) => JSON.stringify(record))
+      .join('\n')
+  }).events;
+
+  expect({
+    history: history.find((event) => event.role === 'tool' && event.providerEventType === 'tool_use')?.dedupeKey,
+    live: live.find((event) => event.role === 'tool' && event.providerEventType === 'tool_use')?.dedupeKey
+  }).toEqual({
+    history: `claude-code:tool:${callId}:tool:tool_use`,
+    live: `claude-code:tool:${callId}:tool:tool_use`
+  });
+});
+
 test('Claude live Monad calls use the connecting orb before a result arrives', () => {
   const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
   if (!adapter) throw new Error('claude-code adapter is unavailable');

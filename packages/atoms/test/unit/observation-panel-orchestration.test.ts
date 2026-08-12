@@ -357,6 +357,54 @@ test('convenience history preserves a tool call and result that share a provider
   });
 });
 
+test('a completed history tool replaces its duplicate running live envelope by call id', () => {
+  const callId = 'toolu_history_live';
+  const historicalCall: AgentObservationEvent = {
+    ...observationEvent('history-call', 'Tool call Write'),
+    kind: 'tool-call',
+    dedupeKey: 'claude-code:history:tool:tool_use',
+    tool: { name: 'Write', callId, input: { file_path: '/tmp/a.md' } }
+  };
+  const historicalResult: AgentObservationEvent = {
+    ...observationEvent('history-result', 'Wrote file'),
+    kind: 'tool-result',
+    dedupeKey: 'claude-code:history-result:tool:tool_result',
+    tool: { name: 'tool', callId, output: 'Wrote file', status: 'completed' }
+  };
+  const liveCall: AgentObservationEvent = {
+    ...observationEvent('live-call', 'Tool call Write'),
+    kind: 'tool-call',
+    streaming: true,
+    dedupeKey: 'claude-code:live:tool:tool_use_delta',
+    tool: { name: 'Write', callId, input: { file_path: '/tmp/a.md' } }
+  };
+  const frames: MeshConvenienceFrame[] = [
+    {
+      kind: 'patch',
+      cursor: 'provider:history-tool',
+      operations: [historicalCall, historicalResult].map((event) => ({ op: 'upsert' as const, event }))
+    }
+  ];
+  const events = foldConvenienceEvents({ ...emptyObservationTimeline, events: [liveCall] }, frames).events;
+
+  expect({
+    events: events.map((event) => ({ id: event.id, kind: event.kind, callId: event.tool?.callId })),
+    cards: agentObservationCards(events, 'claude-code').map((card) => ({
+      id: card.id,
+      kind: card.kind,
+      streaming: card.streaming,
+      callId: (card.payload.call as AgentObservationEvent | undefined)?.tool?.callId,
+      resultStatus: (card.payload.result as AgentObservationEvent | undefined)?.tool?.status
+    }))
+  }).toEqual({
+    events: [
+      { id: 'live-call', kind: 'tool-call', callId },
+      { id: 'history-result', kind: 'tool-result', callId }
+    ],
+    cards: [{ id: 'live-call', kind: 'tool', streaming: false, callId, resultStatus: 'completed' }]
+  });
+});
+
 test('older page events with their own dedupe keys prepend ahead of the live rows', () => {
   const live: AgentObservationEvent = {
     ...observationEvent('mesh:json:0:message', 'newer'),

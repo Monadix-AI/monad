@@ -153,13 +153,17 @@ export function reconcileClaudeStreamEvents(events: MeshAgentObservationEvent[])
                     : event.text;
               existing.text = `${existing.text ?? (previous.hasContent === false ? '' : previous.text)}${fragment}`;
             }
+            const accumulatedText = existing.text ?? previous.text;
+            const hasThinkingContent = nativeType === 'thinking' && accumulatedText.trim().length > 0;
             reconciled[existing.eventIndex] = {
               ...previous,
               text:
                 nativeType === 'tool'
                   ? `Tool call ${existing.toolName ?? 'tool'}${existing.inputJson ? ` ${existing.inputJson}` : ''}`
-                  : (existing.text ?? previous.text),
-              ...(nativeType === 'thinking' ? { hasContent: true } : {}),
+                  : hasThinkingContent || previous.hasContent !== false
+                    ? accumulatedText
+                    : previous.text,
+              ...(nativeType === 'thinking' ? { hasContent: hasThinkingContent } : {}),
               ...(nativeType === 'tool' ? { providerEventType: 'tool_use_delta' } : {}),
               provenance: {
                 rawEvents: [...previous.provenance.rawEvents, ...event.provenance.rawEvents]

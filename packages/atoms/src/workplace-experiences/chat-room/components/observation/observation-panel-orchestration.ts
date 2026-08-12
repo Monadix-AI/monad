@@ -74,6 +74,9 @@ export function prependRawEventsRows(older: RawFrameRow[], current: RawFrameRow[
 // multiple semantic rows (for example a tool call and its result), so `kind` keeps those rows
 // distinct while `dedupeKey` still joins the same row across page and live positional ids.
 function observationJoinKey(event: AgentObservationEvent): string {
+  if ((event.kind === 'tool-call' || event.kind === 'tool-result') && event.tool?.callId) {
+    return `tool:${event.tool.callId}:${event.kind}`;
+  }
   return event.dedupeKey ? `${event.dedupeKey}:${event.kind}` : event.id;
 }
 

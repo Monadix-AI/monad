@@ -198,6 +198,44 @@ function claudeTopLevelProjectionId(base: string, recordIndex: number, part: str
   return indexedId && recordIndex > 0 ? `${base}:json:${recordIndex}:${part}` : `${base}:${part}`;
 }
 
+function claudeToolCallId(event: MeshAgentObservationEvent): string | undefined {
+  if (event.role !== 'tool') return undefined;
+  const partIndexMatch = /:(?:tool|tool-result):(\d+)$/.exec(event.id);
+  const partIndex = partIndexMatch ? Number(partIndexMatch[1]) : undefined;
+  for (const rawEvent of event.provenance.rawEvents) {
+    const raw = recordValue(rawEvent);
+    const payload = recordValue(raw?.payload);
+    const direct = textValue(raw?.tool_use_id, raw?.toolUseId, raw?.callId, payload?.callId);
+    if (direct) return direct;
+    const nativeBlock = recordValue(recordValue(raw?.event)?.content_block);
+    const nativeId = nativeBlock?.type === 'tool_use' ? textValue(nativeBlock.id) : undefined;
+    if (nativeId) return nativeId;
+    const message = recordValue(raw?.message);
+    const content = Array.isArray(message?.content) ? message.content : [];
+    const indexedPart = partIndex === undefined ? undefined : recordValue(content[partIndex]);
+    const indexedId = textValue(
+      indexedPart?.type === 'tool_use' ? indexedPart.id : undefined,
+      indexedPart?.type === 'tool_result' ? indexedPart.tool_use_id : undefined
+    );
+    if (indexedId) return indexedId;
+    const ids = content.flatMap((part) => {
+      const item = recordValue(part);
+      const id = textValue(
+        item?.type === 'tool_use' ? item.id : undefined,
+        item?.type === 'tool_result' ? item.tool_use_id : undefined
+      );
+      return id ? [id] : [];
+    });
+    if (ids.length === 1) return ids[0];
+  }
+  return undefined;
+}
+
+function claudeObservationDedupeIdentity(event: MeshAgentObservationEvent): string | undefined {
+  const callId = claudeToolCallId(event);
+  return callId ? `tool:${callId}` : undefined;
+}
+
 export function claudeRecordEvents(
   id: string,
   record: ClaudeObservationMessage,
@@ -384,6 +422,7 @@ export function claudeRecordEvents(
 
 export const claudeCodeObservationProjection = {
   checkpoint: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
+  dedupeIdentity: claudeObservationDedupeIdentity,
   identity: (event: MeshAgentObservationEvent) => textValue(recordValue(event.provenance.rawEvents[0])?.uuid),
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
