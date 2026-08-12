@@ -45,3 +45,28 @@ test('readSSE stops synchronously at the matching frame within a multi-event net
     server.stop(true);
   }
 });
+
+test('readSSE rejects when the stream timeout expires before its condition matches', async () => {
+  const server = Bun.serve({
+    port: 0,
+    fetch: () =>
+      new Response(
+        new ReadableStream({
+          start: (controller) => {
+            controller.enqueue(new TextEncoder().encode('data: {"type":"session.created","payload":{}}\n\n'));
+          }
+        }),
+        { headers: { 'content-type': 'text/event-stream' } }
+      )
+  });
+  try {
+    await expect(
+      readSSE(`http://127.0.0.1:${server.port}`, {
+        until: (event) => event.type === 'session.updated',
+        timeoutMs: 20
+      })
+    ).rejects.toThrow('SSE condition timed out after 20ms; observed event types: session.created');
+  } finally {
+    server.stop(true);
+  }
+});

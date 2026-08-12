@@ -33,10 +33,17 @@ export async function readSSE(
 ): Promise<Event[]> {
   const controller = new AbortController();
   const seen: Event[] = [];
-  const timer = setTimeout(() => controller.abort(), opts.timeoutMs ?? 2_000);
+  const timeoutMs = opts.timeoutMs ?? 2_000;
+  let matched = false;
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    controller.abort();
+  }, timeoutMs);
   const parser = createJsonSseParser((event) => {
     seen.push(event);
     if (opts.until(event)) {
+      matched = true;
       controller.abort();
       // eventsource-parser dispatches every complete frame already present in one feed call. Throwing a
       // private sentinel preserves readSSE's established contract that the matching event is the final
@@ -69,6 +76,11 @@ export async function readSSE(
     if (error !== SSE_CONDITION_MATCHED && !controller.signal.aborted) throw error;
   } finally {
     clearTimeout(timer);
+  }
+  if (!matched) {
+    const reason = timedOut ? `timed out after ${timeoutMs}ms` : 'ended before the condition matched';
+    const observed = seen.map((event) => event.type).join(', ') || 'none';
+    throw new Error(`SSE condition ${reason}; observed event types: ${observed}`);
   }
   return seen;
 }

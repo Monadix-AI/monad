@@ -998,7 +998,7 @@ for (const kind of TRANSPORTS) {
             typeof message.data === 'object' &&
             message.data !== null &&
             'agentName' in message.data &&
-            message.data.agentName === 'codex'
+            message.data.agentName === 'pmem_codex'
           );
         },
         timeoutMs: DAEMON_E2E_TIMEOUT_BUDGET.streamMs,
@@ -1011,7 +1011,7 @@ for (const kind of TRANSPORTS) {
             uiEvent.kind === 'upsert' &&
             uiEvent.item.kind === 'message' &&
             uiEvent.item.role === 'assistant' &&
-            uiEvent.item.agentName === 'codex' &&
+            uiEvent.item.agentName === 'pmem_codex' &&
             uiEvent.item.parts.some((part) => part.type === 'text' && part.text === 'live managed reply')
           );
         },
@@ -1026,8 +1026,10 @@ for (const kind of TRANSPORTS) {
       );
 
       expect(res.status).toBe(200);
-      expect((await eventP).some((event) => event.type === 'session.message.created')).toBe(true);
-      expect((await uiP).some((event) => (event as unknown as SessionUiEvent).kind === 'upsert')).toBe(true);
+      const streamedEvent = (await eventP).at(-1);
+      expect(streamedEvent?.type).toBe('session.message.created');
+      const streamedUiEvent = (await uiP).at(-1) as SessionUiEvent | undefined;
+      expect(streamedUiEvent?.kind).toBe('upsert');
       expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'live managed reply' }]);
     });
 
