@@ -170,6 +170,7 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
     this.pendingText = '';
     this.decoder = new TextDecoder();
     codexRuntimeState(this.handle).currentTurnId = undefined;
+    codexRuntimeState(this.handle).lastCompletedTurnId = undefined;
     // Disposal runs on the stop path, where the child may already be gone; a broken pipe here is
     // the expected shape of "already closed", not a disposal failure to propagate.
     await this.channel?.close().catch(() => undefined);
@@ -231,7 +232,8 @@ export class CodexAppServerDriver implements ResidentProviderDriver {
     );
     const turnId = turnIdFromResult(result);
     if (!turnId) throw new Error('Codex app-server returned turn/start without a turn id');
-    codexRuntimeState(this.handle).currentTurnId = turnId;
+    const state = codexRuntimeState(this.handle);
+    state.currentTurnId = state.lastCompletedTurnId === turnId ? undefined : turnId;
   }
 
   private async openThread(providerSessionRef?: string): Promise<string> {

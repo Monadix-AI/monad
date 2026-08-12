@@ -469,7 +469,10 @@ export function parseCodexSessionJsonl(chunk: string, handle?: CodexAppServerEve
         const turn = recordValue(recordValue(record.params)?.turn);
         const state = codexRuntimeState(handle);
         state.currentTurnId = record.method === 'turn/started' && typeof turn?.id === 'string' ? turn.id : undefined;
-        if (record.method === 'turn/completed') state.turnRecoveries = 0;
+        if (record.method === 'turn/completed') {
+          state.lastCompletedTurnId = typeof turn?.id === 'string' ? turn.id : undefined;
+          state.turnRecoveries = 0;
+        }
       }
       if (record.method === 'error') {
         const errorEvents = handleCodexTurnError(record, handle);
