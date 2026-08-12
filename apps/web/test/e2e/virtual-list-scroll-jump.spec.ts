@@ -72,7 +72,6 @@ test('scrolling back through a real transcript holds the content still', async (
 
   const drifts: number[] = [];
   for (let step = 0; step < 12; step += 1) drifts.push(await driftOverWheel(page, -400));
-
   expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
 });
 
@@ -91,7 +90,6 @@ test('continuous backward scrolling holds the content still while measurements l
     const drift = await page.evaluate(() => window.harness.anchorDrift());
     drifts.push(Math.abs(drift - 400));
   }
-
   expect(Math.max(...drifts)).toBeLessThanOrEqual(DRIFT_TOLERANCE_PX);
 });
 

@@ -69,7 +69,7 @@ const AT_END_THRESHOLD = 32;
 // Minimum cumulative upward scrollTop travel (reset by any downward movement) that counts as the
 // reader taking over. Above macOS momentum rubber-band jitter, below any deliberate drag.
 const UP_SCROLL_INTENT_EPSILON = 8;
-// Core's pinned-to-end window for streaming growth (official chat guidance: ~80px). Wider than
+// Pinned-to-end window for streaming growth (official chat guidance: ~80px). Wider than
 // AT_END_THRESHOLD so a momentary frame of lag can't drop the viewport out of the pinned path,
 // while the jump-to-latest affordance still uses the tighter visual threshold.
 const SCROLL_END_THRESHOLD = 80;
@@ -184,6 +184,16 @@ export function VirtualList<T>({
   // used to detach on any negative deltaY, which a −1px trackpad-inertia jitter or a wheel-up
   // bubbling out of a nested scroller could forge — and the detach is sticky now.
   const wheelUpTravelRef = useRef(0);
+  // Pointer events from the native scrollbar target the scroll element itself; row interactions
+  // target descendants. Remember that ownership so a stale programmatic-scroll marker cannot
+  // disguise a thumb drag to the loaded top as one of our own writes.
+  const scrollbarPointerActiveRef = useRef(false);
+  const scrollbarPointerTopOffsetRef = useRef<number | null>(null);
+  const scrollbarPointerRowAnchorRef = useRef<{ height: number; key: string } | null>(null);
+  // The row the reader was looking at immediately before the latest backward wheel step. A batch
+  // of first measurements can move the live fold between rows; this stable index keeps every newly
+  // mounted row before that visual anchor in the same compensation batch.
+  const backwardGestureAnchorIndexRef = useRef<number | null>(null);
   // Sticky detach: a deliberate gesture away from the live edge must survive the position drifting
   // back inside the at-end window (streaming growth keeps the distance small no matter how far up
   // the reader nudged). Positional at-end checks re-arm the pins on the next evaluate, so every
@@ -219,6 +229,7 @@ export function VirtualList<T>({
   const firstItem = items[0];
   const firstItemKey = firstItem === undefined ? null : getKey(firstItem);
   const previousFirstKeyRef = useRef<string | null>(null);
+  const firstItemChanged = previousFirstKeyRef.current !== null && firstItemKey !== previousFirstKeyRef.current;
 
   const emitRange = useCallback((range: { endIndex: number; startIndex: number } | null) => {
     const publish = latestRef.current.onRangeChange;
@@ -244,16 +255,15 @@ export function VirtualList<T>({
       emitRange(instance.range);
 
       // Re-pin only when the content itself grew. Scrolling never changes the total size, so a
-      // reader easing away from the bottom is not fought; a streamed token or a settling
-      // measurement does change it, and with directDomUpdates that growth often skips React
-      // entirely, so this notification is the only place left that still runs. Until the initial
-      // end-scroll has settled the pin is unbounded — the first layout is built from estimates
-      // and can be off by far more than the follow threshold.
-      // The library follows APPENDS (followOnAppend, on count change), but a chat's last message
-      // grows token by token WITHOUT changing the count — followOnAppend never fires, so the
-      // viewport drifts a line off the bottom on every token. Re-pin that one case by hand: on any
-      // growth while the previous frame sat at the live edge (same 2px threshold the library uses,
-      // so the reader detaches identically), snap back to the end.
+      // reader easing away from the bottom is not fought; an append, a streamed token or a
+      // settling measurement does change it, and with directDomUpdates that growth often skips
+      // React entirely, so this notification is the only place left that still runs. Core's own
+      // end-keeping (followOnAppend, resizeItem's at-end path) works in VIRTUAL coordinates,
+      // which trail the committed DOM while the sizer catches up — delegating to it leaves the
+      // viewport parked short of the bottom (removing this pin fails the follow suite outright).
+      // scrollHeight cannot disagree with what is about to paint. Until the initial end-scroll
+      // has settled the pin is unbounded: the first layout is built from estimates and can be
+      // off by far more than the follow threshold.
       const scroller = scrollerRef.current;
       const totalSize = instance.getTotalSize();
       const grew = totalSize !== lastTotalSizeRef.current;
@@ -270,7 +280,15 @@ export function VirtualList<T>({
           !leftBottomRef.current &&
           performance.now() - mountedAtRef.current < SETTLE_WINDOW_MS;
         if (distance <= 1) reachedBottomOnceRef.current = true;
-        if (distance > 1 && (settling || wasAtEndRef.current)) scroller.scrollTop = target;
+        if (
+          distance > 1 &&
+          !userDetachedRef.current &&
+          !scrollbarPointerRowAnchorRef.current &&
+          (settling || wasAtEndRef.current)
+        ) {
+          scroller.scrollTop = target;
+          previousScrollTopRef.current = scroller.scrollTop;
+        }
       }
 
       const knownScrollOffset = metrics?.scrollTop;
@@ -284,7 +302,10 @@ export function VirtualList<T>({
         if (atStart && startArmedRef.current && initialEndScrollDoneRef.current) {
           const handled = latestRef.current.onStartReached?.();
           if (handled !== false) startArmedRef.current = false;
-        } else if (scrollOffset > START_REARM_THRESHOLD) {
+        } else if (
+          scrollOffset > START_REARM_THRESHOLD &&
+          !(scrollbarPointerRowAnchorRef.current && scrollbarPointerTopOffsetRef.current !== null)
+        ) {
           // Hysteresis: a prepended page first lands at its estimated height and is corrected once
           // the rows measure. That transient overshoot must not re-arm the start edge, or the
           // correction re-enters the zone and chains a second, unrequested page load.
@@ -307,8 +328,8 @@ export function VirtualList<T>({
       if (metrics && distanceFromEnd > SCROLL_END_THRESHOLD) leftBottomRef.current = true;
       // Record whether the viewport is at the end, read from the LIVE DOM so it reflects the pin
       // just applied above (the instance's cached offset lags a frame). Next growth reads this to
-      // decide whether the reader was still following. Same tiny threshold the library uses, so
-      // hand-pinned token-growth and library-pinned appends agree on when the reader took over.
+      // decide whether the reader was still following — exact bottom, not the wider core window,
+      // so a reader who nudged off the edge is never re-pinned by the next token.
       if (scroller) {
         wasAtEndRef.current =
           !userDetachedRef.current &&
@@ -323,6 +344,32 @@ export function VirtualList<T>({
       if (lastAtEndRef.current !== atEnd) {
         lastAtEndRef.current = atEnd;
         latestRef.current.onAtBottomChange?.(atEnd);
+      }
+      const pointerRowAnchor = scrollbarPointerRowAnchorRef.current;
+      let pointerRowGrowth = 0;
+      if (scroller && pointerRowAnchor) {
+        const anchoredRow = [...scroller.querySelectorAll<HTMLElement>('[data-vl-key]')].find(
+          (element) => element.dataset.vlKey === pointerRowAnchor.key
+        );
+        if (anchoredRow) {
+          const currentHeight = anchoredRow.getBoundingClientRect().height;
+          pointerRowGrowth = currentHeight - pointerRowAnchor.height;
+          if (pointerRowGrowth > 0) scrollbarPointerTopOffsetRef.current = pointerRowGrowth;
+        }
+      }
+      const ownedTopOffset = scrollbarPointerTopOffsetRef.current;
+      if (
+        scroller &&
+        pointerRowAnchor !== null &&
+        ownedTopOffset !== null &&
+        (scroller.scrollTop > START_REARM_THRESHOLD || pointerRowGrowth > 0) &&
+        Math.abs(scroller.scrollTop - ownedTopOffset) > 1
+      ) {
+        userDetachedRef.current = true;
+        wasAtEndRef.current = false;
+        lastAtEndRef.current = false;
+        scroller.scrollTop = ownedTopOffset;
+        previousScrollTopRef.current = scroller.scrollTop;
       }
     },
     [emitRange, settleAtBottomOnLoad, stickToBottom]
@@ -364,14 +411,6 @@ export function VirtualList<T>({
     [evaluateBoundaries]
   );
 
-  const shouldFollowCommittedAppend =
-    scrollerReady &&
-    stickToBottom &&
-    lastItemKey !== null &&
-    previousLastKeyRef.current !== lastItemKey &&
-    lastAtEndRef.current !== false &&
-    !userDetachedRef.current;
-
   // When the item edges change while the reader is away from the bottom — a live append landing
   // mid-history-read, or an older page prepending mid-gesture — this render's setOptions computes
   // the end-anchor as `newStart + (cachedOffset - oldStart)`, and a cached offset that lags the
@@ -394,13 +433,17 @@ export function VirtualList<T>({
   // the reader is at the far end of it; the unbounded pin exists only to finish the very first
   // layout, and letting it survive a prepend would drag them back from the history they just
   // asked for.
-  if (previousFirstKeyRef.current !== null && firstItemKey !== previousFirstKeyRef.current) {
+  if (firstItemChanged) {
     leftBottomRef.current = true;
   }
   previousFirstKeyRef.current = firstItemKey;
 
+  const virtualizerAnchor =
+    stickToBottom && ((!userDetachedRef.current && !scrollbarPointerRowAnchorRef.current) || firstItemChanged)
+      ? 'end'
+      : 'start';
   const virtualizer = useVirtualizer({
-    anchorTo: stickToBottom ? 'end' : 'start',
+    anchorTo: virtualizerAnchor,
     count: items.length + (hasFooter ? 1 : 0),
     // Row positions and the sizer height are written straight to the DOM on every virtualizer
     // notification, in the same synchronous batch as its scroll corrections. Routing positions
@@ -413,10 +456,9 @@ export function VirtualList<T>({
       if (item === undefined) return ESTIMATED_ROW_HEIGHT;
       return latestRef.current.estimateRowHeight?.(item, index) ?? ESTIMATED_ROW_HEIGHT;
     },
-    // The library's followOnAppend only fires on APPEND (count change) and, when on, perturbs the
-    // end-anchor used for prepends. A single growth pin below handles append and token-growth
-    // alike — gated on whether the previous frame sat within the same 2px window the library would
-    // use — so following is uniform and prepend anchoring is left untouched.
+    // The growth pin in evaluateBoundaries plus the commit-time DOM pin follow appends and
+    // token-growth alike, in DOM coordinates; core's append-follow would duplicate them in
+    // virtual coordinates, which trail the committed DOM while the sizer catches up.
     followOnAppend: false,
     getItemKey: keyOfIndex,
     getScrollElement: () => scrollerRef.current,
@@ -446,11 +488,13 @@ export function VirtualList<T>({
         // rebase from the frame-stale cached offset swallows the input applied since.
         if (distanceFromEnd > SCROLL_END_THRESHOLD * 2 || userDetachedRef.current) {
           el.scrollBy({ behavior: 'instant', top: adjustments });
+          previousScrollTopRef.current = el.scrollTop;
           programmaticScrollTopRef.current = el.scrollTop;
           return;
         }
       }
       elementScroll(offset, { adjustments, behavior }, instance);
+      previousScrollTopRef.current = el.scrollTop;
     }
   });
   virtualizerRef.current = virtualizer;
@@ -474,17 +518,6 @@ export function VirtualList<T>({
   // sweep, and each miss is a visible jump. `scrollAdjustments` is private in the typings — the
   // cast is the price of mirroring the default exactly.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = (item, delta, instance) => {
-    // While the reader is glued to the end, ANY resize must shift the offset by its delta to keep
-    // the bottom pinned. The library's own wasAtEnd path intends exactly this but reads its cached
-    // scrollOffset, which lags one frame behind a scrollTop written earlier in this same commit
-    // (scroll events deliver next frame) — so a measure landing right after an append is
-    // misjudged. The live DOM distance cannot lag.
-    if (stickToBottom && !userDetachedRef.current) {
-      const scroller = scrollerRef.current;
-      if (scroller && scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= SCROLL_END_THRESHOLD) {
-        return true;
-      }
-    }
     // Judge above/below against the LIVE scrollTop, not the instance's cached offset: mid-gesture
     // the cache lags by a frame of scroll velocity, and every row inside that stale band gets
     // classified on the wrong side of the viewport — each miss leaks an uncompensated shift.
@@ -496,9 +529,31 @@ export function VirtualList<T>({
     const scrollOffset =
       liveScroller?.scrollTop ??
       (instance.scrollOffset ?? 0) + (instance as unknown as { scrollAdjustments: number }).scrollAdjustments;
-    if (item.index === 0 && scrollOffset <= START_REACHED_THRESHOLD) return true;
-    if (item.start >= scrollOffset) return false;
-    if (!instance.itemSizeCache.has(item.key) || instance.scrollDirection !== 'backward') return true;
+    const firstMeasure = !instance.itemSizeCache.has(item.key);
+    if (item.index === 0 && scrollOffset <= START_REACHED_THRESHOLD) {
+      if (!firstMeasure && (userDetachedRef.current || scrollbarPointerRowAnchorRef.current) && liveScroller) {
+        liveScroller.scrollBy({ top: delta });
+        if (scrollbarPointerRowAnchorRef.current) scrollbarPointerTopOffsetRef.current = liveScroller.scrollTop;
+        previousScrollTopRef.current = liveScroller.scrollTop;
+        programmaticScrollTopRef.current = liveScroller.scrollTop;
+        return false;
+      }
+      return true;
+    }
+    // A ResizeObserver delivery measures newly mounted rows in sequence. Once an early row changes
+    // size, the later rows' cached starts and the live offset move independently; judging each one
+    // against that moving fold can split changes that both precede the reader's pre-gesture anchor
+    // (+77 followed by -53 used to leak a 24px jump on Linux). Keep first measurements before that
+    // stable anchor in the same compensation batch. The ordinary geometric rule remains the source
+    // of truth outside a backward gesture and for the row currently spanning the fold.
+    const gestureAnchorIndex = backwardGestureAnchorIndexRef.current;
+    const beforeGestureAnchor =
+      firstMeasure &&
+      instance.scrollDirection === 'backward' &&
+      gestureAnchorIndex !== null &&
+      item.index < gestureAnchorIndex;
+    if (item.start >= scrollOffset && !beforeGestureAnchor) return false;
+    if (firstMeasure || instance.scrollDirection !== 'backward') return true;
     // A mounted above-viewport row re-measuring during backward scroll is real content reflow
     // (late syntax highlight, image dimensions, font swap) — core's cascade guard skips it, so
     // everything below visibly shifts by the delta on every pass. Compensate here with a RELATIVE
@@ -507,6 +562,7 @@ export function VirtualList<T>({
     const scroller = scrollerRef.current;
     if (scroller) {
       scroller.scrollBy({ top: delta });
+      previousScrollTopRef.current = scroller.scrollTop;
       programmaticScrollTopRef.current = scroller.scrollTop;
     }
     return false;
@@ -538,10 +594,7 @@ export function VirtualList<T>({
 
   useLayoutEffect(() => {
     previousLastKeyRef.current = lastItemKey;
-    // followOnAppend may evaluate before React commits the new total height. Repeat the library's
-    // end scroll after that commit only when the previous viewport was still pinned to the end.
-    if (shouldFollowCommittedAppend) virtualizer.scrollToEnd();
-  }, [lastItemKey, shouldFollowCommittedAppend, virtualizer]);
+  }, [lastItemKey]);
 
   useLayoutEffect(() => {
     if (!scrollerReady) return;
@@ -571,7 +624,10 @@ export function VirtualList<T>({
       const pin = () => {
         const target = scroller.scrollHeight - scroller.clientHeight;
         const distance = target - scroller.scrollTop;
-        if (distance > 1 && distance <= SCROLL_END_THRESHOLD) scroller.scrollTop = target;
+        if (distance > 1 && distance <= SCROLL_END_THRESHOLD) {
+          scroller.scrollTop = target;
+          previousScrollTopRef.current = scroller.scrollTop;
+        }
       };
       pin();
       // The pin above reads geometry mid-commit; a measurement-driven follow-up render inside the
@@ -592,6 +648,8 @@ export function VirtualList<T>({
     controlRef,
     () => ({
       scrollToTop: (behavior = 'auto') => {
+        scrollbarPointerTopOffsetRef.current = null;
+        scrollbarPointerRowAnchorRef.current = null;
         initialEndScrollDoneRef.current = true;
         startArmedRef.current = true;
         // Drop the follow gate before moving: the commit-time re-pin reads it, and the scroll
@@ -618,11 +676,15 @@ export function VirtualList<T>({
         });
       },
       scrollToBottom: (behavior = 'auto') => {
+        scrollbarPointerTopOffsetRef.current = null;
+        scrollbarPointerRowAnchorRef.current = null;
         userDetachedRef.current = false;
         upwardTravelRef.current = 0;
         virtualizer.scrollToEnd({ behavior });
       },
       scrollToKey: (key, opts) => {
+        scrollbarPointerTopOffsetRef.current = null;
+        scrollbarPointerRowAnchorRef.current = null;
         const index = indexOfKey(latestRef.current.items, latestRef.current.getKey, key);
         if (index < 0) return;
         if (index < latestRef.current.items.length - 1) {
@@ -647,7 +709,28 @@ export function VirtualList<T>({
       // clamped scrollTop they emit no scroll event either — so they get the same start-edge
       // arming the wheel path uses, or older history would be unreachable on those inputs.
       onKeyDown={(event) => {
+        scrollbarPointerTopOffsetRef.current = null;
+        scrollbarPointerRowAnchorRef.current = null;
         if (KEYBOARD_SCROLL_UP_KEYS.has(event.key)) armStartEdgeAtTop(event.currentTarget);
+      }}
+      onPointerCancel={() => {
+        scrollbarPointerActiveRef.current = false;
+      }}
+      onPointerDown={(event) => {
+        scrollbarPointerActiveRef.current = event.target === event.currentTarget;
+        scrollbarPointerTopOffsetRef.current = null;
+        scrollbarPointerRowAnchorRef.current = null;
+        if (scrollbarPointerActiveRef.current) {
+          const first = latestRef.current.items[0];
+          if (first !== undefined) {
+            const key = latestRef.current.getKey(first);
+            const height = virtualizer.itemSizeCache.get(key);
+            if (height !== undefined) scrollbarPointerRowAnchorRef.current = { height, key };
+          }
+        }
+      }}
+      onPointerUp={() => {
+        scrollbarPointerActiveRef.current = false;
       }}
       onScroll={(event) => {
         // A scrollbar drag or keyboard scroll toward the top is the reader taking over, exactly
@@ -658,6 +741,21 @@ export function VirtualList<T>({
         // bottom and a measurement reflow emits no scroll event, so a scrollTop that decreased past
         // the momentum-jitter epsilon is unambiguously the reader scrolling up.
         const scrollTop = event.currentTarget.scrollTop;
+        if (scrollbarPointerActiveRef.current && scrollTop <= START_REACHED_THRESHOLD) {
+          scrollbarPointerTopOffsetRef.current = scrollTop;
+          if (!scrollbarPointerRowAnchorRef.current) {
+            const viewportTop = event.currentTarget.getBoundingClientRect().top;
+            const anchor = [...event.currentTarget.querySelectorAll<HTMLElement>('[data-vl-key]')].find(
+              (element) => element.getBoundingClientRect().bottom > viewportTop + 1
+            );
+            if (anchor?.dataset.vlKey) {
+              scrollbarPointerRowAnchorRef.current = {
+                height: anchor.getBoundingClientRect().height,
+                key: anchor.dataset.vlKey
+              };
+            }
+          }
+        }
         const previous = previousScrollTopRef.current;
         previousScrollTopRef.current = scrollTop;
         // A compensation scrollBy's own event carries no reader intent — neither toward detaching
@@ -666,18 +764,30 @@ export function VirtualList<T>({
         const programmatic =
           programmaticScrollTopRef.current !== null && Math.abs(scrollTop - programmaticScrollTopRef.current) < 1;
         if (programmatic) programmaticScrollTopRef.current = null;
+        const distanceFromEnd = event.currentTarget.scrollHeight - scrollTop - event.currentTarget.clientHeight;
+        if (
+          initialEndScrollDoneRef.current &&
+          scrollTop <= START_REACHED_THRESHOLD &&
+          distanceFromEnd > NATIVE_SCROLL_END_THRESHOLD
+        ) {
+          releaseEndFollow();
+        }
         if (!programmatic && previous !== null && scrollTop < previous) {
           // Accumulate across events: a slow scrollbar drag moves fewer pixels per event than the
           // epsilon, and judging each event alone would never see the intent. Only moves that leave
           // the live edge count — a row measuring SMALLER while pinned shrinks scrollHeight and the
           // browser clamps scrollTop up with it, an upward event whose distance-from-end stays zero.
           // That clamp is content reflow, not the reader, and must not detach the follow.
-          const distanceFromEnd = event.currentTarget.scrollHeight - scrollTop - event.currentTarget.clientHeight;
           if (distanceFromEnd > NATIVE_SCROLL_END_THRESHOLD) {
             upwardTravelRef.current += previous - scrollTop;
             if (upwardTravelRef.current > UP_SCROLL_INTENT_EPSILON) releaseEndFollow();
           }
-        } else if (!programmatic && previous !== null && scrollTop > previous) {
+        } else if (
+          !programmatic &&
+          !scrollbarPointerRowAnchorRef.current &&
+          previous !== null &&
+          scrollTop > previous
+        ) {
           upwardTravelRef.current = 0;
           // The reader scrolling DOWN into the at-end window re-attaches following. Pins never run
           // while detached, so this downward arrival cannot be a pin's own write. The window is the
@@ -701,6 +811,8 @@ export function VirtualList<T>({
       // finger travel, and bottom rubber-band pulls — and with the detach now sticky, none of
       // those would self-heal.
       onWheel={(event) => {
+        scrollbarPointerTopOffsetRef.current = null;
+        scrollbarPointerRowAnchorRef.current = null;
         // A wheel or trackpad gesture toward the top is the reader taking over, and it is the one
         // detach signal that content growth cannot forge: while a message streams, appends keep
         // the viewport's distance-from-bottom small no matter how far up the reader nudged, so a
@@ -717,6 +829,7 @@ export function VirtualList<T>({
               ? event.deltaY * el.clientHeight
               : event.deltaY;
         if (deltaY > 0) {
+          backwardGestureAnchorIndexRef.current = null;
           wheelUpTravelRef.current = 0;
           // A wheel-down at the live edge is an explicit request to follow again. At the exact
           // bottom it produces no scroll event, so the scroll-path re-attach can never see it —
@@ -727,6 +840,17 @@ export function VirtualList<T>({
           return;
         }
         if (deltaY < 0) {
+          const viewportTop = el.getBoundingClientRect().top;
+          let anchorTop = Number.POSITIVE_INFINITY;
+          for (const element of virtualizer.elementsCache.values()) {
+            if (!(element instanceof HTMLElement)) continue;
+            const rect = element.getBoundingClientRect();
+            if (rect.bottom <= viewportTop + 1 || rect.top >= anchorTop) continue;
+            const index = Number(element.dataset.index);
+            if (!Number.isInteger(index)) continue;
+            anchorTop = rect.top;
+            backwardGestureAnchorIndexRef.current = index;
+          }
           armStartEdgeAtTop(el);
           // Nothing left to scroll — with no scroll events possible the sticky detach could never
           // clear before the list first overflows, so skip the detach accounting.
