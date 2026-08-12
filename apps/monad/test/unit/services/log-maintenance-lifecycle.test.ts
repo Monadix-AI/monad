@@ -110,6 +110,10 @@ function recordingService(sweeps: Array<{ enabled: boolean; retentionDays: numbe
 test('queues the startup sweep only after the runtime reaches ready', async () => {
   const clock = manualLifecycleScheduler();
   const events: string[] = [];
+  let inventoryCompleted!: () => void;
+  const inventory = new Promise<void>((resolveInventory) => {
+    inventoryCompleted = resolveInventory;
+  });
   const initial = snapshot(true);
   const lifecycle = createLogMaintenanceLifecycleModule({
     initial,
@@ -125,6 +129,7 @@ test('queues the startup sweep only after the runtime reaches ready', async () =
         },
         readdir: async (path) => {
           events.push(`readdir:${path}`);
+          if (path === resolve('/logs', 'live-events')) inventoryCompleted();
           return [];
         }
       }
@@ -136,15 +141,17 @@ test('queues the startup sweep only after the runtime reaches ready', async () =
 
   expect({ events, phase: kernel.state.getState().phase }).toEqual({ events: [], phase: 'ready' });
   clock.runMicrotasks();
-  await Promise.resolve();
-  await Promise.resolve();
+  await inventory;
   expect(events).toEqual([
     `lstat:${resolve('/logs')}`,
     `lstat:${resolve('/debug')}`,
     `lstat:${resolve('/logs', 'mesh-agent-fixture-capture')}`,
+    `lstat:${resolve('/logs', 'live-events')}`,
     `readdir:${resolve('/logs')}`,
     `readdir:${resolve('/debug')}`,
-    `readdir:${resolve('/logs', 'mesh-agent-fixture-capture')}`
+    `readdir:${resolve('/logs', 'mesh-agent-fixture-capture')}`,
+    `lstat:${resolve('/logs', 'live-events')}`,
+    `readdir:${resolve('/logs', 'live-events')}`
   ]);
   await kernel.stop();
 });
