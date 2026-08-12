@@ -82,8 +82,8 @@
     "build-storybook": "storybook build",
     "generate": "bun run scripts/generate-route-tree.ts",
     "start": "bunx --bun vite preview --host 0.0.0.0 --port ${WEB_PORT:-3000}",
-    "start:dev": "LAUNCH_EDITOR=${LAUNCH_EDITOR:-/usr/local/bin/code} bunx --bun vite --host 0.0.0.0 --port ${WEB_PORT:-3000}",
-    "storybook": "storybook dev -p ${WEB_STORYBOOK_PORT:-6006} --no-open",
+    "start:dev": "LAUNCH_EDITOR=${LAUNCH_EDITOR:-/usr/local/bin/code} bun --env-file=../../.env.local run vite",
+    "storybook": "storybook dev -p \"$(bun --env-file=../../.env.local -e 'console.log(process.env.WEB_STORYBOOK_PORT ?? 6006)')\" --no-open",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "test:e2e": "bun ../../scripts/quiet-run.ts playwright test --reporter=dot",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
