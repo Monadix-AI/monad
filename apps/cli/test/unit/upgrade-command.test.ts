@@ -134,6 +134,12 @@ test('upgrade channel prepares the resolved release and launches the shared work
 
 test('upgrade verifies GitHub release assets before launching the installer', async () => {
   const cacheDir = await mkdtemp(join(tmpdir(), 'monad-cli-upgrade-'));
+  const installerPath = join(
+    cacheDir,
+    'staged',
+    new Bun.CryptoHasher('sha256').update('v9.9.9').digest('hex').slice(0, 24),
+    'install.sh'
+  );
   const files = new Map([
     ['monad-x86_64-unknown-linux-gnu.tar.gz', new TextEncoder().encode('archive')],
     ['install.sh', new TextEncoder().encode('#!/bin/sh')]
@@ -161,7 +167,7 @@ test('upgrade verifies GitHub release assets before launching the installer', as
     parentPid: 42,
     platform: 'linux',
     spawn: ((args: string[]) => {
-      launched = args.includes('/opt/monad/bin/monad') && args.some((arg) => arg.endsWith('/install.sh'));
+      launched = args.includes('/opt/monad/bin/monad') && args.includes(installerPath);
       return { exited: Promise.resolve(0) };
     }) as typeof Bun.spawn
   });
@@ -177,9 +183,7 @@ test('upgrade verifies GitHub release assets before launching the installer', as
       exitCode: attempt.exitCode,
       state: attempt.state
     },
-    installer: await Bun.file(
-      join(cacheDir, 'staged', new Bun.CryptoHasher('sha256').update('v9.9.9').digest('hex').slice(0, 24), 'install.sh')
-    ).text()
+    installer: await Bun.file(installerPath).text()
   }).toEqual({
     launched: true,
     attempt: {
@@ -238,6 +242,7 @@ test('upgrade asks the shared worker to restart a previously running daemon', as
     distTarget: 'x86_64-unknown-linux-gnu',
     fetch: (async () => response(release('v9.9.9'))) as unknown as typeof fetch,
     isDaemonRunning: async () => true,
+    platform: 'linux',
     prepare: async () => preparedUpgrade,
     spawn: ((args: string[]) => {
       worker = args.join(' ');
