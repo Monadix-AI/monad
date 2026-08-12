@@ -1,5 +1,56 @@
 # Changelog
 
+## [0.1.5](https://github.com/Monadix-AI/monad/compare/v0.1.4...v0.1.5) (2026-08-12)
+
+
+### Features
+
+* **developer:** add new routes for live events in development settings ([fca35ec](https://github.com/Monadix-AI/monad/commit/fca35eceb49c2d6dbf1b7b552a86fabbdcdccc6c))
+* **developer:** persist and replay native live events ([6b9b79e](https://github.com/Monadix-AI/monad/commit/6b9b79e8096140d3ee7743453934a44f584fb000))
+* **installer:** start Monad after interactive install ([a49cf9e](https://github.com/Monadix-AI/monad/commit/a49cf9e0bc0facbb39e1b0401c4a5c13bbd91056))
+* **observation:** normalize native live event projections ([d00cf67](https://github.com/Monadix-AI/monad/commit/d00cf673df7025554e7b25bd0ba27fb50984308d))
+* **ui:** add thinking orbs to agent activity ([fef1403](https://github.com/Monadix-AI/monad/commit/fef140321f8415c9d586f59854eae8a98cfce544))
+* **upgrade:** verify and apply updates in process ([a167694](https://github.com/Monadix-AI/monad/commit/a167694f9107b892a8d8b0f0bf6c62dac091d0bf))
+* **web:** add sidebar theme choices ([07cec08](https://github.com/Monadix-AI/monad/commit/07cec08e5f1d623e7e3d397478ec4e0b5fae92b8))
+* **workplace:** add rich file viewing and stable observation UI ([16e19f4](https://github.com/Monadix-AI/monad/commit/16e19f45b39f5a62b2a7b66d3830ab33a96c311e))
+
+
+### Bug Fixes
+
+* **chat:** avoid redundant message retrievals ([a1bdfb3](https://github.com/Monadix-AI/monad/commit/a1bdfb30ead1643db2c2434b1f6483336938f888))
+* **ci:** satisfy release quality checks ([693e6d0](https://github.com/Monadix-AI/monad/commit/693e6d09dd5b651ee493dfa6eaa9dd3074753fcd))
+* **codex:** keep completed turns settled ([b344de8](https://github.com/Monadix-AI/monad/commit/b344de8b20158df5f101ebdb001e8f9188d3a40a))
+* **developer:** follow live replay step selection ([ba46e7a](https://github.com/Monadix-AI/monad/commit/ba46e7a9861852ab8a5082d7e1a7f32ca312b0e8))
+* **installer:** suppress terminal input during animations ([815e903](https://github.com/Monadix-AI/monad/commit/815e9037c897e317ec85dc87e0b2370b8126c912))
+* **mesh:** drop a request whose write never reached the child ([0ba3fd1](https://github.com/Monadix-AI/monad/commit/0ba3fd14ae95175c34f6117423dcc5c80ad13a38))
+* **mesh:** join runtime shutdown and output settlement ([eb78d83](https://github.com/Monadix-AI/monad/commit/eb78d83994513bd11224b74336926888ef4334d4))
+* **mesh:** observe an activation nobody is left to await ([afc908f](https://github.com/Monadix-AI/monad/commit/afc908f5fb48ed731a72e8123cd5ecce9f2642b5))
+* **mesh:** reserve placeholders before initial turns ([dac5f4f](https://github.com/Monadix-AI/monad/commit/dac5f4f76ac86583d1a92e153c9013928b88885e))
+* **monad:** join managed runtimes before restart ([37775f8](https://github.com/Monadix-AI/monad/commit/37775f891b17a5d23cb83a2737f1ddc1079e0f5d))
+* **monad:** join the in-flight activation when a runtime stops ([81ce63e](https://github.com/Monadix-AI/monad/commit/81ce63ede8a0e108b48b6bd964284b39efe88ef7))
+* **monad:** settle codex channel writes when a session stops mid-attach ([fd90fee](https://github.com/Monadix-AI/monad/commit/fd90fee4339a5d50f3cfebf0599f9cb265ad2059))
+* **observation:** reconcile Monad tool cards ([e576747](https://github.com/Monadix-AI/monad/commit/e576747e3da1de950717add982a029feb506195e))
+* **release:** address draft publication by repository ([7a6ccf3](https://github.com/Monadix-AI/monad/commit/7a6ccf3d50213148509003002a4f0ca5b6875cfb))
+* **release:** make published notes and assets deterministic ([2643fe0](https://github.com/Monadix-AI/monad/commit/2643fe0829ef66eb82c7664c5119e94ec909c9b1))
+* **release:** merge Windows ARM64 artifact restoration ([2ff430d](https://github.com/Monadix-AI/monad/commit/2ff430db8a4a13f6be72a69d55707a776fda372f))
+* **release:** restore Windows ARM64 artifacts ([ac97d1e](https://github.com/Monadix-AI/monad/commit/ac97d1eff5e17e4549e498239775026c6db1b91a))
+* **security:** harden untrusted parsing and dependencies ([876593b](https://github.com/Monadix-AI/monad/commit/876593bad4b12d725697f14f780ac3925d61fc57))
+* **ui:** keep compact path segments adjacent ([0ef3cc1](https://github.com/Monadix-AI/monad/commit/0ef3cc199c1e9ae01ead617f26600271773696df))
+* **ui:** preserve virtual list scroll anchors ([67134e8](https://github.com/Monadix-AI/monad/commit/67134e839cb41d3622de889adf2266b0eb7fe76c))
+* **workplace:** use provider icons for agent members ([9b49ba2](https://github.com/Monadix-AI/monad/commit/9b49ba267ac5ae4405ea7e2e738c2219a31a82f0))
+
+
+### Performance
+
+* **environment:** create the home directories in one pass ([5e56dea](https://github.com/Monadix-AI/monad/commit/5e56dea938be10ee92755ce31b3372523aff6370))
+
+
+### Refactors
+
+* **docker:** consolidate container configuration ([b79ef0a](https://github.com/Monadix-AI/monad/commit/b79ef0ac261ab5054a34c7453032784261c088dc))
+* **release:** consolidate dist configuration at root ([203a9e1](https://github.com/Monadix-AI/monad/commit/203a9e1d1ce12bc45e95f4e4d15db3ec04dfeba5))
+* **web:** keep resolveThemePreference module-private ([bb69c36](https://github.com/Monadix-AI/monad/commit/bb69c360b79e47ac1cc75a49e405b6003c9a3f3b))
+
 ## [0.1.4](https://github.com/Monadix-AI/monad/compare/v0.1.3...v0.1.4) (2026-08-10)
 
 
