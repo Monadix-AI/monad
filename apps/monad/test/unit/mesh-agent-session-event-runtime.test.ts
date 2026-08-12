@@ -528,9 +528,9 @@ describe('generic session-event runtime executor', () => {
       'driver:open',
       'driver:attached',
       'turn:hello',
+      'driver:disposed',
       'process:killed',
-      'activation:closed',
-      'driver:disposed'
+      'activation:closed'
     ]);
     expect(executor.snapshot()).toMatchObject({
       lifecycle: { state: 'terminal', termination: { kind: 'stopped', exitCode: null, signal: 'SIGTERM' } }
@@ -923,15 +923,15 @@ describe('generic session-event runtime executor', () => {
     await executor.close();
     const closeMs = Date.now() - startedAt;
 
-    expect(await opened).toBe('EPIPE: broken pipe, write');
+    expect(await opened).toBe('opened');
     expect(closeMs).toBeLessThan(5_000);
     // The stop tears the child down, disposes the driver to unblock the attach, and the unwinding
     // activation then runs its own idempotent teardown.
     expect(order).toEqual([
-      'process:killed',
-      'activation:closed',
       'driver:disposed',
       'process:killed',
+      'process:killed',
+      'activation:closed',
       'activation:closed'
     ]);
     expect(executor.snapshot().lifecycle).toMatchObject({ state: 'terminal', termination: { kind: 'stopped' } });

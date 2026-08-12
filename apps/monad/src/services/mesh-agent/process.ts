@@ -8,7 +8,8 @@ type MeshAgentTreeKillFn = (pid: number) => void;
 // Windows has no process groups, so a single kill only signals the leader and leaves the CLI's own
 // child processes orphaned. taskkill /T /F terminates the whole tree.
 function taskkillTree(pid: number): void {
-  Bun.spawnSync(['taskkill', '/T', '/F', '/PID', String(pid)]);
+  const result = Bun.spawnSync(['taskkill', '/T', '/F', '/PID', String(pid)]);
+  if (result.exitCode !== 0) throw new Error(`taskkill failed with code ${result.exitCode}`);
 }
 
 function isMissingProcessError(error: unknown): boolean {
