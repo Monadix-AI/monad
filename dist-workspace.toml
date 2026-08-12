@@ -7,7 +7,7 @@ ci = []
 hosting = "github"
 installers = ["shell", "powershell"]
 install-path = "~/.monad/bin"
-install-updater = true
+install-updater = false
 targets = [
   "aarch64-apple-darwin",
   "x86_64-apple-darwin",

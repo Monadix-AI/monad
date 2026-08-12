@@ -23,6 +23,9 @@ test('dist installer enhancement preserves the product and download contracts', 
   expect(enhancer).toContain('--retry 3');
   expect(enhancer).toContain('MONAD_OUTPUT:-');
   expect(enhancer).toContain("$env:MONAD_OUTPUT -eq 'json'");
+  expect(enhancer).toContain('Confirm-MonadArchiveSha256 $dir_path $url');
+  expect(enhancer).toContain('Get-FileHash -LiteralPath $path -Algorithm SHA256');
+  expect(enhancer).toContain('MONAD_INSTALLER_ARTIFACT_DIR');
   expect(enhancer).toContain('Write-Progress -Activity "Downloading Monad $app_version"');
   expect(enhancer).toContain('copyFile(generatedShell, shellInstaller)');
   expect(enhancer).toContain('copyFile(generatedPowerShell, powerShellInstaller)');

@@ -1,6 +1,10 @@
 import { describe, expect, test } from 'bun:test';
 
-import { releaseTargetFromDistTarget, releaseTargetSuffix } from '../../lib/release-target.ts';
+import {
+  distTargetFromReleaseTarget,
+  releaseTargetFromDistTarget,
+  releaseTargetSuffix
+} from '../../lib/release-target.ts';
 
 describe('dist release target adapter', () => {
   test.each([
@@ -12,8 +16,12 @@ describe('dist release target adapter', () => {
     ['x86_64-unknown-linux-musl', 'linux-x64-musl'],
     ['aarch64-pc-windows-msvc', 'windows-arm64'],
     ['x86_64-pc-windows-msvc', 'windows-x64']
-  ])('maps %s to release suffix %s', (distTarget, suffix) => {
-    expect(releaseTargetSuffix(releaseTargetFromDistTarget(distTarget))).toBe(suffix);
+  ] as const)('maps %s to release suffix %s', (distTarget, suffix) => {
+    const target = releaseTargetFromDistTarget(distTarget);
+    expect({ suffix: releaseTargetSuffix(target), distTarget: distTargetFromReleaseTarget(target) }).toEqual({
+      suffix,
+      distTarget
+    });
   });
 
   test('rejects targets the release builder cannot produce', () => {

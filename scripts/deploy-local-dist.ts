@@ -68,7 +68,6 @@ try {
 }
 
 await access(installedBinary);
-await access(join(installDir, 'monad-update'));
 
 if (!values['no-start']) await run([installedBinary, 'up'], {});
 process.stdout.write(`[deploy-local-dist] installed Monad ${version} in ${installDir}\n`);

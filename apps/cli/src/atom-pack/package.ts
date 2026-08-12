@@ -1,7 +1,7 @@
 import type { AtomPackManifestWire } from '@monad/protocol';
 
 import { lstat, mkdir, readdir } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
+import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { parseAtomPackManifest } from '@monad/protocol';
 
 import { createZip, type ZipEntry } from './zip.ts';
@@ -18,7 +18,6 @@ export interface PackageAtomPackResult {
   name: string;
   version: string;
   artifact: string;
-  checksumFile: string;
   sha256: string;
   integrity: string;
   files: string[];
@@ -84,9 +83,8 @@ export async function packageAtomPack(options: PackageAtomPackOptions): Promise<
 
   const artifact = resolve(options.output ?? join(sourceDir, 'release', 'atom-pack.zip'));
   if (!artifact.toLowerCase().endsWith('.zip')) throw new Error('Atom Pack output must end in .zip');
-  const checksumFile = `${artifact}.sha256`;
   files.delete(posix.normalize(relative(sourceDir, artifact).split(sep).join('/')));
-  files.delete(posix.normalize(relative(sourceDir, checksumFile).split(sep).join('/')));
+  files.delete(posix.normalize(relative(sourceDir, `${artifact}.sha256`).split(sep).join('/')));
 
   const entries: ZipEntry[] = [...files].map(([name, bytes]) => ({ name, bytes }));
   const archive = createZip(entries);
@@ -96,13 +94,11 @@ export async function packageAtomPack(options: PackageAtomPackOptions): Promise<
   const archiveHash = sha256(archive);
   await mkdir(dirname(artifact), { recursive: true });
   await Bun.write(artifact, archive);
-  await Bun.write(checksumFile, `${archiveHash}  ${basename(artifact)}\n`);
 
   return {
     name: manifest.name,
     version: manifest.version,
     artifact,
-    checksumFile,
     sha256: archiveHash,
     integrity,
     files: entries.map((item) => item.name).sort(),
