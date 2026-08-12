@@ -34,7 +34,7 @@ test('parseNativeAgentFileReferences leaves ordinary @file prose alone', () => {
   expect(parsed.text).toBe('Please do not treat @filename or @file as an attachment.');
 });
 
-test('parseNativeAgentFileReferences extracts monad:file markdown links without changing visible text', () => {
+test('parseNativeAgentFileReferences leaves monad:file markdown links as visible references', () => {
   const text = [
     'Summary is ready: [report.md](./reports/report.md "monad:file").',
     'Relevant code: [auth.ts:12](./src/auth.ts#L12 "monad:file").',
@@ -43,20 +43,20 @@ test('parseNativeAgentFileReferences extracts monad:file markdown links without 
 
   const parsed = parseNativeAgentFileReferences(text);
 
-  expect(parsed.paths).toEqual(['./reports/report.md', './src/auth.ts']);
+  expect(parsed.paths).toEqual([]);
   expect(parsed.text).toBe(text);
 });
 
-test('parseNativeAgentFileReferences accepts file URLs for monad:file markdown links', () => {
+test('parseNativeAgentFileReferences leaves monad:file file URLs as visible references', () => {
   const path = join(tmpdir(), 'report.md');
   const url = pathToFileURL(path).href;
   const parsed = parseNativeAgentFileReferences(`[report.md](${url} "monad:file")`);
 
-  expect(parsed.paths).toEqual([path]);
+  expect(parsed.paths).toEqual([]);
   expect(parsed.text).toBe(`[report.md](${url} "monad:file")`);
 });
 
-test('parseNativeAgentFileReferences ignores file references inside markdown code', () => {
+test('parseNativeAgentFileReferences does not turn markdown file references into attachments', () => {
   const text = [
     'Use `[example.md](./example.md "monad:file")` when documenting the protocol.',
     '',
@@ -70,7 +70,7 @@ test('parseNativeAgentFileReferences ignores file references inside markdown cod
 
   const parsed = parseNativeAgentFileReferences(text);
 
-  expect(parsed.paths).toEqual(['./actual.md']);
+  expect(parsed.paths).toEqual([]);
   expect(parsed.text).toBe(text);
 });
 
@@ -105,7 +105,7 @@ test('createNativeAgentAttachmentResolver registers @file references as message 
   expect(result.attachments[0]?.path).toBe(reportRealpath);
 });
 
-test('createNativeAgentAttachmentResolver registers monad:file markdown links as message attachments', async () => {
+test('createNativeAgentAttachmentResolver does not duplicate an explicit attachment referenced by monad:file', async () => {
   const workspace = await mkdtemp(join(tmpdir(), 'monad-file-ref-md-'));
   const report = join(workspace, 'report with spaces.md');
   await writeFile(report, '# Report\n\nDone.\n');
@@ -127,7 +127,10 @@ test('createNativeAgentAttachmentResolver registers monad:file markdown links as
   const url = pathToFileURL(report).href;
 
   const result = await resolver(
-    { text: `Summary is ready: [report with spaces.md](${url} "monad:file").` },
+    {
+      text: `Summary is ready: [report with spaces.md](${url} "monad:file").`,
+      attachments: [{ path: report }]
+    },
     { sessionId: 'ses_TEST00000000', createdBy: 'mesh-agent:test' },
     [workspace]
   );

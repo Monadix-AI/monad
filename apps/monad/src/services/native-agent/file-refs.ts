@@ -6,7 +6,6 @@ export interface ParsedNativeAgentFileReferences {
 }
 
 const MARKER_RE = /^[ \t]*@file(?:\(([^)\r\n]+)\)|[ \t]+(?:"([^"\r\n]+)"|'([^'\r\n]+)'|([^\s\r\n]+)))[ \t]*$/gm;
-const MONAD_FILE_TITLE = 'monad:file';
 
 export function parseNativeAgentFileReferences(text: string): ParsedNativeAgentFileReferences {
   const paths: string[] = [];
@@ -18,10 +17,6 @@ export function parseNativeAgentFileReferences(text: string): ParsedNativeAgentF
     seen.add(path);
     paths.push(path);
   };
-
-  for (const link of markdownLinks(text, codeRanges)) {
-    if (link.title === MONAD_FILE_TITLE) addPath(link.destination);
-  }
 
   const withoutMarkers = text.replace(MARKER_RE, (_marker, paren, doubleQuoted, singleQuoted, bare, offset) => {
     if (isInRange(offset, codeRanges)) return _marker;
@@ -59,86 +54,6 @@ function normalizeFileReferenceTarget(rawTarget: string): string {
   } catch {
     return unwrapped;
   }
-}
-
-function markdownLinks(text: string, codeRanges: readonly TextRange[]): Array<{ destination: string; title: string }> {
-  const links: Array<{ destination: string; title: string }> = [];
-  for (let index = 0; index < text.length; index += 1) {
-    if (isInRange(index, codeRanges)) continue;
-    if (text[index] !== '[' || text[index - 1] === '!') continue;
-    const labelEnd = findClosingBracket(text, index + 1);
-    if (labelEnd === -1 || text[labelEnd + 1] !== '(') continue;
-    const parsed = parseMarkdownLinkTarget(text, labelEnd + 2);
-    if (!parsed) continue;
-    links.push({ destination: parsed.destination, title: parsed.title });
-    index = parsed.end;
-  }
-  return links;
-}
-
-function findClosingBracket(text: string, start: number): number {
-  for (let index = start; index < text.length; index += 1) {
-    if (text[index] === '\\') {
-      index += 1;
-      continue;
-    }
-    if (text[index] === ']') return index;
-  }
-  return -1;
-}
-
-function parseMarkdownLinkTarget(
-  text: string,
-  start: number
-): { destination: string; title: string; end: number } | null {
-  let index = skipSpaces(text, start);
-  const destinationStart = index;
-  if (text[index] === '<') {
-    index = text.indexOf('>', index + 1);
-    if (index === -1) return null;
-    index += 1;
-  } else {
-    let depth = 0;
-    for (; index < text.length; index += 1) {
-      const char = text[index];
-      if (char === '\\') {
-        index += 1;
-        continue;
-      }
-      if (char === '(') depth += 1;
-      if (char === ')') {
-        if (depth === 0) break;
-        depth -= 1;
-      }
-      if (/\s/.test(char ?? '') && depth === 0) break;
-    }
-  }
-  const destination = text.slice(destinationStart, index).trim();
-  index = skipSpaces(text, index);
-  if (text[index] === ')') return { destination, title: '', end: index };
-
-  const quote = text[index];
-  if (quote !== '"' && quote !== "'") return null;
-  index += 1;
-  const titleStart = index;
-  for (; index < text.length; index += 1) {
-    if (text[index] === '\\') {
-      index += 1;
-      continue;
-    }
-    if (text[index] === quote) break;
-  }
-  if (text[index] !== quote) return null;
-  const title = text.slice(titleStart, index);
-  index = skipSpaces(text, index + 1);
-  if (text[index] !== ')') return null;
-  return { destination, title, end: index };
-}
-
-function skipSpaces(text: string, start: number): number {
-  let index = start;
-  while (index < text.length && /[ \t\r\n]/.test(text[index] ?? '')) index += 1;
-  return index;
 }
 
 interface TextRange {
