@@ -189,6 +189,8 @@ test('friendly aliases resolve to the right command', () => {
   expect(reg.get('approvals')?.name).toBe('approval');
   expect(reg.get('commands')?.name).toBe('command');
   expect(reg.get('licenses')?.name).toBe('license');
+  expect(reg.get('update')?.name).toBe('update');
+  expect(reg.get('upgrade')?.name).toBe('update');
   // shortcuts are their own (hidden) delegating commands
   expect(reg.get('ls')?.name).toBe('ls');
   expect(reg.get('ps')?.name).toBe('ps');

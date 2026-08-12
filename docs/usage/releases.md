@@ -25,23 +25,24 @@ you want the newest work and can tolerate a broken day.
 Each dist installer is bound to its release tag. Install stable with the latest installer, then switch an existing install explicitly when needed:
 
 ```bash
-monad upgrade --channel beta
+monad update --channel beta
 ```
 
 ## Upgrading
 
 ```bash
-monad upgrade --check         # report only, changes nothing
-monad upgrade                 # apply the latest release on the current channel
-monad upgrade --notes         # show release notes alongside version info
-monad upgrade --tag v0.1.3    # install that exact release, including a downgrade
-monad upgrade --force         # reinstall the selected/current release
-monad doctor update           # inspect updater, receipt, channel, and the last attempt log
+monad update --check          # report only, changes nothing
+monad update                  # apply the latest release on the current channel
+monad update --notes          # show release notes alongside version info
+monad update --tag v0.1.3     # install that exact release, including a downgrade
+monad update --force          # reinstall the selected/current release
+monad doctor update           # inspect the channel, release, and last attempt log
 ```
 
-The CLI resolves the selected channel to one exact GitHub release tag and passes that tag to
-`monad-update`. The Web UI follows the current build channel, exits the daemon before replacing
-the executable, and restarts it after a successful update.
+The CLI and Web UI resolve the selected channel to one exact immutable GitHub release, verify the
+installer and platform archive against GitHub's asset digests, then run the same upgrade worker.
+The worker exits the daemon before replacing the executable and restarts it when it was previously
+running.
 
 `--tag` and `--channel` are mutually exclusive. Exact tags are intentional operations and may
 downgrade the installation; `--force` still uses the release checksum and only bypasses the
@@ -78,5 +79,5 @@ Upgrade before reporting a vulnerability. Full policy: [SECURITY.md](https://git
 
 ## Verifying a download
 
-Release assets include SHA256 files. For manual installation and checksum verification, see
+Immutable releases include signed attestations for every asset. For manual installation and release verification, see
 [the README](https://github.com/Monadix-AI/monad/blob/main/README.md#manual-installation).

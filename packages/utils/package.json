@@ -6,6 +6,7 @@
   },
   "exports": {
     ".": "./src/index.ts",
+    "./release-upgrade": "./src/release-upgrade.ts",
     "./release-update": "./src/release-update.ts",
     "./release-version": "./src/release-version.ts"
   },

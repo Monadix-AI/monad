@@ -40,7 +40,7 @@ export async function createUpgradeInfoMonitor(
       sendSystemNotification({
         title: 'Monad Update Available',
         subtitle: `Version ${latestVersion}`,
-        body: 'A new version of Monad is ready. Run monad upgrade to install it.',
+        body: 'A new version of Monad is ready. Run monad update to install it.',
         actionUrl: deps.settingsUrl
       }));
 

@@ -48,7 +48,7 @@ monad status
 monad logs [-f] [-n <lines>]
 monad doctor
 monad version
-monad upgrade [rollback]
+monad update [--check] [--channel <stable|beta|nightly>] [--tag <version>] [--force]
 monad remote tls <renew|show|trust>
 ```
 

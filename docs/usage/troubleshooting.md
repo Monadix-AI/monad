@@ -118,7 +118,7 @@ activation attempt, not silently swallowed.
 **An upgrade made things worse.** Install an exact earlier release using that release's dist
 installer. See [releases.md](/usage/releases).
 
-**`monad upgrade` reports a newer version than what runs.** A stale binary is probably
+**`monad update` reports a newer version than what runs.** A stale binary is probably
 earlier on your `PATH`: `which -a monad`.
 
 ## Still stuck

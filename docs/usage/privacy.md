@@ -34,13 +34,13 @@ Nothing in this table happens until you configure or invoke it.
 | `models.dev` | Model settings, pricing and tier resolution | Nothing about you — it fetches a public catalog |
 | `api.github.com`, `registry.npmjs.org` | `monad atom install`, `monad skill install`, MCP binary install | The package coordinates you asked for |
 | Glama / Smithery / the MCP registry | `monad mcp search` | Your search query |
-| GitHub Releases | `monad upgrade` (and only then) | Nothing but the release request |
+| GitHub Releases | `monad update` (and only then) | Nothing but the release request |
 | Qdrant's GitHub release | First use of the optional `mem0` memory backend | Nothing — a binary download |
 | MCP servers you configure | Their tool calls | Whatever the tool call contains |
 | Channels you configure | Inbound and outbound messages | The conversation on that platform |
 | Peers / Monadix, if configured | Delegated subtasks | The instruction you delegate |
 
-There is **no background update check**. `monad upgrade` contacts GitHub only when you run
+There is **no background update check**. `monad update` contacts GitHub only when you run
 it.
 
 The model provider is the significant one: an agent turn sends the model whatever is in

@@ -30,6 +30,9 @@ export const systemUpgradeStatusSchema = z.object({
   latestVersion: z.string().nullable(),
   stage: systemUpgradeStageSchema,
   progress: z.number().min(0).max(100),
+  downloadedBytes: z.number().int().nonnegative().nullable(),
+  totalBytes: z.number().int().nonnegative().nullable(),
+  bytesPerSecond: z.number().nonnegative().nullable(),
   error: z.string().nullable(),
   lastAttempt: systemUpgradeAttemptSchema.nullable()
 });

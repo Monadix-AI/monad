@@ -26,7 +26,7 @@ Monad 把状态存放在你自己的设备上，不发送任何遥测、分析�
 | `models.dev` | 模型设置、价格和分层解析 | 只获取公共目录，不含你的信息 |
 | GitHub API、npm registry | 安装 Atom、技能或 MCP 二进制 | 你请求的软件包坐标 |
 | Glama、Smithery、MCP registry | `monad mcp search` | 搜索词 |
-| GitHub Releases | 仅在运行 `monad upgrade` 时 | 版本请求 |
+| GitHub Releases | 仅在运行 `monad update` 时 | 版本请求 |
 | Qdrant GitHub release | 首次使用可选 `mem0` 后端 | 二进制下载 |
 | 你配置的 MCP 服务器 | 工具调用 | 调用所含内容 |
 | 你配置的渠道 | 收发消息 | 对应平台上的对话 |

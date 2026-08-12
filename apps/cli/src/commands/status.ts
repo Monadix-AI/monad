@@ -38,7 +38,7 @@ export const command: CommandDef = {
       out(
         yellow(`⬆  ${t('cli.upgrade.available', { current: bold(h.version ?? '?'), latest: bold(h.latestVersion) })}`)
       );
-      if (!globals.quiet) out(dim('   run: monad upgrade'));
+      if (!globals.quiet) out(dim('   run: monad update'));
     } else if (h.latestVersion) {
       out(dim(`   ${t('cli.upgrade.upToDate', { version: h.version ?? '' })}`));
     }

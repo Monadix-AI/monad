@@ -2,7 +2,6 @@ import { expect, test } from 'bun:test';
 
 import {
   isUpgradeAvailable,
-  monadUpdaterPath,
   releaseChannelOfVersion,
   resolveRelease,
   resolveReleaseTag,
@@ -15,10 +14,36 @@ function response(body: unknown, status = 200, headers?: Record<string, string>)
 
 test('stable resolves the latest GitHub release', async () => {
   const release = await resolveRelease('stable', {
-    fetch: (async () => response({ tag_name: 'v1.2.3', body: 'notes' })) as unknown as typeof fetch
+    fetch: (async () =>
+      response({
+        tag_name: 'v1.2.3',
+        body: 'notes',
+        immutable: true,
+        assets: [
+          {
+            name: 'monad-x86_64-unknown-linux-gnu.tar.gz',
+            browser_download_url: 'https://downloads.example/monad.tar.gz',
+            size: 42,
+            digest: `sha256:${'a'.repeat(64)}`
+          }
+        ]
+      })) as unknown as typeof fetch
   });
 
-  expect(release).toEqual({ tag: 'v1.2.3', version: '1.2.3', notes: 'notes' });
+  expect(release).toEqual({
+    tag: 'v1.2.3',
+    version: '1.2.3',
+    notes: 'notes',
+    immutable: true,
+    assets: [
+      {
+        name: 'monad-x86_64-unknown-linux-gnu.tar.gz',
+        url: 'https://downloads.example/monad.tar.gz',
+        size: 42,
+        digest: `sha256:${'a'.repeat(64)}`
+      }
+    ]
+  });
 });
 
 test('stable falls back to the latest redirect when the API is unavailable', async () => {
@@ -32,7 +57,7 @@ test('stable falls back to the latest redirect when the API is unavailable', asy
     }) as unknown as typeof fetch
   });
 
-  expect(release).toEqual({ tag: 'v2.0.0', version: '2.0.0', notes: null });
+  expect(release).toEqual({ tag: 'v2.0.0', version: '2.0.0', notes: null, immutable: false, assets: [] });
 });
 
 test('beta excludes nightly and chooses the newest beta tag', async () => {
@@ -72,7 +97,13 @@ test('an exact release tag resolves independently of the latest channel', async 
   });
 
   expect(seen[0]).toEndWith('/releases/tags/v1.2.3-beta.4');
-  expect(release).toEqual({ tag: 'v1.2.3-beta.4', version: '1.2.3-beta.4', notes: 'exact notes' });
+  expect(release).toEqual({
+    tag: 'v1.2.3-beta.4',
+    version: '1.2.3-beta.4',
+    notes: 'exact notes',
+    immutable: false,
+    assets: []
+  });
 });
 
 test('an exact nightly tag accepts the build metadata emitted by the release workflow', async () => {
@@ -121,9 +152,4 @@ test('upgrade availability never treats older or cross-channel releases as autom
   expect(isUpgradeAvailable('1.0.0-beta.9', '1.0.0-beta.10')).toBe(true);
   expect(isUpgradeAvailable('1.0.0-beta.1', '1.0.1')).toBe(false);
   expect(isUpgradeAvailable('1.0.0-nightly.2', '1.0.0-beta.3')).toBe(false);
-});
-
-test('updater path is a sibling of the monad executable', () => {
-  expect(monadUpdaterPath('/opt/monad/bin/monad', 'linux')).toBe('/opt/monad/bin/monad-update');
-  expect(monadUpdaterPath('C:\\Monad\\monad.exe', 'win32')).toBe('C:\\Monad\\monad-update.exe');
 });

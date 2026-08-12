@@ -19,21 +19,23 @@ Monad 把守护进程、CLI 和 Web 界面作为同一个带版本号的构建�
 每个 dist 安装器都绑定到一个精确发行 tag。先用 latest 安装稳定版，需要时再显式切换已有安装：
 
 ```bash
-monad upgrade --channel beta
+monad update --channel beta
 ```
 
 ## 升级
 
 ```bash
-monad upgrade --check
-monad upgrade
-monad upgrade --notes
-monad upgrade --tag v0.1.3    # 安装指定版本，也可用于降级
-monad upgrade --force         # 强制重装当前选择的版本
-monad doctor update           # 检查更新器、receipt、通道和上次升级日志
+monad update --check
+monad update
+monad update --notes
+monad update --tag v0.1.3     # 安装指定版本，也可用于降级
+monad update --force          # 强制重装当前选择的版本
+monad doctor update           # 检查通道、Release 和上次升级日志
 ```
 
-`--check` 只报告，不修改文件。CLI 会把所选 channel 解析为精确 GitHub release tag，再交给 `monad-update`。Web UI 跟随当前构建的 channel，先退出守护进程，更新成功后再重启。
+`--check` 只报告，不修改文件。CLI 与 Web UI 会把所选 channel 解析为精确的不可变 GitHub
+Release，使用 GitHub asset digest 校验安装器和平台压缩包，再交给同一个升级 worker。worker
+会在替换可执行文件前退出守护进程，并在守护进程此前已运行时重新启动。
 
 `--tag` 与 `--channel` 不能同时使用。指定 tag 属于明确操作，因此允许降级；`--force`
 只跳过“版本相同”判断，下载和校验流程保持不变。
@@ -42,7 +44,7 @@ monad doctor update           # 检查更新器、receipt、通道和上次升�
 
 CLI 与守护进程在连接时交换版本。兼容版本正常连接；不兼容时客户端会拒绝继续并给出升级方向。远程连接可以用 `--force` 绕过版本拒绝，但这只适合诊断，不代表协议兼容。
 
-运行 `monad` 时，若已安装客户端要求更高守护进程版本，启动流程可以更新本地守护进程。显式 `monad upgrade` 才会主动检查所选发行通道；没有后台更新轮询。
+运行 `monad` 时，若已安装客户端要求更高守护进程版本，启动流程可以更新本地守护进程。显式 `monad update` 才会主动检查所选发行通道；没有后台更新轮询。
 
 ## 支持范围
 

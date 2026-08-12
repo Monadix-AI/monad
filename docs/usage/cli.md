@@ -52,11 +52,11 @@ monad status                 check whether the daemon is running
 monad logs [-f] [-n <lines>] show the daemon log (-f to follow, default 200 lines)
 monad doctor [update]        diagnose runtime or update installation problems
 monad version                print the Monad version
-monad upgrade                check for and apply updates
+monad update                 check for and apply updates
 monad remote tls <renew|show|trust> manage the daemon TLS certificate
 ```
 
-`monad upgrade` accepts `--check` (report only), `--channel <stable|beta|nightly>`,
+`monad update` accepts `--check` (report only), `--channel <stable|beta|nightly>`,
 `--tag <version>` (exact release), `--force` (same-version reinstall),
 and `--notes` (release notes).
 

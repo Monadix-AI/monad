@@ -67,7 +67,7 @@ Most work has a CLI equivalent, and the CLI is the scriptable surface. These do 
 | Atom Pack install consent | Reviewing a pack's declared atoms before granting them |
 
 Conversely, some things are CLI-only or CLI-first: scripting with `--json` and NDJSON
-event streams, `monad doctor`, `monad logs`, `monad purge`, `monad upgrade`, and every
+event streams, `monad doctor`, `monad logs`, `monad purge`, `monad update`, and every
 non-interactive automation path. See the [CLI reference](/usage/cli).
 
 ## The terminal alternative

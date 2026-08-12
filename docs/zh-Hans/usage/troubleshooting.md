@@ -67,7 +67,7 @@ monad logs -f
 
 **升级后情况变差。** 使用对应历史 release 自带的 dist 安装器安装精确旧版本。
 
-**`monad upgrade` 报告新版本，但运行的仍是旧版。** `PATH` 前面可能有旧二进制；运行 `which -a monad`。
+**`monad update` 报告新版本，但运行的仍是旧版。** `PATH` 前面可能有旧二进制；运行 `which -a monad`。
 
 ## 仍未解决
 
