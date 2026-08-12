@@ -77,39 +77,29 @@ Install Monad from PowerShell 5.1 or later on Windows:
 irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | iex
 ```
 
-The dist installer installs `monad` and `monad-update` under
-`~/.monad/bin`, adds that directory to `PATH`, then starts the daemon and opens the Web UI in an
+The dist installer installs `monad` under `~/.monad/bin`, adds that directory to `PATH`, then
+starts the daemon and opens the Web UI in an
 interactive terminal. Automated and quiet installs only install the binaries; run `monad up`
 afterwards when you are ready to start Monad.
 
 ### Manual installation
 
-Download the archive for your platform and its matching `.sha256` file from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). Verify the checksum, extract the archive, and run `monad`.
+Download the archive for your platform from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). GitHub signs immutable releases and records every asset digest in the release attestation.
 
-For Apple Silicon macOS, replace `release_version_here` with the release tag:
+For the latest immutable release on Apple Silicon macOS:
 
 ```bash
-release_tag=v0.1.3
+release_tag="$(gh release view --repo Monadix-AI/monad --json tagName --jq .tagName)"
 asset="monad-aarch64-apple-darwin"
-release_url="https://github.com/Monadix-AI/monad/releases/download/${release_tag}"
-
-curl -fSLO "${release_url}/${asset}.tar.gz"
-curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
-shasum -a 256 -c "${asset}.tar.gz.sha256"
+gh release download "${release_tag}" --repo Monadix-AI/monad --pattern "${asset}.tar.gz"
+gh release verify-asset "${release_tag}" "${asset}.tar.gz" --repo Monadix-AI/monad
 tar -xzf "${asset}.tar.gz"
 "./${asset}/monad" --help
 ```
 
-Without `curl`, download the same two files with:
-
-```bash
-wget -q "${release_url}/${asset}.tar.gz"
-wget -q "${release_url}/${asset}.tar.gz.sha256"
-```
-
 Release archives are self-contained. Bun and Node.js are not required at runtime. Linux releases include glibc and musl variants.
 
-See [installation and removal](docs/usage/installation.md) for exact checksum commands, supported targets, upgrades, and uninstall steps.
+See [installation and removal](docs/usage/installation.md) for release verification, supported targets, upgrades, and uninstall steps.
 
 ## The runtime behind the team
 

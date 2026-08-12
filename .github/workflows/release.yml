@@ -83,9 +83,7 @@ jobs:
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: monad-power-pack
-          path: |
-            dist/monad-power-pack.atom-pack.zip
-            dist/monad-power-pack.atom-pack.zip.sha256
+          path: dist/monad-power-pack.atom-pack.zip
           retention-days: 1
 
   build:
@@ -146,7 +144,7 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Install dist
         run: curl --proto '=https' --tlsv1.2 -LsSf "https://github.com/axodotdev/cargo-dist/releases/download/v${DIST_VERSION}/cargo-dist-installer.sh" | sh
-      - name: Build target archive and updater
+      - name: Build target archive
         run: |
           dist build --artifacts=local --target=${{ matrix.target }} --tag=${{ env.RELEASE_TAG }} --force-tag --output-format=json > dist-manifest.json
           cp dist-manifest.json target/distrib/${{ matrix.target }}-dist-manifest.json
@@ -154,7 +152,6 @@ jobs:
         with:
           name: dist-${{ matrix.target }}
           path: |
-            target/distrib/monad-${{ matrix.target }}-update
             target/distrib/monad-${{ matrix.target }}.tar.gz
             target/distrib/monad-${{ matrix.target }}.tar.gz.sha256
             target/distrib/monad-${{ matrix.target }}.zip
@@ -191,8 +188,6 @@ jobs:
           path: |
             target/distrib/install.sh
             target/distrib/install.ps1
-            target/distrib/monad-installer.sh
-            target/distrib/monad-installer.ps1
             target/distrib/sha256.sum
             target/distrib/source.tar.gz
             target/distrib/source.tar.gz.sha256
@@ -221,7 +216,7 @@ jobs:
           pattern: dist-*
           merge-multiple: true
           path: artifacts
-      - name: Test shell installer and updater receipt
+      - name: Test shell installer
         if: runner.os != 'Windows'
         shell: bash
         run: |
@@ -239,13 +234,12 @@ jobs:
           cat "${RUNNER_TEMP}/install.log"
           grep -F "◆ MONAD" "${RUNNER_TEMP}/install.log"
           grep -F "▮" "${RUNNER_TEMP}/install.log"
+          grep -F "Checksum verified" "${RUNNER_TEMP}/install.log"
           ! grep -F "no checksums to verify" "${RUNNER_TEMP}/install.log"
           ! grep -F "skipping sha256 checksum verification" "${RUNNER_TEMP}/install.log"
           test -x "${MONAD_INSTALL_DIR}/monad"
-          test -x "${MONAD_INSTALL_DIR}/monad-update"
-          test -f "${HOME}/.config/monad/monad-receipt.json"
           "${MONAD_INSTALL_DIR}/monad" --version | grep -F "${MONAD_DIST_VERSION#v}"
-      - name: Test PowerShell installer and updater receipt
+      - name: Test PowerShell installer
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -259,12 +253,11 @@ jobs:
           $env:MONAD_FORCE_INTERACTIVE = '1'
           & artifacts/install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'install.log')
           Select-String -SimpleMatch '◆ MONAD' (Join-Path $env:RUNNER_TEMP 'install.log') | Out-Null
+          Select-String -SimpleMatch 'Checksum verified' (Join-Path $env:RUNNER_TEMP 'install.log') | Out-Null
           if (Select-String -SimpleMatch 'no checksums to verify' (Join-Path $env:RUNNER_TEMP 'install.log')) {
             throw 'installer did not verify the archive checksum'
           }
           if (!(Test-Path (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe'))) { throw 'monad.exe was not installed' }
-          if (!(Test-Path (Join-Path $env:MONAD_INSTALL_DIR 'monad-update.exe'))) { throw 'monad-update.exe was not installed' }
-          if (!(Test-Path (Join-Path $env:LOCALAPPDATA 'monad\monad-receipt.json'))) { throw 'dist receipt was not installed' }
           & (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe') --version | Select-String ($env:MONAD_DIST_VERSION -replace '^v','')
 
   upgrade-test:
@@ -368,6 +361,26 @@ jobs:
           body_path: release-notes.md
           files: release-assets/*
           fail_on_unmatched_files: true
+      - name: Verify GitHub release asset digests
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          release="$(gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json assets)"
+          local_count="$(find release-assets -maxdepth 1 -type f | wc -l | tr -d ' ')"
+          remote_count="$(jq -r '.assets | length' <<<"${release}")"
+          [[ "${local_count}" == "${remote_count}" ]] || {
+            echo "release asset count mismatch: local=${local_count} github=${remote_count}" >&2
+            exit 1
+          }
+          for asset in release-assets/*; do
+            name="$(basename "${asset}")"
+            local_digest="sha256:$(sha256sum "${asset}" | cut -d' ' -f1)"
+            github_digest="$(jq -er --arg name "${name}" '.assets[] | select(.name == $name) | .digest' <<<"${release}")"
+            [[ "${local_digest}" == "${github_digest}" ]] || {
+              echo "release asset digest mismatch for ${name}: local=${local_digest} github=${github_digest}" >&2
+              exit 1
+            }
+          done
       - name: Publish release
         env:
           GH_TOKEN: ${{ github.token }}

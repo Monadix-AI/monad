@@ -11,7 +11,7 @@ afterEach(async () => {
   await Promise.all(temporaryDirectories.splice(0).map((directory) => rm(directory, { force: true, recursive: true })));
 });
 
-test('staging publishes install and update assets but excludes dist intermediates', async () => {
+test('staging publishes installers and platform archives but excludes updater and checksum intermediates', async () => {
   const root = await mkdtemp(join(tmpdir(), 'monad-public-release-assets-'));
   temporaryDirectories.push(root);
   const source = join(root, 'artifacts');
@@ -20,19 +20,19 @@ test('staging publishes install and update assets but excludes dist intermediate
   const publicNames = [
     'install.ps1',
     'install.sh',
-    'monad-aarch64-apple-darwin-update',
     'monad-aarch64-apple-darwin.tar.gz',
-    'monad-aarch64-apple-darwin.tar.gz.sha256',
-    'monad-aarch64-pc-windows-msvc-update',
     'monad-aarch64-pc-windows-msvc.zip',
-    'monad-aarch64-pc-windows-msvc.zip.sha256',
-    'monad-power-pack.atom-pack.zip',
-    'monad-power-pack.atom-pack.zip.sha256'
+    'monad-power-pack.atom-pack.zip'
   ];
   const internalNames = [
     'aarch64-apple-darwin-dist-manifest.json',
+    'monad-aarch64-apple-darwin-update',
+    'monad-aarch64-apple-darwin.tar.gz.sha256',
+    'monad-aarch64-pc-windows-msvc-update',
+    'monad-aarch64-pc-windows-msvc.zip.sha256',
     'monad-installer.ps1',
     'monad-installer.sh',
+    'monad-power-pack.atom-pack.zip.sha256',
     'sha256.sum',
     'source.tar.gz',
     'source.tar.gz.sha256'
@@ -44,21 +44,15 @@ test('staging publishes install and update assets but excludes dist intermediate
   expect(internalNames.every((name) => !isPublicReleaseAsset(name))).toBeTrue();
 });
 
-test('staging fails closed when an updater has no matching archive', async () => {
+test('staging fails closed when no platform archive is present', async () => {
   const root = await mkdtemp(join(tmpdir(), 'monad-incomplete-release-assets-'));
   temporaryDirectories.push(root);
   const source = join(root, 'artifacts');
   await mkdir(source, { recursive: true });
-  const names = [
-    'install.ps1',
-    'install.sh',
-    'monad-aarch64-apple-darwin-update',
-    'monad-power-pack.atom-pack.zip',
-    'monad-power-pack.atom-pack.zip.sha256'
-  ];
+  const names = ['install.ps1', 'install.sh', 'monad-power-pack.atom-pack.zip'];
   await Promise.all(names.map((name) => writeFile(join(source, name), name)));
 
   expect(stagePublicReleaseAssets(source, join(root, 'release-assets'))).rejects.toThrow(
-    'missing platform archive for updater target aarch64-apple-darwin'
+    'no platform release archives found'
   );
 });

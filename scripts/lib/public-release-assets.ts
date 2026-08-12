@@ -2,19 +2,15 @@ import { copyFile, mkdir, readdir, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 
 const INSTALLERS = new Set(['install.ps1', 'install.sh']);
-const POWER_PACK = /^monad-power-pack\.atom-pack\.zip(?:\.sha256)?$/;
+const POWER_PACK = 'monad-power-pack.atom-pack.zip';
 const PLATFORM_ARCHIVE = /^monad-(.+)\.(tar\.gz|zip)$/;
-const PLATFORM_ARCHIVE_CHECKSUM = /^monad-(.+)\.(tar\.gz|zip)\.sha256$/;
-const PLATFORM_UPDATER = /^monad-(.+)-update$/;
 
 export function isPublicReleaseAsset(name: string): boolean {
-  return (
-    INSTALLERS.has(name) ||
-    POWER_PACK.test(name) ||
-    PLATFORM_ARCHIVE.test(name) ||
-    PLATFORM_ARCHIVE_CHECKSUM.test(name) ||
-    PLATFORM_UPDATER.test(name)
-  );
+  return INSTALLERS.has(name) || name === POWER_PACK || PLATFORM_ARCHIVE.test(name);
+}
+
+export function isPlatformReleaseArchive(name: string): boolean {
+  return PLATFORM_ARCHIVE.test(name) && name !== POWER_PACK;
 }
 
 export async function stagePublicReleaseAssets(sourceDir: string, destinationDir: string): Promise<string[]> {
@@ -33,21 +29,11 @@ export async function stagePublicReleaseAssets(sourceDir: string, destinationDir
 
 export function validatePublicReleaseAssets(names: string[]): void {
   const assets = new Set(names);
-  const required = [...INSTALLERS, 'monad-power-pack.atom-pack.zip', 'monad-power-pack.atom-pack.zip.sha256'];
+  const required = [...INSTALLERS, POWER_PACK];
   const missing = required.filter((name) => !assets.has(name));
   if (missing.length > 0) throw new Error(`missing required public release assets: ${missing.join(', ')}`);
 
-  const updaterTargets = names.flatMap((name) => name.match(PLATFORM_UPDATER)?.[1] ?? []);
-  if (updaterTargets.length === 0) throw new Error('no platform updater assets found');
-  for (const target of updaterTargets) {
-    const archive = names.find((name) => name.match(PLATFORM_ARCHIVE)?.[1] === target);
-    if (!archive) throw new Error(`missing platform archive for updater target ${target}`);
-    if (!assets.has(`${archive}.sha256`)) throw new Error(`missing checksum for platform archive ${archive}`);
+  if (!names.some((name) => isPlatformReleaseArchive(name))) {
+    throw new Error('no platform release archives found');
   }
-
-  const archiveTargets = names.flatMap((name) =>
-    POWER_PACK.test(name) ? [] : (name.match(PLATFORM_ARCHIVE)?.[1] ?? [])
-  );
-  const orphaned = archiveTargets.filter((target) => !assets.has(`monad-${target}-update`));
-  if (orphaned.length > 0) throw new Error(`platform archives without updater assets: ${orphaned.join(', ')}`);
 }

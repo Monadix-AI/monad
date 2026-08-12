@@ -4,8 +4,8 @@ description: "Install Monad on macOS, Linux, or Windows; upgrade or remove it sa
 keywords: ["install Monad", "macOS Linux Windows install", "uninstall", "upgrade", "single binary"]
 ---
 Monad installs as a single binary on macOS, Linux, and Windows and runs as one local daemon.
-The release installer downloads the matching archive and installs both `monad` and the `monad-update`
-updater used by the CLI and Web UI.
+The release installer downloads the matching archive and installs `monad`. The CLI and Web UI use
+the same built-in verified upgrade flow.
 
 This guide covers system requirements, the release installer, manual installation, upgrades, and removal. Use [getting started](/getting-started) after installation to connect a model and run your first session.
 
@@ -23,7 +23,8 @@ You need outbound HTTPS access to your chosen model provider. Monad does not bun
 
 ## Install a release
 
-Run the installer for your platform. It selects the release archive, installs Monad and its updater under `~/.monad/bin`, and updates `PATH`.
+Run the installer for your platform. It selects the release archive, installs Monad under
+`~/.monad/bin`, and updates `PATH`.
 
 On macOS or Linux:
 
@@ -53,36 +54,26 @@ animation. Downloads retry transient failures three times.
 
 ## Install an archive manually
 
-Download the archive and matching `.sha256` file from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). Release names use dist target triples such as `monad-aarch64-apple-darwin.tar.gz`.
+Download the archive from [GitHub Releases](https://github.com/Monadix-AI/monad/releases). Release names use dist target triples such as `monad-aarch64-apple-darwin.tar.gz`. GitHub signs immutable releases and records every asset digest in the release attestation.
 
-For Apple Silicon macOS:
+For the latest immutable release on Apple Silicon macOS:
 
 ```bash
-release_tag=v0.1.3
+release_tag="$(gh release view --repo Monadix-AI/monad --json tagName --jq .tagName)"
 asset="monad-aarch64-apple-darwin"
-release_url="https://github.com/Monadix-AI/monad/releases/download/${release_tag}"
-
-curl -fSLO "${release_url}/${asset}.tar.gz"
-curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
-shasum -a 256 -c "${asset}.tar.gz.sha256"
+gh release download "${release_tag}" --repo Monadix-AI/monad --pattern "${asset}.tar.gz"
+gh release verify-asset "${release_tag}" "${asset}.tar.gz" --repo Monadix-AI/monad
 tar -xzf "${asset}.tar.gz"
 "./${asset}/monad" --help
 ```
 
-Without `curl`, download the archive and checksum with:
-
-```bash
-wget -q "${release_url}/${asset}.tar.gz"
-wget -q "${release_url}/${asset}.tar.gz.sha256"
-```
-
-Use `sha256sum -c` on Linux when `shasum` is unavailable. On Windows, compare the archive with its checksum by running `Get-FileHash -Algorithm SHA256`, then extract it with `tar`.
+The verification command checks both the release attestation and the downloaded asset digest. The same `gh` command works on Windows; extract the verified archive with `tar`.
 
 Use the regular `linux-arch` build on glibc distributions such as Debian, Ubuntu, and Fedora. Use `linux-arch-musl` on Alpine and other musl-based distributions.
 
 ## Upgrade
 
-Use `monad upgrade` or the Web UI upgrade action. See [releases and upgrading](/usage/releases) for release channels and explicit upgrade commands.
+Use `monad update` or the Web UI upgrade action. See [releases and upgrading](/usage/releases) for release channels and explicit update commands.
 
 ## Remove Monad
 

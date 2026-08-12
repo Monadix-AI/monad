@@ -68,7 +68,7 @@
   },
   "private": true,
   "scripts": {
-    "generate": "rimraf generated/codex-app-server && codex app-server generate-ts --out generated/codex-app-server/ts && codex app-server generate-json-schema --out generated/codex-app-server/schema",
+    "generate": "rimraf generated/codex-app-server && bun --bun codex app-server generate-ts --out generated/codex-app-server/ts && bun --bun codex app-server generate-json-schema --out generated/codex-app-server/schema",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
   },

@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 
-import { chmodSync, mkdtempSync, readdirSync, rmSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { basename, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
@@ -27,7 +27,6 @@ const targetTag = values.tag as string;
 const targetVersion = targetTag.replace(/^v/, '');
 const channel = values.channel;
 const installerName = 'install.sh';
-const updaterName = 'monad-update';
 const root = mkdtempSync(join(tmpdir(), 'monad-dist-upgrade-e2e-'));
 
 const artifactServer = Bun.serve({
@@ -84,9 +83,7 @@ async function runScenario(kind: 'cli' | 'web'): Promise<void> {
 
   await run(['sh', join(oldDir, installerName)], { ...env, MONAD_DOWNLOAD_URL: `${serverBase}/old` });
   const monad = join(installDir, 'monad');
-  const updater = join(installDir, updaterName);
   chmodSync(monad, 0o755);
-  chmodSync(updater, 0o755);
   const oldVersion = await run([monad, '--version'], env);
   if (oldVersion.includes(targetVersion)) throw new Error(`${kind}: old install unexpectedly reports ${targetVersion}`);
 
@@ -95,7 +92,7 @@ async function runScenario(kind: 'cli' | 'web'): Promise<void> {
     await waitFor(async () => (await fetch(`http://127.0.0.1:${daemonPort}/health`)).ok, `${kind}: daemon not ready`);
     if (kind === 'cli') {
       const channelArgs = channel === 'stable' ? [] : ['--channel', channel];
-      await run([monad, 'upgrade', ...channelArgs], env);
+      await run([monad, 'update', ...channelArgs], env);
     } else {
       const statusUrl = `http://127.0.0.1:${daemonPort}/v1/system/upgrade`;
       await waitFor(async () => (await fetch(statusUrl)).ok, `${kind}: daemon did not become reachable`);
@@ -137,12 +134,20 @@ function releasePayload(base: string) {
     .filter((entry) => entry.isFile())
     .map((entry) => {
       const assetUrl = `${base}/new/${encodeURIComponent(entry.name)}`;
-      return { name: entry.name, url: assetUrl, browser_download_url: assetUrl };
+      const bytes = readFileSync(join(newDir, entry.name));
+      return {
+        name: entry.name,
+        url: assetUrl,
+        browser_download_url: assetUrl,
+        size: bytes.byteLength,
+        digest: `sha256:${new Bun.CryptoHasher('sha256').update(bytes).digest('hex')}`
+      };
     });
   return {
     assets,
     body: 'dist upgrade e2e',
     draft: false,
+    immutable: true,
     name: targetTag,
     prerelease: channel !== 'stable',
     tag_name: targetTag,

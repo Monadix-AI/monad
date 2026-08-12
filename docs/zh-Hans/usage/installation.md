@@ -3,7 +3,8 @@ title: "安装或移除 Monad"
 description: "在 macOS、Linux 或 Windows 上安装 Monad，并安全地升级或移除。"
 keywords: ["安装 Monad", "macOS Linux Windows 安装", "卸载", "升级", "单个二进制"]
 ---
-Monad 在 macOS、Linux 和 Windows 上作为本地守护进程运行。发行版安装器会下载对应构建，并同时安装 `monad` 与 CLI、Web UI 共用的 `monad-update` 更新器。
+Monad 在 macOS、Linux 和 Windows 上作为本地守护进程运行。发行版安装器会下载对应构建并安装
+`monad`；CLI 与 Web UI 共用内置的可信升级流程。
 
 本指南涵盖系统要求、发行版安装器、手动安装、升级和移除。安装后按[开始使用](/zh-Hans/getting-started)连接模型并运行第一个会话。
 
@@ -21,7 +22,7 @@ Monad 为以下平台发布自包含版本：
 
 ## 安装发行版
 
-运行对应平台的安装器。它会选择发行包，把 Monad 与更新器安装到 `~/.monad/bin`，然后更新 `PATH`。
+运行对应平台的安装器。它会选择发行包，把 Monad 安装到 `~/.monad/bin`，然后更新 `PATH`。
 
 macOS 或 Linux：
 
@@ -49,34 +50,24 @@ irm https://github.com/Monadix-AI/monad/releases/latest/download/install.ps1 | i
 
 ## 手动安装压缩包
 
-从 [GitHub Releases](https://github.com/Monadix-AI/monad/releases) 下载压缩包和对应 `.sha256` 文件。文件名使用 dist target triple，例如 `monad-aarch64-apple-darwin.tar.gz`。
+从 [GitHub Releases](https://github.com/Monadix-AI/monad/releases) 下载压缩包。文件名使用 dist target triple，例如 `monad-aarch64-apple-darwin.tar.gz`。GitHub 会为不可变 Release 签名，并在 Release attestation 中记录每个资产的摘要。
 
-Apple Silicon macOS 示例：
+Apple Silicon macOS 最新不可变 Release 示例：
 
 ```bash
-release_tag=v0.1.3
+release_tag="$(gh release view --repo Monadix-AI/monad --json tagName --jq .tagName)"
 asset="monad-aarch64-apple-darwin"
-release_url="https://github.com/Monadix-AI/monad/releases/download/${release_tag}"
-
-curl -fSLO "${release_url}/${asset}.tar.gz"
-curl -fSLO "${release_url}/${asset}.tar.gz.sha256"
-shasum -a 256 -c "${asset}.tar.gz.sha256"
+gh release download "${release_tag}" --repo Monadix-AI/monad --pattern "${asset}.tar.gz"
+gh release verify-asset "${release_tag}" "${asset}.tar.gz" --repo Monadix-AI/monad
 tar -xzf "${asset}.tar.gz"
 "./${asset}/monad" --help
 ```
 
-没有 `curl` 时，可用以下命令下载压缩包和校验文件：
-
-```bash
-wget -q "${release_url}/${asset}.tar.gz"
-wget -q "${release_url}/${asset}.tar.gz.sha256"
-```
-
-Linux 没有 `shasum` 时使用 `sha256sum -c`。Windows 可用 `Get-FileHash -Algorithm SHA256` 比对校验和，再用 `tar` 解压。Debian、Ubuntu、Fedora 等 glibc 发行版使用常规 `linux-arch` 构建；Alpine 等 musl 发行版使用 `linux-arch-musl`。
+验证命令会同时检查 Release attestation 和已下载资产的摘要。同一条 `gh` 命令也可在 Windows 使用，验证后用 `tar` 解压。Debian、Ubuntu、Fedora 等 glibc 发行版使用常规 `linux-arch` 构建；Alpine 等 musl 发行版使用 `linux-arch-musl`。
 
 ## 升级
 
-使用 `monad upgrade` 或 Web UI 中的升级操作。发行通道与显式升级命令见[发行与升级](/zh-Hans/usage/releases)。
+使用 `monad update` 或 Web UI 中的升级操作。发行通道与显式更新命令见[发行与升级](/zh-Hans/usage/releases)。
 
 ## 移除 Monad
 

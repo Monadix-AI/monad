@@ -4,6 +4,7 @@ import { copyFile, readdir, readFile, rm, stat, writeFile } from 'node:fs/promis
 import { join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
+import { readArchiveSha256s } from './lib/dist-archive-checksums.ts';
 import { POWERSHELL_INSTALLER_AUTO_START, SHELL_INSTALLER_AUTO_START } from './lib/dist-installer-autostart.ts';
 import { SHELL_INSTALLER_TERMINAL_GUARD } from './lib/dist-installer-terminal.ts';
 import { isPublicReleaseAsset } from './lib/public-release-assets.ts';
@@ -17,17 +18,16 @@ const root = resolve(import.meta.dir, '..');
 const artifactsDir = resolve(values.dir ?? join(root, 'target', 'distrib'));
 
 const artifactSizes = await collectArtifactSizes(artifactsDir);
+const archiveSha256s = await readArchiveSha256s(artifactsDir);
 const generatedShell = join(artifactsDir, 'monad-installer.sh');
 const generatedPowerShell = join(artifactsDir, 'monad-installer.ps1');
 const shellInstaller = join(artifactsDir, 'install.sh');
 const powerShellInstaller = join(artifactsDir, 'install.ps1');
 await enhanceShell(generatedShell, artifactSizes);
-await enhancePowerShell(generatedPowerShell, artifactSizes);
+await enhancePowerShell(generatedPowerShell, artifactSizes, archiveSha256s);
 await Promise.all([rm(shellInstaller, { force: true }), rm(powerShellInstaller, { force: true })]);
 await Promise.all([copyFile(generatedShell, shellInstaller), copyFile(generatedPowerShell, powerShellInstaller)]);
-process.stdout.write(
-  `[enhance-dist-installers] wrote install.sh/install.ps1 and axoupdater protocol installers in ${artifactsDir}\n`
-);
+process.stdout.write(`[enhance-dist-installers] wrote install.sh/install.ps1 in ${artifactsDir}\n`);
 
 async function collectArtifactSizes(dir: string): Promise<Map<string, number>> {
   const sizes = new Map<string, number>();
@@ -423,7 +423,13 @@ monad_summary() {
             curl -sSfL "$1" -o "$2"
         fi`,
     `        if monad_is_interactive; then
-            monad_download_progress "$1" "$2" "\${AUTH_TOKEN:-}"
+            if [ -n "\${MONAD_INSTALLER_ARTIFACT_DIR:-}" ]; then
+                cp "$MONAD_INSTALLER_ARTIFACT_DIR/\${1##*/}" "$2"
+            else
+                monad_download_progress "$1" "$2" "\${AUTH_TOKEN:-}"
+            fi
+        elif [ -n "\${MONAD_INSTALLER_ARTIFACT_DIR:-}" ]; then
+            cp "$MONAD_INSTALLER_ARTIFACT_DIR/\${1##*/}" "$2"
         elif [ -n "\${AUTH_TOKEN:-}" ]; then
             curl -sSfL --retry 3 --retry-delay 1 --connect-timeout 10 --speed-limit 1024 --speed-time 30 --header "Authorization: Bearer \${AUTH_TOKEN}" "$1" -o "$2"
         else
@@ -453,12 +459,19 @@ monad_summary() {
   await writeFile(path, source);
 }
 
-async function enhancePowerShell(path: string, artifactSizes: Map<string, number>): Promise<void> {
+async function enhancePowerShell(
+  path: string,
+  artifactSizes: Map<string, number>,
+  archiveSha256s: Map<string, string>
+): Promise<void> {
   let source = await readFile(path, 'utf8');
   if (source.includes('# MONAD_INSTALLER_UI')) return;
 
   const powershellArtifactSizes = [...artifactSizes]
     .map(([name, size]) => `  '${name.replaceAll("'", "''")}' = [int64]${size}`)
+    .join('\n');
+  const powershellArchiveSha256s = [...archiveSha256s]
+    .map(([name, digest]) => `  '${name.replaceAll("'", "''")}' = '${digest}'`)
     .join('\n');
 
   source = replaceOnce(
@@ -469,6 +482,21 @@ async function enhancePowerShell(path: string, artifactSizes: Map<string, number
 # MONAD_INSTALLER_UI
 $MonadArtifactSizes = @{
 ${powershellArtifactSizes}
+}
+$MonadArchiveSha256s = @{
+${powershellArchiveSha256s}
+}
+
+function Confirm-MonadArchiveSha256($path, $url) {
+  $artifactName = [System.IO.Path]::GetFileName(([Uri]$url).AbsolutePath)
+  if (-not $MonadArchiveSha256s.ContainsKey($artifactName)) {
+    throw "missing expected SHA-256 for $artifactName"
+  }
+  $expected = $MonadArchiveSha256s[$artifactName]
+  $actual = (Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash.ToLowerInvariant()
+  if ($actual -ne $expected) {
+    throw "SHA-256 mismatch for $($artifactName): expected $expected, got $actual"
+  }
 }
 
 function Test-MonadJson { return $env:MONAD_OUTPUT -eq 'json' }
@@ -578,6 +606,11 @@ function Write-MonadSummary($installDir, $arch) {
   }
 }`,
     `function Invoke-DownloadFile($client, $url, $path) {
+  if ($env:MONAD_INSTALLER_ARTIFACT_DIR) {
+    $artifactName = [System.IO.Path]::GetFileName(([Uri]$url).AbsolutePath)
+    Copy-Item -Force -LiteralPath (Join-Path $env:MONAD_INSTALLER_ARTIFACT_DIR $artifactName) -Destination $path
+    return
+  }
   $lastError = $null
   foreach ($attempt in 1..3) {
     try {
@@ -641,7 +674,7 @@ function Invoke-MonadDownloadFileOnce($client, $url, $path) {
   source = replaceOnce(
     source,
     '  Invoke-DownloadFile -client $wc -url $url -path $dir_path',
-    '  Write-MonadStep "Downloading release archive ($arch)"\n  Invoke-DownloadFile -client $wc -url $url -path $dir_path\n  Write-MonadDone "Release archive downloaded"'
+    '  Write-MonadStep "Downloading release archive ($arch)"\n  Invoke-DownloadFile -client $wc -url $url -path $dir_path\n  Write-MonadDone "Release archive downloaded"\n  Start-MonadActivity "Verifying SHA-256 checksum"\n  Confirm-MonadArchiveSha256 $dir_path $url\n  Stop-MonadActivity "Verifying SHA-256 checksum"\n  Write-MonadDone "Checksum verified"'
   );
   source = replaceOnce(
     source,

@@ -28,3 +28,14 @@ export function releaseTargetFromDistTarget(target: string): ReleaseTarget {
 export function releaseTargetSuffix(target: ReleaseTarget): string {
   return `${target.os}-${target.arch}${target.libc ? `-${target.libc}` : ''}`;
 }
+
+export function distTargetFromReleaseTarget(target: ReleaseTarget): DistTarget {
+  const entry = Object.entries(DIST_TARGETS).find(
+    ([, candidate]) =>
+      candidate.os === target.os &&
+      candidate.arch === target.arch &&
+      ('libc' in candidate ? candidate.libc : undefined) === target.libc
+  );
+  if (!entry) throw new Error(`Unsupported release target: ${releaseTargetSuffix(target)}`);
+  return entry[0] as DistTarget;
+}

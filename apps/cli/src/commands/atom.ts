@@ -32,7 +32,7 @@ async function runAuthorCommand({ positionals: args, flags }: LocalCommandContex
     const result = await packageAtomPack({ sourceDir, output });
     json(result);
     out(`${green(t('cli.atom.packed'))} ${cyan(result.artifact)}`);
-    out(dim(t('cli.atom.packChecksum', { sha256: result.sha256, file: result.checksumFile })));
+    out(dim(t('cli.atom.packChecksum', { sha256: result.sha256 })));
     return true;
   }
 

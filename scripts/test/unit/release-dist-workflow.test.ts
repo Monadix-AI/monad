@@ -24,22 +24,28 @@ const workflow = Bun.YAML.parse(await Bun.file(join(root, '.github/workflows/rel
 const releasePlease = Bun.YAML.parse(await Bun.file(join(root, '.github/workflows/release-please.yml')).text()) as {
   jobs?: Record<string, Job>;
 };
+const atomPackRelease = Bun.YAML.parse(
+  await Bun.file(join(root, '.github/workflows/atom-pack-release.yml')).text()
+) as {
+  jobs?: Record<string, Job>;
+};
 const jobs = workflow.jobs ?? {};
 const namedStep = (job: string, name: string) => jobs[job]?.steps?.find((step) => step.name === name);
 
 test('release workflow builds, exercises, attests, and publishes dist installers', async () => {
-  const build = namedStep('build', 'Build target archive and updater')?.run;
+  const build = namedStep('build', 'Build target archive')?.run;
   const crossCompilers = namedStep('build', 'Install Linux and Windows cross-compilers')?.run;
   const llvmMingw = namedStep('build', 'Install LLVM MinGW for Windows ARM64');
   const generate = namedStep('installers', 'Generate shell and PowerShell installers')?.run;
   const installerBun = jobs.installers?.steps?.find((step) => step.uses?.startsWith('oven-sh/setup-bun@'));
   const upload = jobs.installers?.steps?.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
-  const shellTest = namedStep('install-test', 'Test shell installer and updater receipt')?.run;
-  const powerShellTest = namedStep('install-test', 'Test PowerShell installer and updater receipt')?.run;
+  const shellTest = namedStep('install-test', 'Test shell installer')?.run;
+  const powerShellTest = namedStep('install-test', 'Test PowerShell installer')?.run;
   const attest = namedStep('publish', 'Attest release assets');
   const stageAssets = namedStep('publish', 'Stage public release assets')?.run;
   const changelog = namedStep('publish', 'Generate complete release changelog')?.run;
   const releaseUpload = namedStep('publish', 'Upload release assets');
+  const digestVerification = namedStep('publish', 'Verify GitHub release asset digests')?.run;
   const localDeploy = await Bun.file(join(root, 'scripts/deploy-local-dist.ts')).text();
   const upgradeE2e = await Bun.file(join(root, 'scripts/test/upgrade-dist-e2e.ts')).text();
   const distWorkspace = await Bun.file(join(root, 'dist-workspace.toml')).text();
@@ -58,19 +64,20 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(llvmMingw?.run).toContain('sha256sum --check');
   expect(installMatrix).toContainEqual({ os: 'windows-arm64', runner: 'windows-11-arm' });
   expect(distWorkspace).toContain('"aarch64-pc-windows-msvc"');
+  expect(distWorkspace).toContain('install-updater = false');
   expect(distPackage).toContain('aarch64-pc-windows-msvc = [');
   expect(installerBun?.with?.['bun-version']).toBe('1.3.14');
   expect(generate).toContain('--artifacts=global');
   expect(generate).toContain('bun scripts/enhance-dist-installers.ts');
   expect(upload?.with?.path).toContain('target/distrib/install.sh');
   expect(upload?.with?.path).toContain('target/distrib/install.ps1');
-  expect(upload?.with?.path).toContain('target/distrib/monad-installer.sh');
-  expect(upload?.with?.path).toContain('target/distrib/monad-installer.ps1');
   expect(shellTest).toContain('script -qefc "sh artifacts/install.sh"');
   expect(shellTest).toContain('MONAD_FORCE_INTERACTIVE=1');
+  expect(shellTest).toContain('Checksum verified');
   expect(shellTest).toContain('no checksums to verify');
   expect(shellTest).toContain('skipping sha256 checksum verification');
   expect(powerShellTest).toContain('MONAD_FORCE_INTERACTIVE');
+  expect(powerShellTest).toContain('Checksum verified');
   expect(powerShellTest).toContain('no checksums to verify');
   expect(localDeploy).toContain("join(artifactsDir, 'install.sh')");
 
@@ -87,13 +94,34 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(stageAssets).toBe('bun scripts/stage-public-release-assets.ts --from artifacts --to release-assets');
   expect(upgradeE2e).toContain('readdirSync(newDir');
   expect(upgradeE2e).toContain('browser_download_url: assetUrl');
+  expect(upgradeE2e).toContain('immutable: true');
+  expect(upgradeE2e).toContain("new Bun.CryptoHasher('sha256').update(bytes).digest('hex')");
+  expect(upgradeE2e).toContain('size: bytes.byteLength');
   expect(upgradeE2e).toContain("await run([monad, 'up'], env)");
   expect(attest?.uses).toMatch(/^actions\/attest@[0-9a-f]{40}$/);
   expect(attest?.with?.['subject-path']).toBe('release-assets/*');
   expect(releaseUpload?.with?.files).toBe('release-assets/*');
+  expect(digestVerification).toContain('gh release view');
+  expect(digestVerification).toContain('.assets[] | select(.name == $name) | .digest');
+  expect(digestVerification).toContain('sha256sum "'.concat('$', '{asset}"'));
   expect(jobs.publish?.permissions).toMatchObject({ attestations: 'write', 'id-token': 'write' });
   expect(releasePlease.jobs?.['release-assets']?.permissions).toMatchObject({
     attestations: 'write',
     'id-token': 'write'
+  });
+});
+
+test('GitHub releases publish canonical assets without checksum sidecars', () => {
+  const powerPackUpload = jobs['atom-pack']?.steps?.find((step) => step.uses?.startsWith('actions/upload-artifact@'));
+  const reusableRelease = atomPackRelease.jobs?.release?.steps?.find((step) =>
+    step.uses?.startsWith('softprops/action-gh-release@')
+  );
+
+  expect({
+    powerPackArtifact: powerPackUpload?.with?.path,
+    reusableReleaseAssets: reusableRelease?.with?.files
+  }).toEqual({
+    powerPackArtifact: 'dist/monad-power-pack.atom-pack.zip',
+    reusableReleaseAssets: 'release/atom-pack.zip'
   });
 });

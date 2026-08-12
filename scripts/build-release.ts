@@ -6,7 +6,7 @@
  *   1. bun install
  *   2. Web: build the Vite SPA (apps/web/out/) → generate the embed module
  *   3. Compile apps/cli/src/bin.ts → bin/monad (embeds daemon + web + tui + SPA)
- *   4. tar + sha256 per platform
+ *   4. tar archive per platform
  *
  * Usage:
  *   bun run scripts/build-release.ts                                   # host platform only (glibc)
@@ -18,7 +18,7 @@
  *   bun run scripts/build-release.ts --prerelease=nightly.20260617     # pre-release channel identifier (-nightly.20260617)
  *   bun run scripts/build-release.ts --all --prerelease=nightly.20260617 --build=abc1234
  *
- * Output: dist/monad-{version}-{os}-{arch}.tar.gz (+ .sha256)
+ * Output: dist/monad-{version}-{os}-{arch}.tar.gz
  */
 
 import type { BunPlugin } from 'bun';
@@ -36,7 +36,7 @@ import { buildMacOSNotificationApp } from './lib/macos-notification-app.ts';
 import { createPlatformModulePlugin } from './lib/platform-modules.ts';
 import { optionalPeerExternals } from './lib/release-optional-peers.ts';
 import { releasePlatformModuleRules } from './lib/release-platform-modules.ts';
-import { type ReleaseTarget, releaseTargetFromDistTarget } from './lib/release-target.ts';
+import { distTargetFromReleaseTarget, type ReleaseTarget, releaseTargetFromDistTarget } from './lib/release-target.ts';
 
 const ROOT = resolve(import.meta.dir, '..');
 const DIST = join(ROOT, 'dist');
@@ -279,6 +279,7 @@ try {
       plugins: [stubReactDevtools, stubBetterSqlite3, platformModules.plugin],
       define: {
         BUILD_VERSION: JSON.stringify(VERSION),
+        BUILD_DIST_TARGET: JSON.stringify(distTargetFromReleaseTarget(t)),
         'Bun.env.NODE_ENV': JSON.stringify('production')
       }
     });
@@ -302,15 +303,10 @@ try {
       log(`  ✓ process-name aliases (${MONAD_PROCESS_ROLES.map((r) => `monad-${r}`).join(', ')})`);
     }
 
-    // ── 3. tar + sha256 ────────────────────────────────────────────────────────
+    // ── 3. tar archive ─────────────────────────────────────────────────────────
     if (!cli['no-archive']) {
       const tarball = `${artifact}.tar.gz`;
       await $`tar -czf ${join(DIST, tarball)} -C ${DIST} ${artifact}`;
-      const sha =
-        HOST.os === 'darwin'
-          ? (await $`shasum -a 256 ${join(DIST, tarball)}`.quiet()).stdout.toString()
-          : (await $`sha256sum ${join(DIST, tarball)}`.quiet()).stdout.toString();
-      writeFileSync(join(DIST, `${tarball}.sha256`), sha);
       log(`  ✓ dist/${tarball}`);
     }
   }

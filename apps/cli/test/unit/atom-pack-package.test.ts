@@ -1,7 +1,7 @@
 import { afterEach, expect, test } from 'bun:test';
-import { mkdir, readFile, rm, symlink } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, symlink } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 
 import { packageAtomPack } from '../../src/atom-pack/package.ts';
 
@@ -25,28 +25,31 @@ async function fixture(): Promise<string> {
   return root;
 }
 
-test('packageAtomPack creates a deterministic canonical artifact and checksum', async () => {
+test('packageAtomPack creates a deterministic canonical artifact and digest', async () => {
   const root = await fixture();
   const first = await packageAtomPack({ sourceDir: root });
   const firstBytes = await readFile(first.artifact);
   const second = await packageAtomPack({ sourceDir: root });
-  const checksum = await readFile(second.checksumFile, 'utf8');
 
   expect(second).toEqual({
     ...first,
     files: ['atom-pack.json', 'dist/atom-pack.js', 'skills/hello/SKILL.md']
   });
   expect(await readFile(second.artifact)).toEqual(firstBytes);
-  expect(checksum).toBe(`${second.sha256}  atom-pack.zip\n`);
+  expect(await readdir(join(root, 'release'))).toEqual(['atom-pack.zip']);
+  expect(second.sha256).toBe(new Bun.CryptoHasher('sha256').update(firstBytes).digest('hex'));
   expect(second.integrity).toMatch(/^sha256-[0-9a-f]{64}$/);
 });
 
-test('packageAtomPack names a custom checksum after its artifact', async () => {
+test('packageAtomPack writes a custom canonical artifact', async () => {
   const root = await fixture();
   const output = join(root, 'release', 'custom-pack.zip');
   const result = await packageAtomPack({ sourceDir: root, output });
 
-  expect(await readFile(result.checksumFile, 'utf8')).toBe(`${result.sha256}  ${basename(output)}\n`);
+  expect({ artifact: result.artifact, sha256: result.sha256 }).toEqual({
+    artifact: output,
+    sha256: new Bun.CryptoHasher('sha256').update(await readFile(output)).digest('hex')
+  });
 });
 
 test('packageAtomPack requires a built entry and rejects symlinked content', async () => {
