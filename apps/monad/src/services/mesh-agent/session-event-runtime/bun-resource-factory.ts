@@ -180,6 +180,7 @@ export class BunSessionEventRuntimeResourceFactory implements SessionEventRuntim
       await stdin?.end?.();
     };
     const result = proc.exited.then((exitCode) => {
+      stdinClosed = true;
       this.options.onExit?.(proc.pid);
       const signal = (proc as typeof proc & { signalCode?: NodeJS.Signals | null }).signalCode;
       return { exitCode, ...(signal ? { signal } : {}) };

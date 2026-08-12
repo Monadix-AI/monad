@@ -277,6 +277,13 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                     runtimeId: existing.id
                   });
                 }
+                await emitManagedMeshAgentThinking(
+                  session.id,
+                  existing.id,
+                  member.projectMemberId,
+                  activeDeliveryId,
+                  displayName
+                );
                 const completion = meshAgentHost.input(existing.id, {
                   input: meshAgentInputText(batch?.prompt ?? notice)
                 });
@@ -323,13 +330,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
               }
               return;
             }
-            await emitManagedMeshAgentThinking(
-              session.id,
-              existing.id,
-              member.projectMemberId,
-              activeDeliveryId,
-              displayName
-            );
             void admission.completion.catch(async (err) => {
               await handleDeliveryFailure(member, err, async () => {
                 await retireManagedMeshAgentThinking(session.id, existing.id, member.projectMemberId);

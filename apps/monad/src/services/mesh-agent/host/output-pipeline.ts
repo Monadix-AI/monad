@@ -52,13 +52,13 @@ function autopilotApprovalDecision(
 export class MeshAgentOutputPipeline {
   constructor(private readonly ctx: MeshAgentOutputPipelineContext) {}
 
-  structuredEvent(
+  async structuredEvent(
     transcriptTargetId: MeshAgentTargetId,
     id: string,
     adapter: MeshAgentProviderAdapter,
     event: MeshAgentOutputEvent,
     authAgentName: string
-  ): void {
+  ): Promise<void> {
     const liveSession = this.ctx.live.get(id);
     if (liveSession?.runtimeRole === 'managed-project-agent') {
       this.ctx.getManagedProjectLoopEventHandler()?.({
@@ -71,7 +71,7 @@ export class MeshAgentOutputPipeline {
     }
     if (event.type === 'agent_message') {
       if (event.payload.final === true) {
-        this.emitManagedProjectOutput(
+        await this.emitManagedProjectOutput(
           transcriptTargetId,
           id,
           typeof event.payload.text === 'string' ? event.payload.text : '',
@@ -119,7 +119,7 @@ export class MeshAgentOutputPipeline {
     if (event.type === 'provider_error') {
       const message =
         typeof event.payload.message === 'string' ? event.payload.message : `${adapter.provider} provider error`;
-      this.emitManagedProjectOutput(transcriptTargetId, id, message, true);
+      await this.emitManagedProjectOutput(transcriptTargetId, id, message, true);
       return;
     }
 
@@ -218,13 +218,13 @@ export class MeshAgentOutputPipeline {
     this.ctx.stop(id);
   }
 
-  emitManagedProjectOutput(
+  async emitManagedProjectOutput(
     transcriptTargetId: MeshAgentTargetId,
     id: string,
     text: string,
     error = false,
     post = true
-  ): void {
+  ): Promise<void> {
     const live = this.ctx.live.get(id);
     const row = this.ctx.store.getMeshSession(id);
     const runtimeRole = live?.runtimeRole ?? row?.runtimeRole;
@@ -239,16 +239,16 @@ export class MeshAgentOutputPipeline {
     // The managed mesh cursor is frozen, so the visible watermark comes from the SessionBinding.
     const cursor = this.ctx.store.meshAgentInboxCursor(id).visibleSeq;
     if (cursor > 0) this.ctx.store.markMeshAgentInboxConsumed(id, cursor);
-    void Promise.resolve(
-      managedProjectOutputHandler({
+    try {
+      await managedProjectOutputHandler({
         sessionId: transcriptTargetId,
         meshSessionId: id,
         agentName,
         text,
         error,
         post
-      })
-    ).catch((err: unknown) => {
+      });
+    } catch (err: unknown) {
       this.ctx.log.debug(
         {
           sessionId: transcriptTargetId,
@@ -259,6 +259,6 @@ export class MeshAgentOutputPipeline {
         },
         'managed native cli provider output failed to project'
       );
-    });
+    }
   }
 }

@@ -1,6 +1,5 @@
 import type { MonadPaths } from '@monad/environment';
 import type { SessionId } from '@monad/protocol';
-import type { EventBus } from '#/services/event-bus.ts';
 
 import { describe, expect, test } from 'bun:test';
 import { mkdir, rm } from 'node:fs/promises';
@@ -63,56 +62,24 @@ async function waitFor<T>(read: () => T | undefined, timeoutMs = 2_000): Promise
   throw new Error('timed out waiting for condition');
 }
 
-/** `mesh.session.connection.closed` is `transient` (event-table.ts) — it is never persisted and
- *  never replayed, so the subscription MUST be established before the action that triggers it
- *  (process exit/kill), not polled for afterward. Fires exactly when a MeshAgent session's
- *  process activation closes (session-event-runtime-launcher.ts), which is the same moment `pid`
- *  returns to null — the signal Opus identified in review. */
-function waitForConnectionClosed(
-  bus: EventBus,
-  sessionId: SessionId,
-  meshSessionId: string,
-  timeoutMs = 2_000
-): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timer = setTimeout(() => {
-      unsubscribe();
-      reject(new Error('timed out waiting for mesh.session.connection.closed'));
-    }, timeoutMs);
-    const unsubscribe = bus.subscribe(sessionId, (event) => {
-      if (event.type !== 'mesh.session.connection.closed') return;
-      if ((event.payload as { meshSessionId: string }).meshSessionId !== meshSessionId) return;
-      clearTimeout(timer);
-      unsubscribe();
-      resolve();
-    });
-  });
-}
-
-/** No daemon event marks "providerSessionRef was just persisted" (connection.opened fires at
- *  process spawn, before the init frame is even decoded — see the earlier investigation). Rather
- *  than poll, wrap the exact store call the daemon makes when it persists the ref
+/** No daemon event marks "providerSessionRef was just persisted". Rather than poll, wrap the exact
+ *  store call the daemon makes when it persists the ref
  *  (`store.updateMeshSessionRef`, called from session-event-runtime-launcher.ts's `consumeEvent`
  *  on a decoded `provider_session_identified` event) and resolve once real code calls it for the
  *  target mesh session — this waits on the actual happens-before, through the real decoder/store
  *  path, not a proxy for it. Restores the original method in the caller's `finally`. */
 function waitForProviderSessionRefPersisted(
   handlers: { store: { updateMeshSessionRef(id: string, providerSessionRef: string): boolean } },
-  meshSessionId: string,
-  timeoutMs = 2_000
+  meshSessionId: string
 ): { result: Promise<string>; restore: () => void } {
   const original = handlers.store.updateMeshSessionRef.bind(handlers.store);
   let resolve!: (ref: string) => void;
-  let reject!: (error: Error) => void;
-  const result = new Promise<string>((res, rej) => {
+  const result = new Promise<string>((res) => {
     resolve = res;
-    reject = rej;
   });
-  const timer = setTimeout(() => reject(new Error('timed out waiting for providerSessionRef to persist')), timeoutMs);
   handlers.store.updateMeshSessionRef = (id: string, providerSessionRef: string): boolean => {
     const persisted = original(id, providerSessionRef);
     if (id === meshSessionId) {
-      clearTimeout(timer);
       resolve(providerSessionRef);
     }
     return persisted;
@@ -121,6 +88,30 @@ function waitForProviderSessionRefPersisted(
     result,
     restore: () => {
       handlers.store.updateMeshSessionRef = original;
+    }
+  };
+}
+
+type MeshSessionUpsert = Parameters<ReturnType<typeof buildHandlers>['store']['upsertMeshSession']>[0];
+
+function waitForMeshSessionSnapshot(
+  handlers: ReturnType<typeof buildHandlers>,
+  meshSessionId: string,
+  matches: (row: MeshSessionUpsert) => boolean
+): { result: Promise<void>; restore: () => void } {
+  const original = handlers.store.upsertMeshSession.bind(handlers.store);
+  let resolve!: () => void;
+  const result = new Promise<void>((res) => {
+    resolve = res;
+  });
+  handlers.store.upsertMeshSession = (row: MeshSessionUpsert): void => {
+    original(row);
+    if (row.id === meshSessionId && matches(row)) resolve();
+  };
+  return {
+    result,
+    restore: () => {
+      handlers.store.upsertMeshSession = original;
     }
   };
 }
@@ -203,10 +194,15 @@ for (const kind of TRANSPORTS) {
         const meshSession = ((await started.json()) as { session: { id: string } }).session;
 
         // `/input` blocks until the turn settles, so it must not be awaited before the process is
-        // killed — fire it, wait for connection.closed (subscribed up front, since it's transient
-        // and won't replay), kill the process, then await both settling together.
-        const closed = waitForConnectionClosed(handlers.bus, sessionId, meshSession.id);
+        // killed — fire it, wait until the provider ref has crossed the real decoder/store boundary,
+        // kill the process, then await the request. Its completion includes the runtime's finally
+        // path, where the pid is cleared and the inactive snapshot is persisted.
         const providerSessionRefPersisted = waitForProviderSessionRefPersisted(handlers, meshSession.id);
+        const settledSnapshot = waitForMeshSessionSnapshot(
+          handlers,
+          meshSession.id,
+          (row) => row.providerSessionRef === 'ref-midflight' && row.pid === null
+        );
         const inputPromise = call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
           input: 'trigger a turn that never completes'
         }).catch((error: Error) => error);
@@ -226,7 +222,8 @@ for (const kind of TRANSPORTS) {
         if (running?.pid == null) throw new Error('expected the hung turn to still have a live pid');
 
         process.kill(running.pid, 'SIGKILL');
-        await Promise.all([inputPromise, closed]);
+        await Promise.all([inputPromise, settledSnapshot.result]);
+        settledSnapshot.restore();
 
         const settled = handlers.store.getMeshSession(meshSession.id);
         expect({ providerSessionRef: settled?.providerSessionRef, pid: settled?.pid }).toEqual({
@@ -258,13 +255,18 @@ for (const kind of TRANSPORTS) {
         // Distinct from the mid-flight-kill case above: this is the provider process itself
         // choosing to die with an exit code, with no external signal and no result frame ever
         // sent — the orphan/crash path a daemon restart must reconcile, not a signalled kill.
-        const closed = waitForConnectionClosed(handlers.bus, sessionId, meshSession.id);
+        const settledSnapshot = waitForMeshSessionSnapshot(
+          handlers,
+          meshSession.id,
+          (row) => row.state === 'failed' && row.providerSessionRef === 'ref-crash' && row.pid === null
+        );
         const [input] = await Promise.all([
           call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
             input: 'trigger a provider self-crash'
           }),
-          closed
+          settledSnapshot.result
         ]);
+        settledSnapshot.restore();
         expect(input.status).toBe(200);
 
         const settled = handlers.store.getMeshSession(meshSession.id);

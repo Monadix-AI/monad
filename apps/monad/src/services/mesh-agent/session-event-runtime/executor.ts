@@ -120,6 +120,10 @@ export class SessionEventRuntimeExecutor {
       });
       this.applyReady(ready);
       await this.ensureResidentActive();
+      if (this.closePromise) {
+        await this.closePromise;
+        return this.snapshot();
+      }
       this.lifecycle = { state: 'active' };
       this.publishSnapshot();
       if (initialTurn) await this.input(initialTurn);
@@ -350,7 +354,14 @@ export class SessionEventRuntimeExecutor {
     this.clearIdleTimer();
     const activation = this.activation;
     this.activation = undefined;
+    const activationPromise = this.residentActivationPromise;
     let exit: Awaited<SessionEventRuntimeActivation['process']['result']> | undefined;
+    let disposalError: unknown;
+    try {
+      await this.disposeDriver();
+    } catch (error) {
+      disposalError = error;
+    }
     if (activation) {
       this.intentionallyClosedActivations.add(activation);
       await activation.process.kill('SIGTERM');
@@ -360,13 +371,11 @@ export class SessionEventRuntimeExecutor {
       exit = await activation.process.result;
       await activation.close();
     }
-    // The activation promise needs the same join. A stop landing mid-attach otherwise leaves
-    // attachChannel writing into the child killed above, and its EPIPE has no subscriber left —
-    // start() has long returned — so it surfaces as an unhandled rejection instead of settling here.
-    // Dispose first: an attach still waiting on a response the dead child will never send only
-    // unwinds once the driver cancels it, otherwise this join sits out the whole startup timeout.
-    await this.disposeDriver();
-    await this.residentActivationPromise?.catch(() => {});
+    // The activation promise needs the same join. Disposal runs before the kill so an attach still
+    // opening the provider channel is rejected through its owned request ledger, rather than writing
+    // its next handshake frame into a child whose stdin has already been torn down.
+    await activationPromise?.catch(() => {});
+    if (disposalError) throw disposalError;
     if (this.lifecycle.state !== 'terminal' || this.lifecycle.termination.kind === 'stopped') {
       this.lifecycle = {
         state: 'terminal',
@@ -441,11 +450,21 @@ export class SessionEventRuntimeExecutor {
       );
       this.activation = activation;
       const packets = this.pumpPackets(activation, epoch, this.residentDriver());
-      void this.monitorResident(activation, packets);
+      // Attachment owns startup until the driver's handshake is complete. Starting the resident
+      // monitor first lets an early child exit dispose the driver concurrently with attachChannel,
+      // so its opening request writes into a just-closed stdin and leaks EPIPE. Race the handshake
+      // against the joined child/readers instead; only a successfully attached activation is handed
+      // to the long-lived monitor.
+      const startupExit = Promise.all([activation.process.result, packets]).then(([result]) => {
+        throw new Error(`resident process exited during startup with code ${result.exitCode}`);
+      });
       const attached = await this.withStartupTimeout(
-        this.residentDriver().attachChannel(activation.channel, {
-          ...(this.providerSessionRef ? { providerSessionRef: this.providerSessionRef } : {})
-        }),
+        Promise.race([
+          this.residentDriver().attachChannel(activation.channel, {
+            ...(this.providerSessionRef ? { providerSessionRef: this.providerSessionRef } : {})
+          }),
+          startupExit
+        ]),
         plan.startup.timeoutMs,
         abort
       );
@@ -453,6 +472,7 @@ export class SessionEventRuntimeExecutor {
       this.connection = { state: 'connected' };
       this.activity = { state: 'idle', pid: null, queuedTurnCount: 0 };
       this.publishSnapshot();
+      void this.monitorResident(activation, packets);
     } catch (error) {
       abort.abort();
       if (activation) {
@@ -461,6 +481,7 @@ export class SessionEventRuntimeExecutor {
         await activation.process.kill('SIGTERM');
         await activation.close();
       }
+      if (this.closePromise) return;
       throw error;
     }
   }

@@ -168,6 +168,7 @@ export class MeshSessionEventRuntimeLauncher {
       id,
       transcriptTargetId: args.transcriptTargetId,
       agentName: args.agentName,
+      projectMemberId: args.projectMemberId ?? null,
       provider: agent.provider,
       workingPath,
       runtimeRole,
@@ -349,7 +350,7 @@ export class MeshSessionEventRuntimeLauncher {
           })();
           return;
         }
-        this.ctx.outputPipeline.structuredEvent(
+        await this.ctx.outputPipeline.structuredEvent(
           args.transcriptTargetId,
           id,
           adapter,
