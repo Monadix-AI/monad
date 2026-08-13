@@ -6,6 +6,7 @@ import { basename, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import rootPackage from '../package.json' with { type: 'json' };
+import { localDistTarget, localInstallPlan } from './lib/local-dist-platform.ts';
 
 const root = resolve(import.meta.dir, '..');
 const artifactsDir = join(root, 'target', 'distrib');
@@ -21,9 +22,6 @@ const { values } = parseArgs({
 
 const dist = Bun.which('dist') ?? Bun.which('cargo-dist');
 if (!dist) throw new Error('dist 0.32.0 is unavailable; run this command through mise');
-if (process.platform === 'win32') {
-  throw new Error('local source builds run on macOS or Linux; use the published PowerShell installer on Windows');
-}
 
 const version = rootPackage.version;
 const target = values.target ?? hostDistTarget();
@@ -38,8 +36,11 @@ if (values['build-only']) {
 }
 
 const installDir = Bun.env.MONAD_INSTALL_DIR ?? join(homedir(), '.monad', 'bin');
-const installedBinary = join(installDir, 'monad');
-const installer = join(artifactsDir, 'install.sh');
+const {
+  binary: installedBinary,
+  command: installerCommand,
+  installer
+} = localInstallPlan(process.platform, artifactsDir, installDir);
 await access(installer);
 
 const server = Bun.serve({
@@ -62,7 +63,7 @@ try {
     MONAD_DOWNLOAD_URL: `http://127.0.0.1:${server.port}`,
     MONAD_INSTALL_DIR: installDir
   };
-  await run(['sh', installer], installerEnv);
+  await run(installerCommand, installerEnv);
 } finally {
   server.stop(true);
 }
@@ -73,14 +74,12 @@ if (!values['no-start']) await run([installedBinary, 'up'], {});
 process.stdout.write(`[deploy-local-dist] installed Monad ${version} in ${installDir}\n`);
 
 function hostDistTarget(): string {
-  const arch = process.arch === 'arm64' ? 'aarch64' : 'x86_64';
-  if (process.platform === 'darwin') return `${arch}-apple-darwin`;
   if (process.platform === 'linux') {
     const ldd = Bun.spawnSync(['ldd', '--version']);
     const output = `${ldd.stdout.toString()}${ldd.stderr.toString()}`;
-    return `${arch}-unknown-linux-${/musl/i.test(output) ? 'musl' : 'gnu'}`;
+    return localDistTarget(process.platform, process.arch, /musl/i.test(output) ? 'musl' : 'gnu');
   }
-  throw new Error(`unsupported local build platform: ${process.platform}`);
+  return localDistTarget(process.platform, process.arch);
 }
 
 async function run(command: string[], extraEnv: Record<string, string>, allowFailure = false): Promise<void> {

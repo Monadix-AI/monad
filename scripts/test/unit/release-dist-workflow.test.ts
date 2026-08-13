@@ -47,6 +47,8 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   const releaseUpload = namedStep('publish', 'Upload release assets');
   const digestVerification = namedStep('publish', 'Verify GitHub release asset digests')?.run;
   const localDeploy = await Bun.file(join(root, 'scripts/deploy-local-dist.ts')).text();
+  const localDeployPlatform = await Bun.file(join(root, 'scripts/lib/local-dist-platform.ts')).text();
+  const releaseBuilder = await Bun.file(join(root, 'scripts/build-release.ts')).text();
   const upgradeE2e = await Bun.file(join(root, 'scripts/test/upgrade-dist-e2e.ts')).text();
   const distWorkspace = await Bun.file(join(root, 'dist-workspace.toml')).text();
   const distPackage = await Bun.file(join(root, 'dist.toml')).text();
@@ -79,7 +81,13 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(powerShellTest).toContain('MONAD_FORCE_INTERACTIVE');
   expect(powerShellTest).toContain('Checksum verified');
   expect(powerShellTest).toContain('no checksums to verify');
-  expect(localDeploy).toContain("join(artifactsDir, 'install.sh')");
+  expect(localDeploy).toContain('localInstallPlan(');
+  expect(localDeployPlatform).toContain("posix.join(artifactsDir, 'install.sh')");
+  expect(localDeployPlatform).toContain("win32.join(artifactsDir, 'install.ps1')");
+  expect(localDeployPlatform).toContain("win32.join(installDir, 'monad.exe')");
+  expect(localDeployPlatform).toContain("'powershell.exe'");
+  expect(releaseBuilder).toContain("process.platform === 'win32' ? 'windows'");
+  expect(releaseBuilder).toContain("label: 'MSVC cl.exe'");
 
   expect(jobs.publish?.needs).toEqual(['atom-pack', 'install-test', 'upgrade-test']);
   expect(namedStep('upgrade-test', 'Upgrade an active daemon through CLI and Web')?.run).toContain(

@@ -79,18 +79,19 @@ function triple(t: Target): string {
 }
 
 const HOST: Target = {
-  os: process.platform === 'darwin' ? 'darwin' : 'linux',
+  os: process.platform === 'darwin' ? 'darwin' : process.platform === 'win32' ? 'windows' : 'linux',
   arch: process.arch === 'arm64' ? 'arm64' : 'x64',
   // A host build on Alpine/musl wants a musl binary; pass --musl (or set when the rootfs is musl).
   ...(process.platform === 'linux' && cli.musl ? { libc: 'musl' as const } : {})
 };
-if (process.platform !== 'darwin' && process.platform !== 'linux') {
-  process.stderr.write('Build script must run on darwin or linux (cross-compiles to windows).\n');
+if (process.platform !== 'darwin' && process.platform !== 'linux' && process.platform !== 'win32') {
+  process.stderr.write('Build script must run on macOS, Linux, or Windows.\n');
   process.exit(1);
 }
 // --os=darwin (or --os=linux,windows) restricts the build to those OSes. The release runs the
-// build matrix split by OS — darwin on a macOS runner (Cocoa can't cross-compile), linux+windows
-// cross-compiled on Linux — so each runner emits only its slice.
+// build matrix split by OS — darwin on a macOS runner (Cocoa can't cross-compile), with the
+// published linux+windows artifacts cross-compiled on Linux. A Windows host can also build its
+// own architecture for local deployment using the installed MSVC toolchain.
 const osArg = cli.os;
 const osFilter = osArg ? new Set(osArg.split(',')) : null;
 
@@ -219,44 +220,42 @@ try {
       log(`  ✓ sandbox launcher (${cc})`);
     }
     if (t.os === 'windows') {
-      const cc =
-        t.arch === 'arm64'
-          ? 'aarch64-w64-mingw32-clang' // llvm-mingw provides this; not in Ubuntu apt
-          : 'x86_64-w64-mingw32-gcc';
-      const staticFlag = t.arch === 'arm64' ? [] : ['-static']; // llvm-mingw links dynamically
-
-      // Low Integrity launcher (monad-sandbox-launcher.exe) — fallback when AppContainer is unavailable
       const lowILSrc = join(ROOT, 'apps/monad/native/sandbox-launcher/windows.c');
       const lowILOut = join(binDir, 'monad-sandbox-launcher.exe');
-      const lowILFlags = ['-O2', '-s', ...staticFlag, '-municode', '-o', lowILOut, lowILSrc, '-ladvapi32'];
-      const rLowIL = await $`${cc} ${lowILFlags}`.nothrow().quiet();
-      if (rLowIL.exitCode !== 0) {
-        log(`  ⚠ ${cc} not found — ${artifact} Low IL sandbox launcher omitted`);
-      } else {
-        log(`  ✓ sandbox launcher / Low IL (${cc})`);
-      }
-
-      // AppContainer launcher (monad-sandbox-appcontainer.exe) — preferred over Low IL
       const acSrc = join(ROOT, 'apps/monad/native/sandbox-launcher/windows-appcontainer.c');
       const acOut = join(binDir, 'monad-sandbox-appcontainer.exe');
-      const acFlags = ['-O2', '-s', ...staticFlag, '-municode', '-o', acOut, acSrc, '-ladvapi32', '-luserenv'];
-      const rAC = await $`${cc} ${acFlags}`.nothrow().quiet();
-      if (rAC.exitCode !== 0) {
-        log(`  ⚠ ${artifact} AppContainer launcher omitted (Low IL fallback remains)`);
-      } else {
-        log(`  ✓ sandbox launcher / AppContainer (${cc})`);
+      const aumidSrc = join(ROOT, 'apps/monad/native/windows-shortcut-aumid/main.c');
+      const aumidOut = join(binDir, 'monad-shortcut-aumid.exe');
+
+      const compiler = await windowsNativeCompiler(t.arch);
+
+      // Low Integrity launcher (monad-sandbox-launcher.exe) — fallback when AppContainer is unavailable
+      const rLowIL = await compiler.compile(lowILSrc, lowILOut, ['advapi32']);
+      if (rLowIL.exitCode !== 0) {
+        throw new Error(
+          `${artifact} Low IL sandbox launcher failed to compile with ${compiler.label}: ${shellDiagnostic(rLowIL)}`
+        );
       }
+      log(`  ✓ sandbox launcher / Low IL (${compiler.label})`);
+
+      // AppContainer launcher (monad-sandbox-appcontainer.exe) — preferred over Low IL
+      const rAC = await compiler.compile(acSrc, acOut, ['advapi32', 'userenv']);
+      if (rAC.exitCode !== 0) {
+        throw new Error(
+          `${artifact} AppContainer launcher failed to compile with ${compiler.label}: ${shellDiagnostic(rAC)}`
+        );
+      }
+      log(`  ✓ sandbox launcher / AppContainer (${compiler.label})`);
 
       // Assign the stable Monad AppUserModelID to the installed Start Menu shortcut. Windows desktop
       // toasts require a shortcut carrying the same ID passed to CreateToastNotifier.
-      const aumidSrc = join(ROOT, 'apps/monad/native/windows-shortcut-aumid/main.c');
-      const aumidOut = join(binDir, 'monad-shortcut-aumid.exe');
-      const aumidFlags = ['-O2', '-s', ...staticFlag, '-municode', '-o', aumidOut, aumidSrc, '-lole32', '-luuid'];
-      const rAumid = await $`${cc} ${aumidFlags}`.nothrow().quiet();
+      const rAumid = await compiler.compile(aumidSrc, aumidOut, ['ole32', 'uuid']);
       if (rAumid.exitCode !== 0) {
-        throw new Error(`${artifact} AppUserModelID helper failed to compile with ${cc}: ${shellDiagnostic(rAumid)}`);
+        throw new Error(
+          `${artifact} AppUserModelID helper failed to compile with ${compiler.label}: ${shellDiagnostic(rAumid)}`
+        );
       }
-      log(`  ✓ Windows AppUserModelID helper (${cc})`);
+      log(`  ✓ Windows AppUserModelID helper (${compiler.label})`);
     }
 
     log(`Compiling ${artifact} (bun-${triple(t)})…`);
@@ -315,10 +314,11 @@ try {
 }
 
 const hostArtifact = `monad-${VERSION}-${HOST.os}-${HOST.arch}`;
+const hostBinary = HOST.os === 'windows' ? 'monad.exe' : 'monad';
 process.stdout.write(`
 Done. Verify the host binary directly:
-  ./dist/${hostArtifact}/bin/monad --help
-  ./dist/${hostArtifact}/bin/monad up        # daemon + web together
+  ./dist/${hostArtifact}/bin/${hostBinary} --help
+  ./dist/${hostArtifact}/bin/${hostBinary} up        # daemon + web together
 
 Production archives, installers, updater binaries, and receipts are generated and tested by dist.
 `);
@@ -330,5 +330,124 @@ function log(msg: string) {
 function shellDiagnostic(result: { stderr: Uint8Array; stdout: Uint8Array }): string {
   return (
     new TextDecoder().decode(result.stderr).trim() || new TextDecoder().decode(result.stdout).trim() || 'no output'
+  );
+}
+
+interface NativeCompileResult {
+  exitCode: number;
+  stderr: Uint8Array;
+  stdout: Uint8Array;
+}
+
+interface WindowsNativeCompiler {
+  label: string;
+  compile: (source: string, output: string, libraries: string[]) => Promise<NativeCompileResult>;
+}
+
+async function windowsNativeCompiler(targetArch: Target['arch']): Promise<WindowsNativeCompiler> {
+  if (process.platform !== 'win32') {
+    const command =
+      targetArch === 'arm64'
+        ? 'aarch64-w64-mingw32-clang' // llvm-mingw provides this; not in Ubuntu apt
+        : 'x86_64-w64-mingw32-gcc';
+    const staticFlag = targetArch === 'arm64' ? [] : ['-static']; // llvm-mingw links dynamically
+    return {
+      label: command,
+      async compile(source, output, libraries) {
+        const result = Bun.spawnSync(
+          [
+            command,
+            '-O2',
+            '-s',
+            ...staticFlag,
+            '-municode',
+            '-o',
+            output,
+            source,
+            ...libraries.map((lib) => `-l${lib}`)
+          ],
+          { stderr: 'pipe', stdout: 'pipe' }
+        );
+        return { exitCode: result.exitCode, stderr: result.stderr, stdout: result.stdout };
+      }
+    };
+  }
+
+  const { command, env } = windowsMsvcToolchain(targetArch);
+  return {
+    label: 'MSVC cl.exe',
+    async compile(source, output, libraries) {
+      const object = `${output}.obj`;
+      const result = Bun.spawnSync(
+        [
+          command,
+          '/nologo',
+          '/O2',
+          '/MT',
+          '/utf-8',
+          '/DUNICODE',
+          '/D_UNICODE',
+          source,
+          `/Fe:${output}`,
+          `/Fo:${object}`,
+          '/link',
+          ...libraries.map((lib) => `${lib}.lib`)
+        ],
+        { env, stderr: 'pipe', stdout: 'pipe' }
+      );
+      rmSync(object, { force: true });
+      return { exitCode: result.exitCode, stderr: result.stderr, stdout: result.stdout };
+    }
+  };
+}
+
+function windowsMsvcToolchain(targetArch: Target['arch']): { command: string; env?: Record<string, string> } {
+  const activeCompiler = Bun.which('cl.exe') ?? Bun.which('cl');
+  if (activeCompiler) return { command: activeCompiler };
+
+  const programFilesX86 = Bun.env['ProgramFiles(x86)'];
+  const vswhere = programFilesX86 && join(programFilesX86, 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
+  if (!vswhere || !existsSync(vswhere)) throw windowsBuildToolsError();
+
+  const installation = Bun.spawnSync([vswhere, '-latest', '-products', '*', '-property', 'installationPath'], {
+    stderr: 'pipe',
+    stdout: 'pipe'
+  });
+  const installationPath = installation.stdout.toString().trim();
+  const vcvarsall = join(installationPath, 'VC', 'Auxiliary', 'Build', 'vcvarsall.bat');
+  if (installation.exitCode !== 0 || !installationPath || !existsSync(vcvarsall)) throw windowsBuildToolsError();
+
+  const hostArch = process.arch === 'arm64' ? 'arm64' : 'amd64';
+  const target = targetArch === 'arm64' ? 'arm64' : 'amd64';
+  const vcvarsTarget = hostArch === target ? target : `${hostArch}_${target}`;
+  const setup = `call "${vcvarsall}" ${vcvarsTarget} >nul`;
+  const environmentResult = Bun.spawnSync(['cmd.exe', '/d', '/s', '/c', `${setup} && set`], {
+    stderr: 'pipe',
+    stdout: 'pipe'
+  });
+  const compilerResult = Bun.spawnSync(['cmd.exe', '/d', '/s', '/c', `${setup} && where cl.exe`], {
+    stderr: 'pipe',
+    stdout: 'pipe'
+  });
+  if (environmentResult.exitCode !== 0 || compilerResult.exitCode !== 0) throw windowsBuildToolsError();
+
+  const command = compilerResult.stdout.toString().split(/\r?\n/).find(Boolean)?.trim();
+  if (!command) throw windowsBuildToolsError();
+  const env = Object.fromEntries(
+    environmentResult.stdout
+      .toString()
+      .split(/\r?\n/)
+      .filter((line) => line.length > 0 && !line.startsWith('=') && line.includes('='))
+      .map((line) => {
+        const separator = line.indexOf('=');
+        return [line.slice(0, separator), line.slice(separator + 1)];
+      })
+  );
+  return { command, env };
+}
+
+function windowsBuildToolsError(): Error {
+  return new Error(
+    'Windows local builds require MSVC Build Tools with Desktop development with C++; install Visual Studio Build Tools or run mise from a Developer PowerShell'
   );
 }

@@ -28,6 +28,11 @@ mise run release:deploy-local
 ```
 
 `release:deploy-local` builds the current host target, serves the generated assets only on a
-temporary loopback port, stops the installed daemon, runs `install.sh`, verifies the installed
-`monad` binary, and starts it. Set `MONAD_INSTALL_DIR` to override `~/.monad/bin`; pass
-`--no-start` to install without starting the daemon.
+temporary loopback port, stops the installed daemon, runs `install.sh` on macOS/Linux or
+`install.ps1` on Windows, verifies the installed `monad`/`monad.exe` binary, and starts it. Set
+`MONAD_INSTALL_DIR` to override `~/.monad/bin`; pass `--no-start` to install without starting the
+daemon.
+
+Windows source builds require MSVC Build Tools with the **Desktop development with C++** workload.
+The build discovers a standard Visual Studio installation through `vswhere`; alternatively, run
+mise from a Developer PowerShell where `cl.exe` is already active.
