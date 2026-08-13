@@ -144,15 +144,6 @@ export function AtomPackAtoms({ atoms }: { atoms: AtomDescriptor[] }) {
   );
 }
 
-function providerHost(url: string | undefined): string | null {
-  if (!url) return null;
-  try {
-    return new URL(url).host;
-  } catch {
-    return null;
-  }
-}
-
 function AtomMark({ atom, className }: { atom: AtomDescriptor; className?: string }) {
   return (
     <span className={cn('grid size-7 shrink-0 place-items-center rounded-md border bg-card', className)}>
@@ -211,25 +202,25 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
 
   if (isProvider) {
     return (
-      <ul className="pv-table">
+      <ul className="atom-card-flow-list">
         {atoms.map((atom) => {
           const meta = metaFor(atom.id);
-          const host = providerHost(meta.defaultBaseUrl);
           return (
             <li
-              className="pv-trow"
+              className="provider-atom-card atom-card-flow min-w-0 rounded-md border bg-card"
               key={atom.id}
             >
-              <span className="pv-cell">
-                <AtomMark
-                  atom={atom}
-                  className="pv-mark"
-                />
-              </span>
-              <span className="pv-name">{atom.name ?? atom.id}</span>
-              <code className="pv-id">{atom.id}</code>
-              <span className="pv-strategy">{meta.strategy === 'native' ? 'Native' : 'OpenAI-compat'}</span>
-              <span className="pv-host">{host ?? ''}</span>
+              <AtomMark
+                atom={atom}
+                className="provider-atom-card-mark"
+              />
+              <div className="provider-atom-card-heading">
+                <div className="atom-card-label truncate font-medium text-xs">{atom.name ?? atom.id}</div>
+                <span className="provider-atom-card-strategy">
+                  {meta.strategy === 'native' ? 'Native' : 'OpenAI-compat'}
+                </span>
+              </div>
+              <code className="provider-atom-card-id">{atom.id}</code>
             </li>
           );
         })}
@@ -239,10 +230,10 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
 
   if (isChannel)
     return (
-      <ul className="grid grid-cols-2 gap-2">
+      <ul className="atom-card-flow-list">
         {atoms.map((atom) => (
           <li
-            className="flex min-w-0 items-center gap-2 rounded-md border bg-card p-2"
+            className="atom-card-flow flex min-w-0 items-center gap-2 rounded-md border bg-card p-2"
             key={atom.id}
           >
             <ChannelBrandIcon
@@ -251,7 +242,7 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
               iconClassName="size-4"
             />
             <div className="min-w-0">
-              <div className="truncate font-medium text-xs">{atom.name ?? atom.id}</div>
+              <div className="atom-card-label font-medium text-xs">{atom.name ?? atom.id}</div>
               <div className="truncate font-ui text-[10px] text-muted-foreground">{atom.id}</div>
             </div>
           </li>
@@ -261,15 +252,15 @@ function AtomKindBody({ atoms, form }: { atoms: AtomDescriptor[]; form: AtomForm
 
   if (isAgentAdapter)
     return (
-      <ul className="grid grid-cols-2 gap-2">
+      <ul className="atom-card-flow-list">
         {atoms.map((atom) => (
           <li
-            className="flex min-w-0 items-center gap-2.5 rounded-md border bg-card p-2"
+            className="atom-card-flow flex min-w-0 items-center gap-2.5 rounded-md border bg-card p-2"
             key={atom.id}
           >
             <AtomMark atom={atom} />
             <div className="min-w-0">
-              <div className="truncate font-medium text-xs">{atom.name ?? atom.id}</div>
+              <div className="atom-card-label font-medium text-xs">{atom.name ?? atom.id}</div>
               <div className="truncate font-ui text-[10px] text-muted-foreground">{atom.id}</div>
             </div>
           </li>

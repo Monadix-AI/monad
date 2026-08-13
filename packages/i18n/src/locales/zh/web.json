@@ -458,6 +458,7 @@
   "web.atoms.empty": "尚未安装任何 Atom Pack。",
   "web.atoms.add": "安装 Atom Pack",
   "web.atoms.addTitle": "安装 Atom Pack",
+  "web.atoms.addHint": "安装会运行该 Pack 声明的 Atom。请仅安装你信任的来源。",
   "web.atoms.source": "来源",
   "web.atoms.githubRepo": "GitHub 仓库",
   "web.atoms.githubPlaceholder": "github:owner/repo@main 或 GitHub URL",

@@ -103,6 +103,7 @@
   "web.approvals.revoke": "Revoke",
   "web.atoms.add": "Install Atom Pack",
   "web.atoms.addTitle": "Install an Atom Pack",
+  "web.atoms.addHint": "Installing runs the atoms declared by this pack. Only install sources you trust.",
   "web.atoms.confirmRemove": "Uninstall this Atom Pack?",
   "web.atoms.conflictActive": "active",
   "web.atoms.conflictShadowed": "shadowed:",

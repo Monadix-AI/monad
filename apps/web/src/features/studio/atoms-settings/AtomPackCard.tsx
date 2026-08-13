@@ -1,7 +1,7 @@
 import type { AtomConflict, AtomPackUpdateCheck, InstalledAtomPack } from '@monad/protocol';
 import type { ReactNode } from 'react';
 
-import { Delete02Icon, PackageIcon, PinIcon, PowerIcon, Refresh01Icon } from '@hugeicons/core-free-icons';
+import { Delete02Icon, PackageIcon, PinIcon, Refresh01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
   useLazyCheckAtomPackUpdateQuery,
@@ -10,7 +10,7 @@ import {
   useSetAtomPinMutation,
   useUpdateAtomPackMutation
 } from '@monad/client-rtk';
-import { Badge, Button, Confirm } from '@monad/ui';
+import { Badge, Button, Confirm, Switch } from '@monad/ui';
 import { useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -78,8 +78,9 @@ export function AtomPackCard({ pack }: { pack: InstalledAtomPack }) {
           icon={PackageIcon}
         />
       </span>
-      <div className="flex min-w-0 flex-1 items-baseline gap-3.5">
-        <div className="flex min-w-0 items-center gap-1.5">
+
+      <div className="atom-pack-header-flow flex min-w-0 flex-1 items-baseline gap-x-3.5 max-[760px]:flex-wrap max-[760px]:items-start max-[760px]:gap-y-1">
+        <div className="atom-pack-header-flow__identity flex min-w-0 shrink-0 items-center gap-1.5">
           <span className="truncate font-medium text-sm">{pack.displayName ?? pack.name}</span>
           <Badge
             className="text-[10px]"
@@ -96,6 +97,7 @@ export function AtomPackCard({ pack }: { pack: InstalledAtomPack }) {
           placement="header"
         />
       </div>
+
       {pack.builtin ? (
         <Badge
           className="shrink-0 text-[10px]"
@@ -130,19 +132,12 @@ export function AtomPackCard({ pack }: { pack: InstalledAtomPack }) {
             </Button>
           ) : null}
           {checkFailed ? <span className="text-destructive text-xs">{t('web.atoms.checkUpdateFailed')}</span> : null}
-          <Button
-            className="gap-1.5"
+          <Switch
+            aria-label={pack.enabled ? t('web.atoms.enabled') : t('web.atoms.disabled')}
+            checked={pack.enabled}
             disabled={toggling}
-            onClick={() => void setEnabled({ name: pack.name, enabled: !pack.enabled })}
-            size="sm"
-            variant={pack.enabled ? 'secondary' : 'outline'}
-          >
-            <HugeiconsIcon
-              className="size-3.5"
-              icon={PowerIcon}
-            />
-            {pack.enabled ? t('web.atoms.enabled') : t('web.atoms.disabled')}
-          </Button>
+            onCheckedChange={(enabled) => void setEnabled({ name: pack.name, enabled })}
+          />
           <Button
             aria-label={t('web.atoms.remove')}
             className="size-7"
@@ -219,17 +214,10 @@ export function AtomPackCard({ pack }: { pack: InstalledAtomPack }) {
   );
 }
 
-function formatInstalledAt(iso: string): string {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? iso : date.toLocaleDateString();
-}
-
 function AtomPackMeta({ pack, placement = 'footer' }: { pack: InstalledAtomPack; placement?: 'footer' | 'header' }) {
   const t = useT();
   const codeText = (value: string) => <span className="font-ui">{value}</span>;
   const items: { key: string; label: string; value: ReactNode }[] = [];
-  if (pack.displayName && pack.name !== pack.displayName)
-    items.push({ key: 'id', label: t('web.atoms.packId'), value: codeText(pack.name) });
   if (pack.author) items.push({ key: 'author', label: t('web.atoms.author'), value: pack.author });
   if (pack.monadVersion)
     items.push({ key: 'compat', label: t('web.atoms.compatibility'), value: codeText(pack.monadVersion) });
@@ -240,33 +228,24 @@ function AtomPackMeta({ pack, placement = 'footer' }: { pack: InstalledAtomPack;
       label: t('web.atoms.repository'),
       value: codeText(`${pack.repository.repo}@${pack.repository.commit.slice(0, 7)}`)
     });
-  if (pack.source) items.push({ key: 'source', label: t('web.atoms.source'), value: codeText(pack.source) });
-  if (pack.installedAt)
-    items.push({ key: 'installed', label: t('web.atoms.installedAt'), value: formatInstalledAt(pack.installedAt) });
+  if (pack.sourceKind === 'local' && pack.source)
+    items.push({ key: 'source', label: t('web.atoms.source'), value: codeText(pack.source) });
   if (items.length === 0) return null;
 
   return (
     <dl
       className={
         placement === 'header'
-          ? 'flex min-w-0 flex-wrap items-baseline gap-x-3 gap-y-0.5 text-[10px] [opacity:.72]'
-          : 'flex flex-wrap items-baseline gap-x-4 gap-y-1 border-t bg-muted/30 px-3 py-2 text-[11px]'
+          ? 'atom-pack-meta atom-pack-meta--inline flex min-w-0 flex-1 flex-nowrap items-baseline gap-x-3.5 gap-y-0.5 text-[10px] [opacity:.76] max-[760px]:basis-full max-[760px]:flex-wrap'
+          : 'atom-pack-meta atom-pack-meta--inline flex min-w-0 flex-wrap items-baseline gap-x-3.5 gap-y-0.5 text-[10px] [opacity:.76]'
       }
     >
-      {items.map((item, index) => (
+      {items.map((item) => (
         <div
           className="flex min-w-0 items-baseline gap-1.5"
           key={item.key}
         >
-          <dt
-            className={
-              placement === 'header' && index > 0
-                ? "whitespace-nowrap text-muted-foreground/60 before:mr-3 before:text-muted-foreground before:content-['·']"
-                : 'whitespace-nowrap text-muted-foreground/60'
-            }
-          >
-            {item.label}
-          </dt>
+          <dt className="whitespace-nowrap text-muted-foreground/60">{item.label}</dt>
           <dd className="min-w-0 truncate text-foreground/80">{item.value}</dd>
         </div>
       ))}

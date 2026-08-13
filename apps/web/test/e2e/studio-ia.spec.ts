@@ -703,8 +703,8 @@ test.describe('Studio IA', () => {
     await installStudioIaApiMock(page, requests);
     await page.goto('/studio/atoms');
 
-    await page.getByRole('button', { name: 'Install Atom Pack' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Install an atom' });
+    await page.getByRole('button', { name: 'Install Atom Pack', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Install an Atom Pack' });
     await dialog.getByRole('textbox', { name: 'Source' }).fill('github:owner/example@sha');
     await dialog.getByRole('button', { name: 'Install', exact: true }).click();
 
@@ -724,8 +724,8 @@ test.describe('Studio IA', () => {
     await installStudioIaApiMock(page, requests);
     await page.goto('/studio/atoms');
 
-    await page.getByRole('button', { name: 'Install Atom Pack' }).click();
-    const dialog = page.getByRole('dialog', { name: 'Install an atom' });
+    await page.getByRole('button', { name: 'Install Atom Pack', exact: true }).click();
+    const dialog = page.getByRole('dialog', { name: 'Install an Atom Pack' });
     await dialog.getByRole('button', { name: 'Local development folder' }).click();
 
     await expect(dialog.getByRole('textbox', { name: 'Source' })).toHaveValue('/tmp/local-atom-pack');

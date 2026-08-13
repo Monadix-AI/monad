@@ -82,6 +82,121 @@ export function InstallAtomPackDialog({ onOpenChange, open }: { onOpenChange(ope
 
   const submitPrimary = () => submitSource(Boolean(consent));
 
+  const dialogBodyContent = (
+    <>
+      <form
+        className="install-atom-pack-form flex flex-col gap-2"
+        onSubmit={(event) => {
+          event.preventDefault();
+          void submitPrimary();
+        }}
+      >
+        <div className="install-atom-pack-source-switch flex gap-2">
+          {(['github', 'local'] as const).map((kind) => (
+            <Button
+              key={kind}
+              onClick={() => {
+                setSourceKind(kind);
+                setSource('');
+                setConsent(null);
+                setError(null);
+                if (kind === 'local') void chooseLocalDirectory('');
+              }}
+              size="sm"
+              type="button"
+              variant={sourceKind === kind ? 'secondary' : 'outline'}
+            >
+              {t(kind === 'github' ? 'web.atoms.githubRepo' : 'web.atoms.localDev')}
+            </Button>
+          ))}
+        </div>
+        <Label htmlFor="atom-pack-source">{t('web.atoms.source')}</Label>
+        {sourceKind === 'github' ? (
+          <Input
+            autoFocus
+            disabled={isLoading}
+            id="atom-pack-source"
+            name="atom-pack-source"
+            onChange={(event) => {
+              setSource(event.target.value);
+              setConsent(null);
+            }}
+            placeholder={t('web.atoms.githubPlaceholder')}
+            spellCheck={false}
+            value={source}
+          />
+        ) : (
+          <div className="flex gap-2">
+            <Input
+              disabled
+              id="atom-pack-source"
+              name="atom-pack-source"
+              placeholder={t('web.atoms.localPlaceholder')}
+              value={source}
+            />
+            <Button
+              disabled={isLoading || isPickingDirectory}
+              onClick={() => void chooseLocalDirectory()}
+              type="button"
+              variant="outline"
+            >
+              <HugeiconsIcon
+                className={isPickingDirectory ? 'size-3.5 animate-spin' : 'size-3.5'}
+                icon={isPickingDirectory ? LoaderPinwheelIcon : FolderOpenIcon}
+              />
+              {isPickingDirectory ? t('web.atoms.localChoosing') : t('web.atoms.localChoose')}
+            </Button>
+          </div>
+        )}
+      </form>
+
+      {consent ? (
+        <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
+          <span className="font-medium text-warning">{t('web.atoms.consentTitle')}</span>
+          <div className="flex flex-wrap gap-1.5">
+            {consent.atoms.map((atom) => (
+              <Badge
+                className="text-[10px]"
+                key={atom}
+                variant="outline"
+              >
+                {atom}
+              </Badge>
+            ))}
+          </div>
+          {consent.warnings.length > 0 ? (
+            <div className="flex flex-col gap-1">
+              <span className="flex items-center gap-1 font-medium text-warning">
+                <HugeiconsIcon
+                  className="size-3"
+                  icon={Alert01Icon}
+                />
+                {t('web.atoms.warningsTitle')}
+              </span>
+              {consent.warnings.map((warning) => (
+                <span
+                  className="break-words text-muted-foreground"
+                  key={warning}
+                >
+                  {warning}
+                </span>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+
+      {error ? (
+        <p
+          aria-live="polite"
+          className="text-destructive text-xs"
+        >
+          {error}
+        </p>
+      ) : null}
+    </>
+  );
+
   return (
     <Dialog
       onOpenChange={(next) => {
@@ -94,118 +209,7 @@ export function InstallAtomPackDialog({ onOpenChange, open }: { onOpenChange(ope
           <DialogTitle>{t('web.atoms.addTitle')}</DialogTitle>
           <DialogDescription>{t('web.atoms.addHint')}</DialogDescription>
         </DialogHeader>
-        <DialogBody className="flex flex-col gap-4">
-          <form
-            className="flex flex-col gap-2"
-            onSubmit={(event) => {
-              event.preventDefault();
-              void submitPrimary();
-            }}
-          >
-            <div className="flex gap-2">
-              {(['github', 'local'] as const).map((kind) => (
-                <Button
-                  key={kind}
-                  onClick={() => {
-                    setSourceKind(kind);
-                    setSource('');
-                    setConsent(null);
-                    setError(null);
-                    if (kind === 'local') void chooseLocalDirectory('');
-                  }}
-                  size="sm"
-                  type="button"
-                  variant={sourceKind === kind ? 'secondary' : 'outline'}
-                >
-                  {t(kind === 'github' ? 'web.atoms.githubRepo' : 'web.atoms.localDev')}
-                </Button>
-              ))}
-            </div>
-            <Label htmlFor="atom-pack-source">{t('web.atoms.source')}</Label>
-            {sourceKind === 'github' ? (
-              <Input
-                autoFocus
-                disabled={isLoading}
-                id="atom-pack-source"
-                name="atom-pack-source"
-                onChange={(event) => {
-                  setSource(event.target.value);
-                  setConsent(null);
-                }}
-                placeholder={t('web.atoms.githubPlaceholder')}
-                spellCheck={false}
-                value={source}
-              />
-            ) : (
-              <div className="flex gap-2">
-                <Input
-                  disabled
-                  id="atom-pack-source"
-                  name="atom-pack-source"
-                  placeholder={t('web.atoms.localPlaceholder')}
-                  value={source}
-                />
-                <Button
-                  disabled={isLoading || isPickingDirectory}
-                  onClick={() => void chooseLocalDirectory()}
-                  type="button"
-                  variant="outline"
-                >
-                  <HugeiconsIcon
-                    className={isPickingDirectory ? 'size-3.5 animate-spin' : 'size-3.5'}
-                    icon={isPickingDirectory ? LoaderPinwheelIcon : FolderOpenIcon}
-                  />
-                  {isPickingDirectory ? t('web.atoms.localChoosing') : t('web.atoms.localChoose')}
-                </Button>
-              </div>
-            )}
-          </form>
-
-          {consent ? (
-            <div className="flex flex-col gap-2 rounded-md border border-amber-500/40 bg-amber-500/10 p-3 text-xs">
-              <span className="font-medium text-warning">{t('web.atoms.consentTitle')}</span>
-              <div className="flex flex-wrap gap-1.5">
-                {consent.atoms.map((atom) => (
-                  <Badge
-                    className="text-[10px]"
-                    key={atom}
-                    variant="outline"
-                  >
-                    {atom}
-                  </Badge>
-                ))}
-              </div>
-              {consent.warnings.length > 0 ? (
-                <div className="flex flex-col gap-1">
-                  <span className="flex items-center gap-1 font-medium text-warning">
-                    <HugeiconsIcon
-                      className="size-3"
-                      icon={Alert01Icon}
-                    />
-                    {t('web.atoms.warningsTitle')}
-                  </span>
-                  {consent.warnings.map((warning) => (
-                    <span
-                      className="break-words text-muted-foreground"
-                      key={warning}
-                    >
-                      {warning}
-                    </span>
-                  ))}
-                </div>
-              ) : null}
-            </div>
-          ) : null}
-
-          {error ? (
-            <p
-              aria-live="polite"
-              className="text-destructive text-xs"
-            >
-              {error}
-            </p>
-          ) : null}
-        </DialogBody>
+        <DialogBody className="install-atom-pack-hierarchy flex flex-col">{dialogBodyContent}</DialogBody>
         <DialogFooter>
           <Button
             disabled={isLoading || isPickingDirectory}
