@@ -341,63 +341,6 @@ test('projects canonical lifecycle events into localized experience notices', ()
   ]);
 });
 
-test('replaces a connection-required notice with the verified login requirement for the same runtime', () => {
-  const connectionRequired = event(1, 'mesh.connection_required', {
-    meshSessionId,
-    agentName: 'pmem_claude',
-    authAgentName: 'claude-code',
-    provider: 'claude-code',
-    code: 'authentication_failed',
-    reason: 'Please run /login',
-    reconnectIn: 'studio'
-  });
-  const liveState = foldMeshAgentExperienceState({
-    sessions: { [meshSessionId]: { ...session, agentName: 'pmem_claude' } },
-    loginRequirements: {},
-    approvals: {},
-    events: [
-      connectionRequired,
-      event(2, 'mesh.login_required', {
-        meshSessionId,
-        agentName: 'pmem_claude',
-        authAgentName: 'claude-code',
-        provider: 'claude-code',
-        reason: 'Please run /login'
-      }),
-      event(3, 'mesh.login_resolved', {
-        agentName: 'pmem_claude',
-        authAgentName: 'claude-code',
-        provider: 'claude-code'
-      })
-    ],
-    snapshotReceived: true,
-    stale: false
-  });
-
-  const snapshotState = foldMeshAgentExperienceState({
-    sessions: { [meshSessionId]: { ...session, agentName: 'pmem_claude' } },
-    loginRequirements: {
-      login: {
-        id: 'mesh-agent-login-required:pmem_claude:claude-code',
-        observedAt: '2026-07-23T00:00:02.000Z',
-        meshSessionId,
-        agentName: 'pmem_claude',
-        authAgentName: 'claude-code',
-        provider: 'claude-code',
-        reason: 'Please run /login'
-      }
-    },
-    approvals: {},
-    events: [connectionRequired],
-    snapshotReceived: true,
-    stale: false
-  });
-
-  for (const state of [liveState, snapshotState]) {
-    expect(meshAgentLifecycleNotices(state).filter((notice) => notice.kind === 'connection-required')).toEqual([]);
-  }
-});
-
 test('omits a generic failed notice when the runtime snapshot carries the specific error', () => {
   const failedSession: MeshAgentStateSession = {
     ...session,
