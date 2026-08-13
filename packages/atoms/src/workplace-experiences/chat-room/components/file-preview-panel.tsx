@@ -388,7 +388,7 @@ export function FilePreviewPanel({
           </div>
           <div
             className="truncate font-ui text-[10px] text-muted-foreground"
-            title={attachment.path}
+            title={resource.path}
           >
             {resource.path}
           </div>
