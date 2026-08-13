@@ -33,3 +33,5 @@ export const monadPowerPack = defineAtomPack({
   workplaceExperienceApis: [kanbanApi],
   experienceWorkers: [kanbanWorker]
 });
+
+export default monadPowerPack;
