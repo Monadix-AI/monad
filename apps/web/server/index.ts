@@ -136,6 +136,7 @@ const RELEASE_STATIC_ROUTES = [
 
 const RELEASE_SPA_ROUTES = [
   '/',
+  '/developer/*',
   '/init',
   '/inbox',
   '/inbox/*',

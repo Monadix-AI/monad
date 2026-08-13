@@ -122,6 +122,7 @@ test('registers every exported public asset directory in release mode', () => {
     '/monad-icon-vector-solid.svg',
     '/monad-logo-vector-solid.svg',
     '/',
+    '/developer/*',
     '/init',
     '/inbox',
     '/inbox/*',
