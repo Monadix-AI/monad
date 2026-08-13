@@ -27,6 +27,7 @@ function codexAppServerToolName(item: Record<string, unknown>, fallback = 'tool'
   const semanticName = codexSemanticToolName(item);
   if (semanticName) return semanticName;
   const itemType = textValue(item.kind, item.type);
+  if (itemType?.toLowerCase() === 'filechange') return 'File change';
   if (itemType && ['websearch', 'web_search', 'web_search_call'].includes(itemType.toLowerCase())) return 'Search';
   return explicitName ?? itemType ?? fallback;
 }

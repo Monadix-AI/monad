@@ -77,7 +77,7 @@ function codexAppServerItemEvents(args: {
       item: args.item,
       createdAt
     });
-    return hasInput
+    return hasInput || type?.toLowerCase() === 'filechange'
       ? [
           ...codexAppServerToolCallObservation({
             id: args.id,

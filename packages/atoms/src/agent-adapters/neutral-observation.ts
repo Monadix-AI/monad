@@ -129,7 +129,8 @@ function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool
     textValue(
       item?.type === 'commandExecution' ? item.type : undefined,
       item?.type === 'command_execution' ? item.type : undefined,
-      item?.type === 'imageGeneration' ? item.type : undefined
+      item?.type === 'imageGeneration' ? item.type : undefined,
+      item?.type === 'fileChange' ? 'File change' : undefined
     ) ??
     projectedName ??
     declaredName ??

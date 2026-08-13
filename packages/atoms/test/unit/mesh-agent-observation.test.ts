@@ -1984,6 +1984,52 @@ test('Codex history image generation pairs the item and never renders its base64
   });
 });
 
+test('Codex history file changes render as paired semantic tool cards', () => {
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_codex_file_change_history',
+    provider: 'codex',
+    mode: 'events',
+    output: JSON.stringify({
+      id: 'turn_file_change_history',
+      itemsView: 'full',
+      status: 'completed',
+      items: [
+        {
+          id: 'file_change_1',
+          type: 'fileChange',
+          status: 'completed',
+          changes: [{ path: '/tmp/example.ts', kind: { type: 'update' }, diff: '@@ -1 +1 @@' }]
+        }
+      ]
+    })
+  });
+  const cards = agentObservationCards(events, 'codex');
+  const toolCard = cards.find((card) => card.kind === 'tool');
+  if (!toolCard) throw new Error('Expected history file change tool card');
+  const call = toolCard.payload.call as AgentObservationEvent | undefined;
+  const result = toolCard.payload.result as AgentObservationEvent | undefined;
+
+  expect({
+    cardCount: cards.filter((card) => card.kind === 'tool').length,
+    call: call?.tool,
+    result: result?.tool
+  }).toEqual({
+    cardCount: 1,
+    call: {
+      callId: 'file_change_1',
+      name: 'File change',
+      status: 'completed'
+    },
+    result: {
+      callId: 'file_change_1',
+      name: 'File change',
+      output:
+        '{"id":"file_change_1","type":"fileChange","status":"completed","changes":[{"path":"/tmp/example.ts","kind":{"type":"update"},"diff":"@@ -1 +1 @@"}]}',
+      status: 'completed'
+    }
+  });
+});
+
 test('Codex observation does not project a capped partial JSON record as one giant message', () => {
   const output = `truncated provider payload ${'x'.repeat(70_000)} \\"method\\":\\"item/completed\\"}`;
 
