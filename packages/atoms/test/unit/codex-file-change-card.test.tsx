@@ -1,6 +1,7 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
+import { parseUnifiedDiff } from '@monad/ui';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
@@ -130,6 +131,38 @@ test('Codex fileChange projects exact files and diff totals from app-server prov
       ],
       status: 'completed'
     }
+  });
+});
+
+test('Codex add fileChange treats body content as additions with natural new-file line numbers', () => {
+  const view = codexFileChangeView([
+    {
+      type: 'fileChange',
+      changes: [
+        {
+          path: 'research-desk-hifi-prompt.md',
+          kind: { type: 'add' },
+          diff: '# Research Desk high-fidelity prompt\n\nMode: built-in image generation.\n'
+        }
+      ],
+      status: 'completed'
+    }
+  ]);
+  const diff = view?.files[0]?.diff;
+
+  expect({
+    totals: view ? { additions: view.additions, deletions: view.deletions } : undefined,
+    rows: diff
+      ? parseUnifiedDiff(diff).map((row) => ({ kind: row.kind, marker: row.marker, newLine: row.newLine }))
+      : undefined
+  }).toEqual({
+    totals: { additions: 3, deletions: 0 },
+    rows: [
+      { kind: 'hunk', marker: '', newLine: null },
+      { kind: 'addition', marker: '+', newLine: 1 },
+      { kind: 'addition', marker: '+', newLine: 2 },
+      { kind: 'addition', marker: '+', newLine: 3 }
+    ]
   });
 });
 

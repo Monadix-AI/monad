@@ -40,14 +40,15 @@ export function codexFileChangeView(contractEvents: readonly unknown[]): CodexFi
         const path = stringValue(record?.path);
         if (!record || !path) return [];
         const kindRecord = recordValue(record.kind);
-        const diff = stringValue(record.diff);
+        const kind = stringValue(kindRecord?.type, record.kind) ?? 'update';
+        const diff = normalizedFileChangeDiff(kind, stringValue(record.diff));
         const stats = diffStats(diff);
         return [
           {
             additions: stats.additions,
             deletions: stats.deletions,
             ...(diff ? { diff } : {}),
-            kind: stringValue(kindRecord?.type, record.kind) ?? 'update',
+            kind,
             ...(stringValue(kindRecord?.move_path, kindRecord?.movePath)
               ? { movePath: stringValue(kindRecord?.move_path, kindRecord?.movePath) }
               : {}),
@@ -301,6 +302,16 @@ function replacementDiff(oldText: string, newText: string): string | undefined {
 function diffTextLines(text: string): string[] {
   if (!text) return [];
   return text.endsWith('\n') ? text.slice(0, -1).split('\n') : text.split('\n');
+}
+
+function normalizedFileChangeDiff(kind: string, diff: string | undefined): string | undefined {
+  if (
+    !diff ||
+    !['add', 'create'].includes(kind.trim().toLowerCase()) ||
+    /^@@ -\d+(?:,\d+)? \+\d+(?:,\d+)? @@/m.test(diff)
+  )
+    return diff;
+  return replacementDiff('', diff);
 }
 
 function diffStats(diff: string | undefined): { additions: number; deletions: number } {
