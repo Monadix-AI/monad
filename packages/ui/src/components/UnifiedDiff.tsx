@@ -7,6 +7,7 @@ import { createHighlighter } from 'shiki';
 import { SHIKI_THEME_NAMES, SHIKI_THEMES } from '../lib/shiki';
 import { cn } from '../lib/utils';
 import { FileIcon } from './FileIcon';
+import { ScrollShadow } from './ScrollShadow';
 import {
   type CodeLanguage,
   type DiffHighlightRange,
@@ -74,22 +75,27 @@ export function UnifiedDiff({
       {warning ? (
         <div className="border-warning/20 border-b bg-warning/5 px-3 py-2 text-[11px] text-warning">{warning}</div>
       ) : null}
-      <pre
-        className="max-h-80 overflow-auto font-code text-[12px] leading-[1.55]"
-        data-selectable="true"
-        style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
+      <ScrollShadow
+        className="max-h-80"
+        size={14}
       >
-        <code className="block w-max min-w-full">
-          {rows.map((row, index) => (
-            <DiffLine
-              highlightedLine={highlighted.lines[index]}
-              key={row.key}
-              row={row}
-              showLineNumbers={showLineNumbers}
-            />
-          ))}
-        </code>
-      </pre>
+        <pre
+          className="font-code text-[12px] leading-[1.55]"
+          data-selectable="true"
+          style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
+        >
+          <code className="block w-max min-w-full">
+            {rows.map((row, index) => (
+              <DiffLine
+                highlightedLine={highlighted.lines[index]}
+                key={row.key}
+                row={row}
+                showLineNumbers={showLineNumbers}
+              />
+            ))}
+          </code>
+        </pre>
+      </ScrollShadow>
     </div>
   );
 }

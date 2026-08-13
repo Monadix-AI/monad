@@ -194,7 +194,9 @@ import {
   faviconHref,
   faviconMarkdownComponents,
   fileNameFromHref,
-  hideFailedFavicon
+  filePathFromHref,
+  hideFailedFavicon,
+  LinkPathPopover
 } from './components/FaviconLink';
 import { FileIcon, fileIconName } from './components/FileIcon';
 import { FileReadCard, FileReadCardHeader } from './components/FileReadCard';
@@ -443,6 +445,7 @@ export {
   faviconMarkdownComponents,
   fileIconName,
   fileNameFromHref,
+  filePathFromHref,
   formatMessageTimestamp,
   hideFailedFavicon,
   ImageGalleryDialog,
@@ -457,6 +460,7 @@ export {
   inferCodeLanguage,
   isProductIconId,
   Label,
+  LinkPathPopover,
   Message,
   MessageAction,
   MessageActions,

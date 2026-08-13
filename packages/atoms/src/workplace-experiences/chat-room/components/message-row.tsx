@@ -11,6 +11,7 @@ import {
   ChannelOriginBadge,
   channelOriginDetails,
   FaviconLink,
+  LinkPathPopover,
   showsChannelOrigin,
   WorkspaceMessageCard
 } from '@monad/ui';
@@ -209,32 +210,36 @@ function createMessageMarkdownComponents({
         );
         if (!reference.attachment && !onOpenFilePath) {
           return (
+            <LinkPathPopover href={reference.path}>
+              <span className="inline-flex max-w-full items-baseline align-baseline">
+                <button
+                  aria-disabled="true"
+                  className="inline-flex max-w-full items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-muted-foreground leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
+                  data-inline-link="file"
+                  disabled
+                  type="button"
+                >
+                  {content}
+                </button>
+              </span>
+            </LinkPathPopover>
+          );
+        }
+        return (
+          <LinkPathPopover href={reference.attachment?.path ?? reference.path}>
             <button
-              aria-disabled="true"
-              className="inline-flex max-w-full items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-muted-foreground leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
+              className="inline-flex max-w-full cursor-pointer items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-accent-blue leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
               data-inline-link="file"
-              disabled
-              title="File unavailable"
+              onClick={() =>
+                reference.attachment
+                  ? onOpenAttachment?.(reference.attachment, reference.line)
+                  : onOpenFilePath?.(reference.path, reference.line)
+              }
               type="button"
             >
               {content}
             </button>
-          );
-        }
-        return (
-          <button
-            className="inline-flex max-w-full cursor-pointer items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-accent-blue leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
-            data-inline-link="file"
-            onClick={() =>
-              reference.attachment
-                ? onOpenAttachment?.(reference.attachment, reference.line)
-                : onOpenFilePath?.(reference.path, reference.line)
-            }
-            title={reference.attachment?.path ?? reference.path}
-            type="button"
-          >
-            {content}
-          </button>
+          </LinkPathPopover>
         );
       }
       return <FaviconLink href={href}>{children}</FaviconLink>;
