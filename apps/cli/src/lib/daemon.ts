@@ -4,7 +4,7 @@ import { join, resolve } from 'node:path';
 import { makeLoopbackHttpsFetcher } from '@monad/client';
 import { getPaths, loadAll, resolveClientConn, roleExecPath } from '@monad/environment';
 import { rotateDaemonLog } from '@monad/monad/log-maintenance';
-import { DAEMON_RESTART_EXIT_CODE } from '@monad/protocol';
+import { DAEMON_RESTART_EXIT_CODE, DAEMON_STARTUP_READY_MARKER } from '@monad/protocol';
 
 import { t } from './i18n.ts';
 import { bold, cyan, dim, green, out, printGoodbye, red, yellow } from './output.ts';
@@ -226,14 +226,15 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
   await Bun.write(getPidPath(), String(supervisorPid));
 
   const ready = await waitUntilReady(supervisorPid, logPath, presentation.reportLifecycle);
-  if (ready && presentation.relayStartup) {
-    await Bun.sleep(600);
-    const startupOutput = await Bun.file(startupOutputPath)
-      .text()
-      .catch(() => '');
-    if (startupOutput) process.stdout.write(startupOutput);
+  const startup = ready ? await waitForStartupOutput(startupOutputPath, supervisorPid) : null;
+  if (startup?.complete && presentation.relayStartup && startup.output) {
+    process.stdout.write(startup.output);
   }
-  if (!ready && options.requireReady) throw new Error(`${t('cli.daemon.notReady')} (${logPath})`);
+  const startupReady = ready && startup?.complete === true;
+  if (ready && !startupReady && presentation.reportLifecycle) {
+    out(yellow(t('cli.daemon.notReady')) + dim(` (${logPath})`));
+  }
+  if (!startupReady && options.requireReady) throw new Error(`${t('cli.daemon.notReady')} (${logPath})`);
   return { alreadyRunning: false };
 }
 
@@ -326,7 +327,9 @@ export async function runDaemonSupervisor(): Promise<void> {
     supervisorLog(logPath, 'daemon supervisor started child', { childPid: child.pid }, 30);
 
     const started = await waitForSupervisorReady(child);
-    if (started && startupOutput) await Bun.sleep(600);
+    if (started && startupOutput) {
+      await Promise.race([startupOutput.completed, child.exited.then(() => false).catch(() => false)]);
+    }
     await startupOutput?.stop();
     const exitCode = await child.exited.catch(() => 1);
     supervisorLog(logPath, 'daemon supervisor child exited', { childPid: child.pid, exitCode, started }, 30);
@@ -349,10 +352,17 @@ export async function runDaemonSupervisor(): Promise<void> {
   }
 }
 
-function forwardStartupOutput(stream: ReadableStream<Uint8Array>): { stop: () => Promise<void> } {
+function forwardStartupOutput(stream: ReadableStream<Uint8Array>): {
+  completed: Promise<boolean>;
+  stop: () => Promise<void>;
+} {
   const abort = new AbortController();
-  const pump = relayDaemonOutput(stream, true, undefined, abort.signal);
+  const pump = relayDaemonOutput(stream, true, undefined, abort.signal, {
+    forwardMarker: true,
+    marker: DAEMON_STARTUP_READY_MARKER
+  });
   return {
+    completed: pump,
     stop: async () => {
       abort.abort();
       await pump;
@@ -375,28 +385,55 @@ export async function relayDaemonOutput(
   stream: ReadableStream<Uint8Array>,
   forward: boolean,
   write: (value: Uint8Array) => void = (value) => process.stdout.write(value),
-  signal?: AbortSignal
-): Promise<void> {
+  signal?: AbortSignal,
+  completion?: { forwardMarker?: boolean; marker: string }
+): Promise<boolean> {
   const reader = stream.getReader();
+  const decoder = completion ? new TextDecoder() : undefined;
+  const encoder = completion ? new TextEncoder() : undefined;
+  let pending = '';
   const abort = () => void reader.cancel();
   if (signal?.aborted) abort();
   else signal?.addEventListener('abort', abort, { once: true });
   try {
     for (;;) {
       const { done, value } = await reader.read();
-      if (done) return;
-      if (forward && value?.length) write(value);
+      if (!completion) {
+        if (done) return false;
+        if (forward && value?.length) write(value);
+        continue;
+      }
+
+      pending += done ? (decoder?.decode() ?? '') : (decoder?.decode(value, { stream: true }) ?? '');
+      const markerIndex = pending.indexOf(completion.marker);
+      if (markerIndex !== -1) {
+        const end = markerIndex + completion.marker.length;
+        const output = completion.forwardMarker ? pending.slice(0, end) : pending.slice(0, markerIndex);
+        if (forward && output) write(encoder?.encode(output) ?? new Uint8Array());
+        await reader.cancel();
+        return true;
+      }
+      if (done) {
+        if (forward && pending) write(encoder?.encode(pending) ?? new Uint8Array());
+        return false;
+      }
+
+      const safeLength = Math.max(0, pending.length - completion.marker.length + 1);
+      if (safeLength > 0) {
+        if (forward) write(encoder?.encode(pending.slice(0, safeLength)) ?? new Uint8Array());
+        pending = pending.slice(safeLength);
+      }
     }
   } catch {
-    return;
+    return false;
   } finally {
     signal?.removeEventListener('abort', abort);
     reader.releaseLock();
   }
 }
 
-/** Relay the detached daemon's stdout (its banner + ready-info) to the user until the daemon is
- *  reachable, then stop — leaving it running in the background. */
+/** Relay the detached daemon's banner + ready-info through its explicit completion marker, then
+ *  verify the daemon is reachable before leaving it running in the background. */
 async function relayUntilReady(
   stream: ReadableStream<Uint8Array>,
   pid: number,
@@ -404,28 +441,60 @@ async function relayUntilReady(
   presentation: ReturnType<typeof resolveDaemonPresentation>
 ): Promise<boolean> {
   const relayAbort = new AbortController();
-  const pump = relayDaemonOutput(stream, presentation.relayStartup, undefined, relayAbort.signal);
+  const pump = relayDaemonOutput(stream, presentation.relayStartup, undefined, relayAbort.signal, {
+    marker: DAEMON_STARTUP_READY_MARKER
+  });
+  const completion = pump.then((complete) => ({ complete }));
 
   const deadline = Date.now() + 30_000;
   let ready = false;
+  let startupComplete = false;
   while (Date.now() < deadline) {
     if (!isAlive(pid)) break; // crashed during startup — the reason is now in daemon.log
+    const result = await Promise.race([completion, Bun.sleep(150).then(() => undefined)]);
+    if (result) {
+      startupComplete = result.complete;
+      break;
+    }
+  }
+  while (startupComplete && Date.now() < deadline && isAlive(pid)) {
     if (await isDaemonReachable()) {
       ready = true;
       break;
     }
     await Bun.sleep(150);
   }
-  // /health answers the instant the socket is bound, which is just before the banner + ready-info
-  // are printed — give them a moment to flush through the pipe before we stop relaying.
-  if (ready && presentation.relayStartup) await Bun.sleep(600);
-  else if (!ready && isAlive(pid) && presentation.reportLifecycle) {
+  if (!ready && isAlive(pid) && presentation.reportLifecycle) {
     out(yellow(t('cli.daemon.notReady')) + dim(` (${logPath})`));
   }
 
   relayAbort.abort();
   await pump;
   return ready;
+}
+
+export function parseDaemonStartupOutput(value: string): { complete: boolean; output: string } {
+  const markerIndex = value.indexOf(DAEMON_STARTUP_READY_MARKER);
+  if (markerIndex === -1) return { complete: false, output: value };
+  return {
+    complete: true,
+    output: value.slice(0, markerIndex) + value.slice(markerIndex + DAEMON_STARTUP_READY_MARKER.length)
+  };
+}
+
+async function waitForStartupOutput(path: string, pid: number): Promise<{ complete: boolean; output: string }> {
+  const deadline = Date.now() + 30_000;
+  let parsed = { complete: false, output: '' };
+  while (Date.now() < deadline && isAlive(pid)) {
+    parsed = parseDaemonStartupOutput(
+      await Bun.file(path)
+        .text()
+        .catch(() => '')
+    );
+    if (parsed.complete) return parsed;
+    await Bun.sleep(50);
+  }
+  return parsed;
 }
 
 function formatConfigValidationError(configPath: string, err: unknown): string {

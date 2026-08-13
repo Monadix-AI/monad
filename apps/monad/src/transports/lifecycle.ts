@@ -15,7 +15,7 @@ import type { TlsSetup } from '#/transports/tls.ts';
 import { chmod, unlink } from 'node:fs/promises';
 import { resolveDaemonNetwork, validateDaemonNetworkSecurity } from '@monad/environment';
 import { logger } from '@monad/logger';
-import { MONAD_VERSION } from '@monad/protocol';
+import { DAEMON_STARTUP_READY_MARKER, MONAD_VERSION } from '@monad/protocol';
 
 import { printBanner, printGoodbye, printReadyInfo } from '#/infra/banner.ts';
 import { shutdownBus } from '#/infra/shutdown-bus.ts';
@@ -439,6 +439,7 @@ export async function serveDaemon(deps: ServeDeps): Promise<void> {
     configPath: paths.config,
     t: i18n.t
   });
+  if (process.argv.includes('--start-relay')) process.stdout.write(DAEMON_STARTUP_READY_MARKER);
 
   // Graceful shutdown. process.exit(0) synchronously runs every process.on('exit') handler
   // registered above — that is what kills spawned MCP child processes (conn.close → proc.kill

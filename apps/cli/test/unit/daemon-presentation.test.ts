@@ -1,6 +1,12 @@
 import { expect, test } from 'bun:test';
+import { DAEMON_STARTUP_READY_MARKER } from '@monad/protocol';
 
-import { isDaemonReachable, relayDaemonOutput, resolveDaemonPresentation } from '../../src/lib/daemon.ts';
+import {
+  isDaemonReachable,
+  parseDaemonStartupOutput,
+  relayDaemonOutput,
+  resolveDaemonPresentation
+} from '../../src/lib/daemon.ts';
 
 test('daemon reachability treats a partially written first-run config as not ready', async () => {
   const reachable = await isDaemonReachable(async () => {
@@ -53,4 +59,50 @@ test('startup relay releases an open daemon stream when readiness polling finish
   await relay;
 
   expect(cancelled).toBe(true);
+});
+
+test('startup relay waits for a split completion marker and keeps it out of terminal output', async () => {
+  const writes: Uint8Array[] = [];
+  const markerSplit = Math.floor(DAEMON_STARTUP_READY_MARKER.length / 2);
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(`banner\n${DAEMON_STARTUP_READY_MARKER.slice(0, markerSplit)}`));
+      controller.enqueue(new TextEncoder().encode(DAEMON_STARTUP_READY_MARKER.slice(markerSplit)));
+    }
+  });
+
+  const complete = await relayDaemonOutput(stream, true, (value) => writes.push(value), undefined, {
+    marker: DAEMON_STARTUP_READY_MARKER
+  });
+
+  expect({ complete, output: new TextDecoder().decode(Buffer.concat(writes)) }).toEqual({
+    complete: true,
+    output: 'banner\n'
+  });
+});
+
+test('release startup output removes the completion marker before presenting the banner', () => {
+  expect(parseDaemonStartupOutput(`banner\n${DAEMON_STARTUP_READY_MARKER}`)).toEqual({
+    complete: true,
+    output: 'banner\n'
+  });
+});
+
+test('supervisor forwards the completion marker into the release startup output file', async () => {
+  const writes: Uint8Array[] = [];
+  const stream = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode(`banner\n${DAEMON_STARTUP_READY_MARKER}`));
+    }
+  });
+
+  const complete = await relayDaemonOutput(stream, true, (value) => writes.push(value), undefined, {
+    forwardMarker: true,
+    marker: DAEMON_STARTUP_READY_MARKER
+  });
+
+  expect({ complete, output: new TextDecoder().decode(Buffer.concat(writes)) }).toEqual({
+    complete: true,
+    output: `banner\n${DAEMON_STARTUP_READY_MARKER}`
+  });
 });
