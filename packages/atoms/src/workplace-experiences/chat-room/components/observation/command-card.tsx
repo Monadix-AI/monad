@@ -13,7 +13,6 @@ export function commandToolView(
   const name =
     standaloneResult && result.tool?.name === 'tool' ? 'tool-result' : (call.tool?.name ?? result.tool?.name);
   if (!name) return null;
-  const tool = result.tool ?? call.tool;
   const shellCommand = shellCommandInput(
     name,
     call.tool?.input ?? result.tool?.input,
@@ -22,9 +21,7 @@ export function commandToolView(
   const command = standaloneResult
     ? structuredText(result.tool?.input)
     : (shellCommand ?? structuredText(call.tool?.input ?? result.tool?.input) ?? toolCallTextInput(call.text));
-  const output = standaloneCall
-    ? undefined
-    : (structuredOutputText(result.tool?.output, shellCommand !== undefined) ?? result.text);
+  const output = standaloneCall ? undefined : (structuredOutputText(result.tool?.output) ?? result.text);
   const jsonOutput = output ? jsonCodeText(output) : null;
   return {
     type: name,
@@ -35,7 +32,7 @@ export function commandToolView(
     status: result.tool?.status ?? call.tool?.status,
     exitCode: result.tool?.exitCode ?? call.tool?.exitCode,
     durationMs: result.tool?.durationMs ?? call.tool?.durationMs,
-    output: tool?.status ? output : (jsonOutput ?? output),
+    output,
     outputLanguage: jsonOutput ? 'json' : commandOutputLanguage(output)
   };
 }
@@ -78,10 +75,9 @@ function structuredText(value: unknown): string | undefined {
   }
 }
 
-function structuredOutputText(value: unknown, preserveLeadingWhitespace: boolean): string | undefined {
+function structuredOutputText(value: unknown): string | undefined {
   if (typeof value !== 'string') return structuredText(value);
-  const normalized = preserveLeadingWhitespace ? value.trimEnd() : value.trim();
-  return normalized || undefined;
+  return value.length > 0 ? value : undefined;
 }
 
 function commandOutputLanguage(text: string | undefined): BundledLanguage {

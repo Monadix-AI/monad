@@ -47,12 +47,66 @@ export function codexAppServerRecordEvents(
   if (method === 'mcpServer/startupStatus/updated') {
     const name = textValue(p.name) ?? 'MCP server';
     const status = textValue(p.status) ?? 'updated';
-    const error = textValue(p.error);
+    const detail = textValue(p.error) ?? textValue(p.failureReason);
     return observation({
       id: `${id}:json:${recordIndex}:mcp-status`,
       projection: 'unknown',
       role: 'system',
-      text: error ? `${name} ${status}: ${error}` : `${name} ${status}`,
+      text: detail ? `${name} ${status}: ${detail}` : `${name} ${status}`,
+      source: 'codex-app-server',
+      providerEventType: method,
+      raw: record
+    });
+  }
+  if (method === 'turn/plan/updated') {
+    const steps = codexPlanSteps(p.plan);
+    if (steps.length === 0) return [];
+    const done = steps.filter((step) => step.status === 'completed').length;
+    const active = steps.find((step) => step.status === 'inProgress')?.step;
+    return observation({
+      id: `${id}:json:${recordIndex}:plan`,
+      projection: 'unknown',
+      role: 'system',
+      text: active ? `Plan ${done}/${steps.length}: ${active}` : `Plan ${done}/${steps.length}`,
+      source: 'codex-app-server',
+      providerEventType: method,
+      raw: record
+    });
+  }
+  if (method === 'error') {
+    const error = recordValue(p.error);
+    const message = textValue(error?.message) ?? 'Codex reported an error';
+    const detail = textValue(error?.additionalDetails);
+    return observation({
+      id: `${id}:json:${recordIndex}:error`,
+      role: 'system',
+      text: message,
+      diagnostic: {
+        severity: p.willRetry === true ? 'warning' : 'error',
+        message,
+        ...(detail ? { detail } : {})
+      },
+      source: 'codex-app-server',
+      providerEventType: method,
+      raw: record
+    });
+  }
+  if (method === 'hook/completed') {
+    // Hooks run on every turn and almost always succeed; only a failed run is worth a card.
+    const run = recordValue(p.run);
+    const status = textValue(run?.status);
+    if (!status || status === 'completed') return [];
+    const name = textValue(run?.eventName) ?? 'hook';
+    const detail = textValue(run?.statusMessage, run?.sourcePath);
+    return observation({
+      id: `${id}:json:${recordIndex}:hook`,
+      role: 'system',
+      text: `Hook ${name} ${status}`,
+      diagnostic: {
+        severity: 'warning',
+        message: `Hook ${name} ${status}`,
+        ...(detail ? { detail } : {})
+      },
       source: 'codex-app-server',
       providerEventType: method,
       raw: record
@@ -169,15 +223,8 @@ export function codexAppServerRecordEvents(
     });
   }
   if (method === 'turn/diff/updated') {
-    return observation({
-      id: `${id}:json:${recordIndex}:diff`,
-      role: 'tool',
-      text: rawTextValue(p.diff, p.unifiedDiff),
-      source: 'codex-app-server',
-      providerEventType: method,
-      raw: record,
-      preserveWhitespace: true
-    });
+    // Turn diffs are cumulative snapshots retained by the raw view; item/fileChange owns public edit cards.
+    return [];
   }
   if (method === 'turn/started' || method === 'turn/completed' || method === 'thread/status/changed') {
     const turn = recordValue(p.turn);
@@ -210,6 +257,15 @@ export function codexAppServerRecordEvents(
     });
   }
   return [];
+}
+
+function codexPlanSteps(value: unknown): { step: string; status: string }[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    const record = recordValue(entry);
+    const step = textValue(record?.step);
+    return step ? [{ step, status: textValue(record?.status) ?? 'pending' }] : [];
+  });
 }
 
 const CODEX_LIVE_APP_SERVER_EVENT_METHODS = new Map([

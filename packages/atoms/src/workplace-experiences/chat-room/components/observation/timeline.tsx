@@ -9,8 +9,13 @@ import { codexItemSummary } from '../../../../agent-adapters/codex/observation/o
 import { workplaceExperienceT } from '../../../i18n.ts';
 import { renderPrivateObservationCard } from './adapters.ts';
 import { ObservationCardShell, ObservationToolCardShell, toolCallSummary } from './card-shell.tsx';
-import { CodexFileChangeCard, claudeFileChangeView, codexFileChangeView } from './codex-file-change-card.tsx';
-import { CodexMcpStartupProgressCard, type CodexMcpStartupUpdate } from './codex-startup-progress.tsx';
+import {
+  CodexFileChangeCard,
+  claudeFileChangeView,
+  codexFileChangeView,
+  FileChangeToolHeader,
+  fileChangeStatus
+} from './codex-file-change-card.tsx';
 import { CommandToolCard, CommandToolHeader, commandToolView } from './command-card.tsx';
 import { ContextCompactionCard } from './context-compaction-card.tsx';
 import { ObservationDisclosureScope } from './disclosure.tsx';
@@ -22,9 +27,11 @@ import {
   isFileReadToolCall
 } from './file-read-card.tsx';
 import { ImageToolCard, imageToolView } from './image-tool-card.tsx';
+import { McpStartupProgressCard, mcpStartupView } from './mcp-startup-progress.tsx';
 import { ObservationMessageCard } from './message-card.tsx';
 import { MonadMcpToolCard, MonadMcpToolHeader } from './monad-mcp-card.tsx';
 import { monadMcpToolView } from './monad-mcp-projection.ts';
+import { PlanProgressCard, planProgressView } from './plan-progress.tsx';
 import { observationContractRawEvents } from './provenance.ts';
 import { ShellToolCard, ShellToolHeader, shellToolView } from './shell-card.tsx';
 
@@ -76,12 +83,21 @@ function cardToolResult(card: AgentObservationCard): ObservationItem | undefined
 function reasoningSummary(entry: ObservationTimelineEntry, event: ObservationItem): string | undefined {
   if (event.summary) return event.summary;
   return observationContractRawEvents(entry.contractEvents)
-    .map((raw) =>
-      raw && typeof raw === 'object' && !Array.isArray(raw)
-        ? codexItemSummary(raw as Record<string, unknown>)
-        : undefined
-    )
+    .map(codexReasoningSummary)
     .find((summary) => summary !== undefined);
+}
+
+function codexReasoningSummary(raw: unknown): string | undefined {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return undefined;
+  const record = raw as Record<string, unknown>;
+  const params = record.params;
+  const item =
+    params && typeof params === 'object' && !Array.isArray(params)
+      ? (params as Record<string, unknown>).item
+      : undefined;
+  const itemRecord =
+    item && typeof item === 'object' && !Array.isArray(item) ? (item as Record<string, unknown>) : undefined;
+  return codexItemSummary(itemRecord) ?? codexItemSummary(record);
 }
 
 function sameObservationItem(left: AgentObservationCard, right: AgentObservationCard): boolean {
@@ -180,7 +196,7 @@ export function observationToolVisualStatus({
     return 'running';
   if (completed || normalized === 'completed' || normalized === 'success' || normalized === 'succeeded')
     return 'success';
-  return undefined;
+  return 'running';
 }
 
 function ObservationTimelineCard({
@@ -223,10 +239,14 @@ function ObservationTimelineCard({
       : null;
   if (fileChange) {
     return (
-      <CodexFileChangeCard
+      <ObservationToolCardShell
+        header={<FileChangeToolHeader view={fileChange} />}
+        kind="file-change"
+        status={fileChangeStatus(fileChange.status)}
         timestamp={entry.timestamp}
-        view={fileChange}
-      />
+      >
+        <CodexFileChangeCard view={fileChange} />
+      </ObservationToolCardShell>
     );
   }
   if (entry.kind === 'public' && entry.card.kind === 'tool') {
@@ -245,7 +265,7 @@ function ObservationTimelineCard({
               quiet
               showSource={false}
               source={provider}
-              title="Image generation"
+              title={t(result ? 'web.workplace.image.generated' : 'web.workplace.image.generating')}
             />
           }
           kind="tool"
@@ -302,6 +322,7 @@ function ObservationTimelineCard({
           <ObservationToolCardShell
             header={
               <FileReadToolHeader
+                completed
                 quiet
                 view={fileRead}
               />
@@ -323,6 +344,7 @@ function ObservationTimelineCard({
           header={
             pendingFileRead ? (
               <FileReadToolHeader
+                completed={false}
                 quiet
                 view={pendingFileRead}
               />
@@ -478,25 +500,22 @@ function ObservationTimelineCard({
       </ObservationCardShell>
     );
   }
-  if (entry.kind === 'public' && entry.card.kind === 'codex-mcp-startup-progress') {
-    const updates = (
-      Array.isArray(entry.card.payload.updates) ? entry.card.payload.updates : []
-    ) as CodexMcpStartupUpdate[];
+  if (entry.kind === 'public' && entry.card.kind === 'mcp-startup-progress') {
     return (
-      <ObservationCardShell
-        header={
-          <ObservationMeta
-            compact
-            label="system"
-            source={provider}
-            title="Startup progress"
-          />
-        }
+      <McpStartupProgressCard
+        provider={provider}
         timestamp={entry.timestamp}
-        visualRole="system"
-      >
-        <CodexMcpStartupProgressCard updates={updates} />
-      </ObservationCardShell>
+        view={mcpStartupView(entry.card.payload)}
+      />
+    );
+  }
+  if (entry.kind === 'public' && entry.card.kind === 'plan-progress') {
+    return (
+      <PlanProgressCard
+        provider={provider}
+        timestamp={entry.timestamp}
+        view={planProgressView(entry.card.payload)}
+      />
     );
   }
   if (entry.kind === 'public' && entry.card.kind === 'reasoning' && entryEvent) {
@@ -598,6 +617,7 @@ function GenericObservationCard({
       >
         <ObservationText
           observationRole={role}
+          scrollable
           text={item.text ?? ''}
         />
       </ObservationToolCardShell>

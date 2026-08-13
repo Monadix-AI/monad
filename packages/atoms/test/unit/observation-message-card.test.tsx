@@ -6,7 +6,11 @@ import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { FilePreviewContext } from '../../src/workplace-experiences/chat-room/components/file-preview-context.tsx';
-import { ObservationMessageCard } from '../../src/workplace-experiences/chat-room/components/observation/message-card.tsx';
+import {
+  ObservationMessageCard,
+  observationReasoningContent,
+  observationReasoningTitle
+} from '../../src/workplace-experiences/chat-room/components/observation/message-card.tsx';
 import {
   ObservationTimelineRowView,
   observationTimelineEntries,
@@ -210,12 +214,13 @@ test('streaming observation reasoning prefixes the current Codex summary with th
   );
 
   expect({
+    disabled: markup.includes('disabled=""'),
     oneSummary: markup.match(/Planning image generation/g)?.length,
-    title: markup.includes('Thinking… Planning image generation')
-  }).toEqual({ oneSummary: 1, title: true });
+    title: markup.includes('Thinking… 0s · Planning image generation')
+  }).toEqual({ disabled: true, oneSummary: 1, title: true });
 });
 
-test('observation reasoning uses the Codex summary as its collapsed title', () => {
+test('completed observation reasoning puts its only summary in the title without a disclosure', () => {
   const markup = renderToStaticMarkup(
     <ObservationMessageCard
       messageRole="reasoning"
@@ -234,9 +239,86 @@ test('observation reasoning uses the Codex summary as its collapsed title', () =
   expect({
     body: markup.includes('Thinking…'),
     disabled: markup.includes('disabled=""'),
-    durationFallback: markup.includes('Thought for'),
+    duration: markup.includes('Thought for 3 seconds'),
     summary: markup.includes('Checking the event projection')
-  }).toEqual({ body: false, disabled: true, durationFallback: false, summary: true });
+  }).toEqual({ body: false, disabled: true, duration: true, summary: true });
+});
+
+test('multi-part reasoning keeps summaries out of the title and exposes the complete expandable content', () => {
+  const summary = '**Planning shared memory read**\n\n**Executing the project lookup**';
+  const markup = renderToStaticMarkup(
+    <ObservationMessageCard
+      messageRole="reasoning"
+      reasoning={{ durationMs: 2400, hasContent: false, streaming: false, summary, text: 'Thinking…' }}
+      streaming={false}
+      text="Thinking…"
+    />
+  );
+
+  expect({
+    content: observationReasoningContent(summary, 'Thinking…'),
+    disabled: markup.includes('disabled=""'),
+    title: observationReasoningTitle(summary),
+    visibleFirstPart: markup.includes('Planning shared memory read'),
+    visibleSecondPart: markup.includes('Executing the project lookup')
+  }).toEqual({
+    content: summary,
+    disabled: false,
+    title: undefined,
+    visibleFirstPart: false,
+    visibleSecondPart: false
+  });
+});
+
+test('completed Claude reasoning shows measured duration and estimated tokens', () => {
+  const markup = renderToStaticMarkup(
+    <ObservationMessageCard
+      messageRole="reasoning"
+      reasoning={{
+        durationMs: 2400,
+        hasContent: false,
+        streaming: false,
+        summary: 'Thinking… 151 tokens',
+        text: 'Thinking…'
+      }}
+      streaming={false}
+      text="Thinking…"
+    />
+  );
+
+  expect({ disabled: markup.includes('disabled=""'), text: visibleText(markup) }).toEqual({
+    disabled: true,
+    text: 'Thought for 3 seconds · 151 tokens'
+  });
+});
+
+test('completed Claude reasoning with content remains expandable when its summary reports tokens', () => {
+  const markup = renderToStaticMarkup(
+    <ObservationMessageCard
+      messageRole="reasoning"
+      reasoning={{
+        durationMs: 2400,
+        hasContent: true,
+        streaming: false,
+        summary: 'Thinking… 151 tokens',
+        text: 'Inspect the live Claude event projection.'
+      }}
+      streaming={false}
+      text="Inspect the live Claude event projection."
+    />
+  );
+
+  expect({
+    collapsedContent: markup.includes('Inspect the live Claude event projection.'),
+    disclosure: markup.includes('aria-expanded="false"'),
+    disabled: markup.includes('disabled=""'),
+    title: visibleText(markup)
+  }).toEqual({
+    collapsedContent: false,
+    disclosure: true,
+    disabled: false,
+    title: 'Thought for 3 seconds · 151 tokens'
+  });
 });
 
 test('observation reasoning recovers a Codex summary from raw provenance for existing events', () => {
@@ -244,10 +326,17 @@ test('observation reasoning recovers a Codex summary from raw provenance for exi
     provenance: {
       rawEvents: [
         {
-          type: 'reasoning',
-          id: 'item-reasoning-summary',
-          summary: ['**Planning shared memory read**', '**Executing the project lookup**'],
-          content: []
+          method: 'item/completed',
+          params: {
+            item: {
+              type: 'reasoning',
+              id: 'item-reasoning-summary',
+              summary: ['**Planning shared memory read**', '**Executing the project lookup**'],
+              content: []
+            },
+            threadId: 'thread-reasoning-summary',
+            turnId: 'turn-reasoning-summary'
+          }
         }
       ]
     }
@@ -285,10 +374,18 @@ test('observation reasoning recovers a Codex summary from raw provenance for exi
   );
 
   expect({
+    disabled: markup.includes('disabled=""'),
     fallback: markup.includes('Thought for'),
     markdownMarkers: markup.includes('**'),
-    summary: markup.includes('Planning shared memory read · Executing the project lookup')
-  }).toEqual({ fallback: false, markdownMarkers: false, summary: true });
+    summaryInTitle: markup.includes('Planning shared memory read'),
+    visibleSecondPart: markup.includes('Executing the project lookup')
+  }).toEqual({
+    disabled: false,
+    fallback: true,
+    markdownMarkers: false,
+    summaryInTitle: false,
+    visibleSecondPart: false
+  });
 });
 
 test('empty observation reasoning shows its measured duration without an expandable body', () => {
@@ -380,6 +477,15 @@ test('observation timeline routes only message-like roles through chat presentat
     userUsesMessageCard: true
   });
 });
+
+function visibleText(markup: string): string {
+  return markup
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&quot;/g, '"')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
 
 test('observation timeline omits unrecognized system messages while keeping recognized system cards', () => {
   const cards: AgentObservationCard[] = [

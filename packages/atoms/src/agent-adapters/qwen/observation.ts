@@ -124,7 +124,7 @@ function qwenContentEvents(args: {
       return observation({
         id: `${args.id}:json:${args.recordIndex}:tool-result:${partIndex}`,
         role: 'tool',
-        text: textValue(item.content, item.output, item.result) ?? JSON.stringify(item.content ?? item),
+        text: rawTextValue(item.content, item.output, item.result) ?? JSON.stringify(item.content ?? item),
         source: 'qwen-code-sdk',
         providerEventType: args.providerEventType,
         raw: args.raw
@@ -178,7 +178,7 @@ export function qwenRecordEvents(
     return observation({
       id: `${base}:tool-result`,
       role: 'tool',
-      text: textValue(record.output, record.result, record.content) ?? JSON.stringify(record),
+      text: rawTextValue(record.output, record.result, record.content) ?? JSON.stringify(record),
       source: 'qwen-code-sdk',
       providerEventType: 'tool_result',
       raw: record

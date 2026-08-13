@@ -1394,15 +1394,30 @@ test('MeshAgent app-server JSON-RPC output is projected as readable observation 
     )
   );
 
-  // The `thread/started` system notice now surfaces as a `system` kind; the mcp status is a tool
-  // event and survives.
-  expect(observationFields(stream.items)).toEqual([
-    {
-      id: 'mesh_appserveQWB9:json:0:thread-started',
-      text: 'Thread started in /Users/test/project/.dev/.monad/workplace/project/test'
-    },
-    { id: 'mesh_appserveQWB9:json:1:mcp-status', text: 'node_repl starting' }
-  ]);
+  expect({
+    items: stream.items.map(({ id, kind }) => ({ id, kind })),
+    startup: stream.items[1]?.payload
+  }).toEqual({
+    items: [
+      { id: 'mesh_appserveQWB9:json:0:thread-started', kind: 'system' },
+      { id: 'mcp-startup:mesh_appserveQWB9:json:1:mcp-status', kind: 'mcp-startup-progress' }
+    ],
+    startup: {
+      active: 'node_repl',
+      failed: 0,
+      pending: 1,
+      ready: 0,
+      servers: [
+        {
+          name: 'node_repl',
+          status: 'starting',
+          threadId: '019f1f3a-5e8d-7260-a35e-c755a13bfde2'
+        }
+      ],
+      skipped: 0,
+      total: 1
+    }
+  });
 });
 
 test('MeshAgent follow streams do not restore removed terminal snapshots', () => {

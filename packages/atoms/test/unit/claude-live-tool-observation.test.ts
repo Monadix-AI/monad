@@ -241,7 +241,7 @@ test('Claude live tool argument deltas settle into one canonical tool card', () 
     ],
     liveCard: {
       kind: 'file',
-      orb: 'shaping',
+      orb: 'solving',
       title: 'Read',
       genericInputFallback: false,
       partialFileName: 'exam',
@@ -377,9 +377,9 @@ test('Claude live Monad calls use the connecting orb before a result arrives', (
   };
 
   expect([frame(2), frame(3), frame(4)]).toEqual([
-    { kind: 'mcp', input: {}, text: 'Post to project No details' },
-    { kind: 'mcp', input: { text: 'Project sta' }, text: 'Post to project Project sta' },
-    { kind: 'mcp', input: { text: 'Project status' }, text: 'Post to project Project status' }
+    { kind: 'mcp', input: {}, text: 'Posting to project 0s No details' },
+    { kind: 'mcp', input: { text: 'Project sta' }, text: 'Posting to project 0s Project sta' },
+    { kind: 'mcp', input: { text: 'Project status' }, text: 'Posting to project 0s Project status' }
   ]);
 });
 

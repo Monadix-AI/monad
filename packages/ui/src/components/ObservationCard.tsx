@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { cva, type VariantProps } from 'class-variance-authority';
 
 import { cn } from '../lib/utils';
+import { ScrollShadow } from './ScrollShadow';
 
 export type ObservationVisualRole = 'user' | 'agent' | 'tool' | 'system' | 'warning' | 'error';
 
@@ -130,6 +131,7 @@ export interface ObservationTextProps {
   compact?: boolean;
   contained?: boolean;
   observationRole: ObservationVisualRole;
+  scrollable?: boolean;
   text: string;
 }
 
@@ -138,22 +140,32 @@ export function ObservationText({
   compact = false,
   contained = false,
   observationRole,
+  scrollable = false,
   text
 }: ObservationTextProps) {
-  return (
-    <div
-      className={cn(
-        'wrap-break-word whitespace-pre-wrap leading-relaxed',
-        observationRole === 'system' ? 'text-muted-foreground' : 'text-foreground',
-        observationRole === 'tool' ? 'font-ui text-[11px]' : 'text-[13px]',
-        compact && 'text-xs',
-        contained && 'max-h-64 overflow-auto rounded-md border border-border/70 bg-secondary/55 p-2',
-        className
-      )}
-    >
-      {inlineCodeParts(text)}
-    </div>
+  const content = inlineCodeParts(text);
+  const contentClassName = cn(
+    'wrap-break-word whitespace-pre-wrap leading-relaxed',
+    observationRole === 'system' ? 'text-muted-foreground' : 'text-foreground',
+    observationRole === 'tool' ? 'font-ui text-[11px]' : 'text-[13px]',
+    compact && 'text-xs',
+    className
   );
+  if (contained || scrollable) {
+    return (
+      <ScrollShadow
+        className={cn(
+          'max-h-64 overscroll-contain',
+          contained && 'rounded-md border border-border/70 bg-secondary/55 p-2',
+          contentClassName
+        )}
+        size={14}
+      >
+        {content}
+      </ScrollShadow>
+    );
+  }
+  return <div className={contentClassName}>{content}</div>;
 }
 
 function inlineCodeParts(text: string): ReactNode {
@@ -198,6 +210,7 @@ export function DefaultObservationToolPair({
       <ObservationText
         compact
         observationRole="tool"
+        scrollable
         text={callText}
       />
       <div className="mt-2 border-border/80 border-t pt-2">

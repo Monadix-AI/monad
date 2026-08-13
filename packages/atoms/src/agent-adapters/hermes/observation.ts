@@ -9,6 +9,7 @@ import {
   observation,
   providerEpochSecondsTimestamp,
   providerIsoTimestamp,
+  rawTextValue,
   recordValue,
   textValue,
   toolCategoryByName
@@ -147,10 +148,13 @@ export function hermesRecordEvents(
     createdAt,
     raw: record
   });
-  const contentText = textFromContent(record.content) ?? textValue(record.text, record.tool_name);
+  const contentRole = roleFromHermesMessage(record);
+  const contentText =
+    textFromContent(record.content) ??
+    (contentRole === 'tool' ? rawTextValue(record.text) : textValue(record.text, record.tool_name));
   const content = observation({
     id: `${id}:json:${recordIdentity}:message`,
-    role: roleFromHermesMessage(record),
+    role: contentRole,
     text: contentText,
     source: 'unknown',
     providerEventType: record.role === 'tool' ? 'tool_result' : 'message',

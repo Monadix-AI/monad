@@ -52,8 +52,9 @@ export const ScrollShadow = forwardRef<HTMLDivElement, ScrollShadowProps>(
       if (typeof ResizeObserver === 'undefined') return;
       const observer = new ResizeObserver(updateVisibility);
       observer.observe(viewport);
-      const content = viewport.firstElementChild;
-      if (content instanceof HTMLElement) observer.observe(content);
+      for (const content of viewport.children) {
+        if (content instanceof HTMLElement) observer.observe(content);
+      }
       return () => observer.disconnect();
     }, [updateVisibility]);
 

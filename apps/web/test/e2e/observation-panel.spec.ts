@@ -21,6 +21,34 @@ const fixtureByProvider = {
 
 type FixtureProvider = keyof typeof fixtureByProvider;
 
+async function expectVirtualRowsNotToOverlap(page: Page): Promise<void> {
+  await expect
+    .poll(async () => {
+      const gaps = await page.locator('[role="log"] [data-index]').evaluateAll((rows) =>
+        rows.slice(0, -1).flatMap((row, index) => {
+          const next = rows[index + 1];
+          return next ? [next.getBoundingClientRect().top - row.getBoundingClientRect().bottom] : [];
+        })
+      );
+      return gaps.length > 0 ? Math.min(...gaps) : Number.NEGATIVE_INFINITY;
+    })
+    .toBeGreaterThanOrEqual(-1);
+}
+
+test('rapid tool disclosure growth keeps virtual rows separated', async ({ page }) => {
+  await page.setViewportSize({ width: 500, height: 180 });
+  await page.goto(`${HARNESS}?mode=tool`);
+
+  const cards = page.locator('[data-slot="observation-tool-card"]');
+  await expect(cards).toHaveCount(3);
+  await cards.locator('summary').evaluateAll((summaries) => {
+    for (const summary of summaries) (summary as HTMLElement).click();
+  });
+
+  await expect(page.locator('[data-slot="observation-tool-card"][open]')).toHaveCount(3);
+  await expectVirtualRowsNotToOverlap(page);
+});
+
 test('tool activities stay collapsed until their summary is opened', async ({ page }) => {
   await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
   await page.goto(`${HARNESS}?mode=tool`);

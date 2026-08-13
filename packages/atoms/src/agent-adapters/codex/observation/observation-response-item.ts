@@ -1,7 +1,7 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type { ObservationSource } from '../../observation-projection.ts';
 
-import { observation, textValue, thinkingObservation } from '../../observation-projection.ts';
+import { observation, rawTextValue, textValue, thinkingObservation } from '../../observation-projection.ts';
 import { codexItemSummaries, codexItemText } from './observation-message-group.ts';
 
 export type CodexObservationResponseItem = Record<string, unknown> & { type: string };
@@ -20,21 +20,15 @@ function codexReasoningItemEvents(args: {
   createdAt?: string;
   raw: unknown;
 }): MeshAgentObservationEvent[] {
-  const summaries = codexItemSummaries(args.item);
-  const projectedSummaries: (string | undefined)[] = summaries.length > 0 ? summaries : [undefined];
-  const text = codexItemText(args.item);
-  const multiple = projectedSummaries.length > 1;
-  return projectedSummaries.flatMap((summary, index) =>
-    thinkingObservation({
-      id: `${args.id}${multiple ? `:summary:${index}` : ''}`,
-      text: index === projectedSummaries.length - 1 ? text : undefined,
-      summary,
-      source: args.source,
-      providerEventType: args.providerEventType,
-      createdAt: args.createdAt,
-      raw: args.raw
-    })
-  );
+  return thinkingObservation({
+    id: args.id,
+    text: codexItemText(args.item),
+    summary: codexItemSummaries(args.item).join('\n\n') || undefined,
+    source: args.source,
+    providerEventType: args.providerEventType,
+    createdAt: args.createdAt,
+    raw: args.raw
+  });
 }
 
 function codexResponseMessageContentEvents(args: {
@@ -100,7 +94,7 @@ function codexResponseMessageContentEvents(args: {
       return observation({
         id: `${args.id}:json:${args.recordIndex}:tool-result:${partIndex}`,
         role: 'tool',
-        text: textValue(item.content, item.output, item.result) ?? JSON.stringify(item.content ?? item),
+        text: rawTextValue(item.content, item.output, item.result) ?? JSON.stringify(item.content ?? item),
         source: args.source,
         providerEventType: args.providerEventType,
         createdAt: args.createdAt,
@@ -169,7 +163,7 @@ export function codexResponseItem(
     return observation({
       id: `${id}:json:${recordIndex}:function-output`,
       role: 'tool',
-      text: textValue(item.output) ?? JSON.stringify(item.output ?? item),
+      text: rawTextValue(item.output) ?? JSON.stringify(item.output ?? item),
       source,
       providerEventType: String(item.type),
       createdAt,

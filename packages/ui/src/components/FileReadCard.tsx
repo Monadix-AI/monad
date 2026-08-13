@@ -113,7 +113,15 @@ function stripTrailingSystemReminders(value: string): string {
   return removed ? value.slice(0, end) : value;
 }
 
-export function FileReadCardHeader({ quiet = false, view }: { quiet?: boolean; view: FileReadCardView }) {
+export function FileReadCardHeader({
+  quiet = false,
+  title,
+  view
+}: {
+  quiet?: boolean;
+  title?: string;
+  view: FileReadCardView;
+}) {
   return (
     <ObservationMeta
       compact
@@ -122,7 +130,7 @@ export function FileReadCardHeader({ quiet = false, view }: { quiet?: boolean; v
       quiet={quiet}
       showSource={false}
       source={view.provider}
-      title={view.type}
+      title={title ?? view.type}
     >
       {quiet ? (
         <span

@@ -118,7 +118,7 @@ export function observation(args: {
   rawEvents?: unknown[];
   preserveWhitespace?: boolean;
 }): MeshAgentObservationEvent[] {
-  const text = args.preserveWhitespace ? args.text : args.text?.trim();
+  const text = args.preserveWhitespace || args.role === 'tool' ? args.text : args.text?.trim();
   if (!text) return [];
   const parsed = meshAgentObservationEventSchema.safeParse({
     id: args.id,
@@ -375,7 +375,7 @@ export function contentEvents(args: {
       return observation({
         id: `${args.id}:json:${args.recordIndex}:tool-result:${partIndex}`,
         role: 'tool',
-        text: textValue(item.content, item.output, item.result) ?? JSON.stringify(item.content ?? item),
+        text: rawTextValue(item.content, item.output, item.result) ?? JSON.stringify(item.content ?? item),
         source: args.source,
         providerEventType: args.providerEventType,
         createdAt: args.createdAt,

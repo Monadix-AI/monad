@@ -10,7 +10,8 @@ export { ShellCard as ShellToolCard } from '@monad/ui';
 
 export function ShellToolHeader({ view }: { view: ShellCardView }) {
   const t = workplaceExperienceT();
-  const headerView = view.provider === 'codex' ? { ...view, title: t('web.tools.shell') } : view;
+  const headerView =
+    view.provider === 'codex' || view.type.toLowerCase() === 'bash' ? { ...view, title: t('web.tools.shell') } : view;
   return (
     <ShellCardHeader
       labels={{
@@ -32,12 +33,12 @@ export function shellToolView(
   if (call.tool?.category !== 'shell') return null;
   const view = commandToolView(call, result ?? call, provider);
   if (!view?.command) return null;
-  const title = claudeShellTitle(call, provider);
+  const summary = claudeShellSummary(call, provider);
   return {
     command: view.command,
     provider: view.provider,
     type: view.type,
-    ...(title ? { title } : {}),
+    ...(summary ? { summary } : {}),
     ...(view.cwd === undefined ? {} : { cwd: view.cwd }),
     ...(view.durationMs === undefined ? {} : { durationMs: view.durationMs }),
     ...(view.exitCode === undefined ? {} : { exitCode: view.exitCode }),
@@ -46,7 +47,7 @@ export function shellToolView(
   };
 }
 
-function claudeShellTitle(call: ObservationItem, provider: string): string | undefined {
+function claudeShellSummary(call: ObservationItem, provider: string): string | undefined {
   if (provider !== 'claude-code' || call.tool?.name.toLowerCase() !== 'bash') return undefined;
   const input = call.tool.input;
   if (!input || typeof input !== 'object' || Array.isArray(input)) return undefined;

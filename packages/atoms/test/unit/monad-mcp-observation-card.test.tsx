@@ -159,7 +159,7 @@ test('renders a Hermes-wrapped Monad call with the shared semantic card', () => 
       threadId: 'thread_hermes',
       attachments: []
     },
-    timeline: ['Post to project Posted. Joined and ready.']
+    timeline: ['Posted to project Posted. Joined and ready.']
   });
 });
 
@@ -209,7 +209,7 @@ ${JSON.stringify({ result: JSON.stringify(payload) })}
       text: 'Joined and ready.',
       attachments: []
     },
-    timeline: ['Post to project Message ID msg_hermes Joined and ready.']
+    timeline: ['Posted to project Message ID msg_hermes Joined and ready.']
   });
 });
 
@@ -323,7 +323,7 @@ test('projects an actual Codex completed Monad MCP record through the semantic t
       {
         cardCollapseTrigger: false,
         toolActivityCollapsed: true,
-        text: 'Post to project Completed 232ms Accepted Yes Message Posted to the project. Message ID message_1 Ready for review.',
+        text: 'Posted to project Completed 232ms Accepted Yes Message Posted to the project. Message ID message_1 Ready for review.',
         visualRole: 'tool'
       }
     ]
@@ -400,7 +400,7 @@ test('projects Monad agent-facing MCP events through the semantic timeline', () 
     },
     timeline: [
       {
-        text: 'Post to project Failed tool "monad__project_post" denied by gate: approval request timed out Share the current status.',
+        text: 'Posted to project Failed tool "monad__project_post" denied by gate: approval request timed out Share the current status.',
         visualRole: 'error'
       }
     ]
@@ -457,7 +457,7 @@ test('renders an actual completed Codex MCP error as an error without a contradi
     },
     timeline: {
       completed: false,
-      text: 'Post to project Error 41ms Message Permission denied. Post this update.',
+      text: 'Posted to project Error 41ms Message Permission denied. Post this update.',
       visualRole: 'error'
     }
   });
@@ -529,7 +529,7 @@ test('renders a completed rollout MCP Err result as a localized error card', () 
     },
     timeline: {
       completed: false,
-      text: 'Post to project Error transport failed Retry this post.',
+      text: 'Posted to project Error transport failed Retry this post.',
       visualRole: 'error'
     }
   });
@@ -600,7 +600,7 @@ test('routes actual Claude Monad tool_use and matching tool_result records to a 
     },
     timeline: [
       {
-        text: 'Send a private message to CC Claude Code Completed Delivered. Please review the patch.',
+        text: 'Sent a private message to CC Claude Code Completed Delivered. Please review the patch.',
         visualRole: 'tool'
       }
     ]
@@ -659,7 +659,7 @@ test('renders Claude project-post MCP content blocks like the equivalent Codex r
       attachments: []
     },
     timeline: [
-      'Post to project Completed Message ID message_claude_post Session ID session_claude_post Created At 2026-08-09T12:25:52.512Z Claude joined the project.'
+      'Posted to project Completed Message ID message_claude_post Session ID session_claude_post Created At 2026-08-09T12:25:52.512Z Claude joined the project.'
     ]
   });
 });
@@ -816,7 +816,7 @@ test('routes session member availability through the semantic Monad MCP card', (
     staleIdHidden: true,
     timeline: [
       {
-        text: 'List session members Completed CL OpenClaw online DD Monad online',
+        text: 'Listed session members Completed CL OpenClaw online DD Monad online',
         visualRole: 'tool'
       }
     ]
@@ -868,7 +868,7 @@ test('renders project_plan_list as a unified Monad MCP todo card', () => {
     view: pairedToolView(card)
   }).toEqual({
     kind: 'mcp',
-    text: 'List project plan Completed Wire the fence Review the tests Ship the release',
+    text: 'Viewed project plan Completed Wire the fence Review the tests Ship the release',
     view: {
       action: 'project-plan-list',
       callId: 'call_plan_list',
@@ -950,7 +950,7 @@ test('keeps non-Monad tools generic and renders an in-progress Monad call semant
         text: 'Still running.',
         attachments: []
       },
-      text: ['Post to project Running Still running.'],
+      text: ['Posting to project Running 0s Still running.'],
       visualRole: ['tool']
     }
   });
@@ -1211,7 +1211,7 @@ test('renders project-post output while hiding its input contract', () => {
     attachmentCard: true,
     attachmentMeta: true,
     mentionChip: true,
-    text: 'Post to project Completed Accepted Yes Message ID message_43 The deployment is ready for Reviewer . release.md text/markdown Path /workspace/ release.md MIME type text/markdown'
+    text: 'Posted to project Completed Accepted Yes Message ID message_43 The deployment is ready for Reviewer . release.md text/markdown Path /workspace/ release.md MIME type text/markdown'
   });
   // presence-ok: semantic rendering must not expose request identifiers.
   expect(markup.includes('request_should_not_render')).toEqual(false);
@@ -1319,7 +1319,7 @@ test('renders a placeholder when a Monad MCP card has no displayable fields', ()
     )
   );
 
-  expect(visibleText(markup)).toEqual('Check project inbox Completed No details');
+  expect(visibleText(markup)).toEqual('Checked project inbox Completed No details');
 });
 
 test('renders every project question and its choices before the ask result', () => {
@@ -1357,7 +1357,7 @@ test('renders every project question and its choices before the ask result', () 
     view
   }).toEqual({
     questionCount: 2,
-    text: 'Ask for input Completed Choose the implementation scope. Focused Complete Who should review it? Alice Bob pending Request ID ask_result',
+    text: 'Asked for input Completed Choose the implementation scope. Focused Complete Who should review it? Alice Bob pending Request ID ask_result',
     view: {
       action: 'project-ask',
       input,
@@ -1482,7 +1482,7 @@ test('renders agent-send output while hiding its input contract', () => {
     rawMentionHidden: !text.includes('@[name='),
     recipient: markup.includes('data-slot="monad-mcp-recipient"') && text.includes('Claude Code'),
     recipientInTitle: /data-slot="observation-meta-title"[^>]*>[\s\S]*data-slot="monad-mcp-recipient"/.test(markup),
-    title: text.includes('Send a private message to')
+    title: text.includes('Sending a private message to')
   }).toEqual({
     attachmentCard: true,
     body: true,
@@ -1553,7 +1553,7 @@ test('hides Monad MCP input while keeping friendly Monad and raw third-party out
 
   const visibleRows = markup.map(visibleText);
   expect([visibleRows[0], visibleRows[1]?.replace(/\s*:\s*/g, ': ')]).toEqual([
-    'Post to project Completed Accepted Yes Always visible.',
+    'Posted to project Completed Accepted Yes Always visible.',
     'tool call project_post running input { "text": "Third-party payload." } output { "accepted": true }'
   ]);
   // behavior-ok: rendering tool activity keeps raw events exclusively in the separate Raw view.

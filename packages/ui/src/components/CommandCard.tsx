@@ -124,9 +124,11 @@ function CommandCodeSection({
     >
       <div className="font-bold font-ui text-[10px] text-foreground uppercase">{label}</div>
       <CodeBlock
-        className="[&>div]:scrollbar-none rounded-md border-0 bg-transparent text-[11px] [&>div::-webkit-scrollbar]:hidden [&>div]:max-h-72 [&>div]:overflow-auto [&_pre]:p-0"
+        className="**:data-[slot=scroll-shadow]:scrollbar-none rounded-md border-0 bg-transparent text-[11px] **:data-[slot=scroll-shadow]:max-h-72 [&_[data-slot=scroll-shadow]::-webkit-scrollbar]:hidden [&_pre]:p-0"
         code={code}
         language={language}
+        scrollShadow
+        scrollShadowSize={14}
       />
     </section>
   );

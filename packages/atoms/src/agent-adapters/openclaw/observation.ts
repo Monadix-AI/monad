@@ -12,6 +12,7 @@ import {
   observation,
   providerEpochMsTimestamp,
   providerIsoTimestamp,
+  rawTextValue,
   recordValue,
   textValue,
   toolCategoryByName
@@ -126,7 +127,7 @@ export function openClawRecordEvents(
     return observation({
       id: `${id}:json:${recordIndex}:tool-result`,
       role: 'tool',
-      text: textFromContent(providerMessage.content) ?? textValue(providerMessage.text),
+      text: textFromContent(providerMessage.content) ?? rawTextValue(providerMessage.text),
       source: 'unknown',
       providerEventType: 'tool_result',
       createdAt: messageCreatedAt,

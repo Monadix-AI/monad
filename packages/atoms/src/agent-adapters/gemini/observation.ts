@@ -6,6 +6,7 @@ import {
   isStreamingObservationFragment,
   observation,
   providerIsoTimestamp,
+  rawTextValue,
   textValue,
   thinkingObservation,
   toolCategoryByName
@@ -58,7 +59,7 @@ export function geminiRecordEvents(
     return observation({
       id: `${id}:json:${recordIndex}:tool-result`,
       role: 'tool',
-      text: textValue(record.output, record.result, record.content) ?? JSON.stringify(record),
+      text: rawTextValue(record.output, record.result, record.content) ?? JSON.stringify(record),
       source: 'gemini-cli',
       providerEventType: 'tool_result',
       createdAt,

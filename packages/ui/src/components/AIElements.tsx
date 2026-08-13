@@ -275,6 +275,7 @@ export const Reasoning = memo(
       defaultProp: undefined,
       prop: durationProp
     });
+    const [liveDuration, setLiveDuration] = useState(0);
 
     const hasEverStreamedRef = useRef(isStreaming);
     const [hasAutoClosed, setHasAutoClosed] = useState(false);
@@ -285,12 +286,21 @@ export const Reasoning = memo(
         hasEverStreamedRef.current = true;
         if (startTimeRef.current === null) {
           startTimeRef.current = Date.now();
+          setLiveDuration(0);
         }
       } else if (startTimeRef.current !== null) {
         setDuration(Math.ceil((Date.now() - startTimeRef.current) / MS_IN_S));
         startTimeRef.current = null;
       }
     }, [isStreaming, setDuration]);
+
+    useEffect(() => {
+      if (!isStreaming) return;
+      const timer = setInterval(() => {
+        if (startTimeRef.current !== null) setLiveDuration(Math.floor((Date.now() - startTimeRef.current) / MS_IN_S));
+      }, MS_IN_S);
+      return () => clearInterval(timer);
+    }, [isStreaming]);
 
     useEffect(() => {
       if (isStreaming && !isOpen && !isExplicitlyClosed) {
@@ -316,9 +326,10 @@ export const Reasoning = memo(
       [setIsOpen]
     );
 
+    const displayedDuration = isStreaming ? liveDuration : duration;
     const contextValue = useMemo(
-      () => ({ duration, isOpen, isStreaming, setIsOpen }),
-      [duration, isOpen, isStreaming, setIsOpen]
+      () => ({ duration: displayedDuration, isOpen, isStreaming, setIsOpen }),
+      [displayedDuration, isOpen, isStreaming, setIsOpen]
     );
 
     return (
@@ -346,8 +357,8 @@ export type ReasoningTriggerProps = ComponentProps<typeof CollapsibleTrigger> & 
 
 function defaultThinkingMessage(labels: ReasoningLabels | undefined, isStreaming: boolean, duration?: number) {
   const resolved = { ...defaultReasoningLabels, ...labels };
-  if (isStreaming || duration === 0) {
-    return <Shimmer duration={1}>{resolved.thinking}</Shimmer>;
+  if (isStreaming) {
+    return <Shimmer duration={1}>{`${resolved.thinking} ${duration ?? 0}s`}</Shimmer>;
   }
   if (duration === undefined) {
     return <p>{resolved.thoughtFew}</p>;

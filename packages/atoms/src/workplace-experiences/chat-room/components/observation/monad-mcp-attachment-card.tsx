@@ -92,7 +92,7 @@ function MonadMcpAttachmentCard({
       }}
       open={open}
     >
-      <summary className="flex min-h-9 min-w-0 cursor-pointer list-none items-center gap-2 px-2.5 py-1.5 text-left transition-colors hover:bg-secondary/35 focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
+      <summary className="flex min-h-9 min-w-0 cursor-pointer list-none items-center gap-2 px-2.5 py-1.5 text-left transition-colors focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
         <FileIcon
           className="size-4 shrink-0 text-muted-foreground"
           contentType={attachment.mime}

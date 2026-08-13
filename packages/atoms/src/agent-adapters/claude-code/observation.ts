@@ -175,7 +175,7 @@ function claudeContentEvents(args: {
       return observation({
         id: claudeProjectionId(args.id, args.recordIndex, `tool-result:${partIndex}`, args.indexedId),
         role: 'tool',
-        text: textValue(item.content) ?? JSON.stringify(item.content ?? item),
+        text: rawTextValue(item.content) ?? JSON.stringify(item.content ?? item),
         source: 'claude-code-sdk',
         providerEventType: 'tool_result',
         createdAt: args.createdAt,
@@ -330,7 +330,7 @@ export function claudeRecordEvents(
     return observation({
       id: claudeTopLevelProjectionId(base, recordIndex, 'tool-result', indexedId),
       role: 'tool',
-      text: textValue(loose.output, loose.result, loose.content) ?? JSON.stringify(record),
+      text: rawTextValue(loose.output, loose.result, loose.content) ?? JSON.stringify(record),
       source: 'claude-code-sdk',
       providerEventType: 'tool_result',
       raw: record
@@ -386,6 +386,17 @@ export function claudeRecordEvents(
     });
   }
   if (isClaudeSystemMessage(record)) {
+    if (loose.subtype === 'init' && Array.isArray(loose.mcp_servers) && loose.mcp_servers.length > 0) {
+      return observation({
+        id: claudeProjectionId(base, recordIndex, 'mcp-startup', indexedId),
+        projection: 'unknown',
+        role: 'system',
+        text: 'MCP servers initialized',
+        source: 'claude-code-sdk',
+        providerEventType: 'mcp_servers_initialized',
+        raw: record
+      });
+    }
     if (loose.subtype === 'compact_boundary') {
       return observation({
         id: claudeProjectionId(base, recordIndex, 'context-compaction', indexedId),

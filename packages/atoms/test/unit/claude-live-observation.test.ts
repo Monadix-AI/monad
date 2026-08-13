@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
+import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 
 test('Claude live projection replaces partial thinking and text with the final SDK message blocks', () => {
@@ -149,4 +150,76 @@ test('Claude empty thinking deltas keep a non-expandable reasoning placeholder',
       ({ hasContent, kind, streaming, text }) => ({ hasContent, kind, streaming, text })
     )
   ).toEqual([{ hasContent: false, kind: 'reasoning', streaming: false, text: 'Thinking…' }]);
+});
+
+test('Claude init projects its complete MCP server snapshot as one startup event', () => {
+  const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
+  if (!adapter) throw new Error('Claude adapter is required');
+  const raw = {
+    type: 'system',
+    subtype: 'init',
+    uuid: 'claude-init-1',
+    session_id: 'claude-session',
+    mcp_servers: [
+      { name: 'monad', status: 'connected' },
+      { name: 'shadcn', status: 'failed' },
+      { name: 'claude.ai Notion', status: 'needs-auth' }
+    ]
+  };
+
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_claude_init',
+    provider: 'claude-code',
+    adapter,
+    output: JSON.stringify(raw)
+  });
+
+  expect({
+    events: events.map(({ id, kind, streaming, text, provenance }) => ({
+      id,
+      kind,
+      streaming,
+      text,
+      rawEvents: provenance.contractEvents.flatMap((event) =>
+        event && typeof event === 'object' && 'provenance' in event
+          ? ((event as { provenance?: { rawEvents?: unknown[] } }).provenance?.rawEvents ?? [])
+          : []
+      )
+    })),
+    cards: agentObservationCards(events, 'claude-code').map(({ id, kind, streaming, payload }) => ({
+      id,
+      kind,
+      streaming,
+      payload
+    }))
+  }).toEqual({
+    events: [
+      {
+        id: 'claude-init-1:mcp-startup',
+        kind: 'unknown',
+        streaming: false,
+        text: 'MCP servers initialized',
+        rawEvents: [raw]
+      }
+    ],
+    cards: [
+      {
+        id: 'mcp-startup:claude-init-1:mcp-startup',
+        kind: 'mcp-startup-progress',
+        streaming: false,
+        payload: {
+          failed: 2,
+          pending: 0,
+          ready: 1,
+          servers: [
+            { name: 'monad', status: 'connected' },
+            { name: 'shadcn', status: 'failed' },
+            { name: 'claude.ai Notion', status: 'needs-auth' }
+          ],
+          skipped: 0,
+          total: 3
+        }
+      }
+    ]
+  });
 });

@@ -21,7 +21,7 @@ export function MonadMcpToolHeader({
 }) {
   const t = workplaceExperienceT();
   const recipient = view.action === 'agent-send' && view.to ? memberIdentities?.get(view.to) : undefined;
-  const actionTitle = monadMcpActionTitle(view, t, Boolean(recipient));
+  const actionTitle = monadMcpActionTitle(view, t, Boolean(recipient), monadMcpIsCompleted(view));
   return (
     <ObservationMeta
       compact
@@ -98,38 +98,93 @@ export function MonadMcpToolCard({
 function monadMcpActionTitle(
   view: MonadMcpToolView,
   t: ReturnType<typeof workplaceExperienceT>,
-  hasResolvedRecipient = false
+  hasResolvedRecipient: boolean,
+  completed: boolean
 ): string {
   switch (view.action) {
     case 'project-post':
-      return t('web.workplace.monadMcp.action.projectPost');
+      return t(
+        completed ? 'web.workplace.monadMcp.action.projectPostCompleted' : 'web.workplace.monadMcp.action.projectPost'
+      );
     case 'project-ask':
-      return t('web.workplace.monadMcp.action.projectAsk');
+      return t(
+        completed ? 'web.workplace.monadMcp.action.projectAskCompleted' : 'web.workplace.monadMcp.action.projectAsk'
+      );
     case 'project-read':
-      return t('web.workplace.monadMcp.action.projectRead');
+      return t(
+        completed ? 'web.workplace.monadMcp.action.projectReadCompleted' : 'web.workplace.monadMcp.action.projectRead'
+      );
     case 'project-inbox-check':
-      return t('web.workplace.monadMcp.action.projectInboxCheck');
+      return t(
+        completed
+          ? 'web.workplace.monadMcp.action.projectInboxCheckCompleted'
+          : 'web.workplace.monadMcp.action.projectInboxCheck'
+      );
     case 'project-inbox-ack':
-      return t('web.workplace.monadMcp.action.projectInboxAck');
+      return t(
+        completed
+          ? 'web.workplace.monadMcp.action.projectInboxAckCompleted'
+          : 'web.workplace.monadMcp.action.projectInboxAck'
+      );
     case 'agent-send':
       return hasResolvedRecipient
-        ? t('web.workplace.monadMcp.action.agentSendTo')
-        : t('web.workplace.monadMcp.action.agentSend');
+        ? t(
+            completed
+              ? 'web.workplace.monadMcp.action.agentSendToCompleted'
+              : 'web.workplace.monadMcp.action.agentSendTo'
+          )
+        : t(completed ? 'web.workplace.monadMcp.action.agentSendCompleted' : 'web.workplace.monadMcp.action.agentSend');
     case 'agent-read':
-      return t('web.workplace.monadMcp.action.agentRead');
+      return t(
+        completed ? 'web.workplace.monadMcp.action.agentReadCompleted' : 'web.workplace.monadMcp.action.agentRead'
+      );
     case 'session-members':
-      return t('web.workplace.monadMcp.action.sessionMembers');
+      return t(
+        completed
+          ? 'web.workplace.monadMcp.action.sessionMembersCompleted'
+          : 'web.workplace.monadMcp.action.sessionMembers'
+      );
     case 'runtime-info':
-      return t('web.workplace.monadMcp.action.runtimeInfo');
+      return t(
+        completed ? 'web.workplace.monadMcp.action.runtimeInfoCompleted' : 'web.workplace.monadMcp.action.runtimeInfo'
+      );
     case 'project-plan-list':
-      return t('web.workplace.monadMcp.action.projectPlanList');
+      return t(
+        completed
+          ? 'web.workplace.monadMcp.action.projectPlanListCompleted'
+          : 'web.workplace.monadMcp.action.projectPlanList'
+      );
     case 'project-plan-add':
-      return t('web.workplace.monadMcp.action.projectPlanAdd');
+      return t(
+        completed
+          ? 'web.workplace.monadMcp.action.projectPlanAddCompleted'
+          : 'web.workplace.monadMcp.action.projectPlanAdd'
+      );
     case 'project-plan-update':
-      return t('web.workplace.monadMcp.action.projectPlanUpdate');
+      return t(
+        completed
+          ? 'web.workplace.monadMcp.action.projectPlanUpdateCompleted'
+          : 'web.workplace.monadMcp.action.projectPlanUpdate'
+      );
     case 'project-plan-delete':
-      return t('web.workplace.monadMcp.action.projectPlanDelete');
+      return t(
+        completed
+          ? 'web.workplace.monadMcp.action.projectPlanDeleteCompleted'
+          : 'web.workplace.monadMcp.action.projectPlanDelete'
+      );
   }
+}
+
+function monadMcpIsCompleted(view: MonadMcpToolView): boolean {
+  const status = view.status?.trim().toLowerCase();
+  if (status === 'running' || status === 'pending' || status === 'in_progress' || status === 'inprogress') return false;
+  return (
+    view.isError ||
+    status === 'completed' ||
+    status === 'success' ||
+    status === 'succeeded' ||
+    view.output !== undefined
+  );
 }
 
 function MonadMcpAgentSendTitle({ action, recipient }: { action: string; recipient: Participant }) {

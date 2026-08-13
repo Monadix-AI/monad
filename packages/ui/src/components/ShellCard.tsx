@@ -1,5 +1,6 @@
 import { CodeBlock, CodeBlockCopyButtonOverlay } from './CodeBlock';
 import { ObservationMeta } from './ObservationCard';
+import { ScrollShadow } from './ScrollShadow';
 
 export interface ShellCardView {
   command: string;
@@ -9,6 +10,7 @@ export interface ShellCardView {
   output?: string;
   provider: string;
   status?: string;
+  summary?: string;
   title?: string;
   type: string;
 }
@@ -45,9 +47,11 @@ export function ShellCard({
           $
         </span>
         <CodeBlock
-          className="min-w-0 flex-1 rounded-none border-0 bg-transparent text-[11px] [&_[data-slot=code-block-content]>div]:overflow-visible [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:p-0"
+          className="min-w-0 flex-1 rounded-none border-0 bg-transparent text-[11px] **:data-[slot=scroll-shadow]:max-h-72 [&_pre]:whitespace-pre-wrap [&_pre]:break-words [&_pre]:p-0"
           code={view.command}
           language="bash"
+          scrollShadow
+          scrollShadowSize={14}
         />
         <CodeBlockCopyButtonOverlay
           aria-label={copyCommandLabel}
@@ -67,12 +71,17 @@ export function ShellCard({
             data-copy-target="content"
             value={view.output}
           />
-          <pre
-            className="m-0 max-h-72 overflow-auto whitespace-pre font-ui text-[11px] text-foreground"
-            data-selectable="true"
+          <ScrollShadow
+            className="max-h-72 overscroll-contain"
+            size={14}
           >
-            {view.output}
-          </pre>
+            <pre
+              className="m-0 w-max min-w-full whitespace-pre font-ui text-[11px] text-foreground"
+              data-selectable="true"
+            >
+              {view.output}
+            </pre>
+          </ScrollShadow>
         </div>
       ) : null}
     </div>
@@ -84,12 +93,25 @@ export function ShellCardHeader({ labels, view }: { labels: ShellCardHeaderLabel
     <ObservationMeta
       compact
       label={labels.toolCall}
+      preserveTitle={Boolean(view.summary)}
       quiet
       showSource={false}
       source={view.provider}
       title={view.title ?? view.type}
     >
-      {view.title ? null : <span className="min-w-0 truncate text-muted-foreground">{singleLine(view.command)}</span>}
+      {view.summary ? (
+        <>
+          <span
+            aria-hidden="true"
+            className="shrink-0 text-muted-foreground"
+          >
+            ·
+          </span>
+          <span className="min-w-0 shrink truncate text-muted-foreground">{view.summary}</span>
+        </>
+      ) : view.title ? null : (
+        <span className="min-w-0 truncate text-muted-foreground">{singleLine(view.command)}</span>
+      )}
       <span className="sr-only">{shellStatusLabel(view, labels)}</span>
       {view.durationMs === undefined ? null : (
         <span className="shrink-0 text-muted-foreground">{formatDurationMs(view.durationMs)}</span>

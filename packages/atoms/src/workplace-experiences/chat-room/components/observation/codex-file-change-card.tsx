@@ -1,14 +1,12 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 
-import { FileCodeIcon } from '@hugeicons/core-free-icons';
-import { HugeiconsIcon } from '@hugeicons/react';
-import { CompactFilePath, FileIcon, UnifiedDiff } from '@monad/ui';
+import { CompactFilePath, FileIcon, ObservationMeta, UnifiedDiff } from '@monad/ui';
 
 import { workplaceExperienceT } from '../../../i18n.ts';
-import { type ObservationToolStatus, ObservationToolStatusIndicator } from './card-shell.tsx';
 import { useObservationDisclosure } from './disclosure.tsx';
 import { observationContractRawEvents } from './provenance.ts';
 
+const FILE_NAME_TITLE_SLOT = '__MONAD_FILE_NAME_TITLE_SLOT__';
 const INITIAL_FILE_COUNT = 3;
 
 type CodexFileChange = {
@@ -29,6 +27,77 @@ export type CodexFileChangeView = {
   files: CodexFileChange[];
   status?: string;
 };
+
+export function fileChangeStatus(status: string | undefined): 'error' | 'running' | 'success' {
+  const normalized = status?.trim().toLowerCase();
+  if (normalized === 'error' || normalized === 'failed') return 'error';
+  if (
+    normalized === 'running' ||
+    normalized === 'pending' ||
+    normalized === 'in_progress' ||
+    normalized === 'inprogress'
+  )
+    return 'running';
+  return 'success';
+}
+
+export function FileChangeToolHeader({ view }: { view: CodexFileChangeView }): React.ReactElement {
+  const t = workplaceExperienceT();
+  const running = fileChangeStatus(view.status) === 'running';
+  const creating = view.files.every((file) => ['add', 'create', 'write'].includes(file.kind.trim().toLowerCase()));
+  const path = view.files[0]?.path ?? '';
+  const name = path.split(/[\\/]/).at(-1) ?? '';
+  const title =
+    view.files.length === 1
+      ? fileChangeSingleFileTitle(
+          t(
+            creating
+              ? running
+                ? 'web.workplace.fileChange.creatingFile'
+                : 'web.workplace.fileChange.createdFile'
+              : running
+                ? 'web.workplace.fileChange.editingFile'
+                : 'web.workplace.fileChange.editedFile',
+            { name: FILE_NAME_TITLE_SLOT }
+          ),
+          name,
+          path
+        )
+      : creating
+        ? t(running ? 'web.workplace.fileChange.creatingFiles' : 'web.workplace.fileChange.createdFiles', {
+            count: view.files.length
+          })
+        : t(running ? 'web.workplace.fileChange.editingFiles' : 'web.workplace.fileChange.editedFiles', {
+            count: view.files.length
+          });
+  return (
+    <ObservationMeta
+      compact
+      label="tool call"
+      quiet
+      showSource={false}
+      source="file"
+      title={title}
+    />
+  );
+}
+
+function fileChangeSingleFileTitle(title: string, name: string, path: string): React.ReactNode {
+  const [prefix, suffix = ''] = title.split(FILE_NAME_TITLE_SLOT);
+  return (
+    <span className="inline-flex min-w-0 max-w-full items-center gap-1 align-middle">
+      <span className="shrink-0">{prefix}</span>
+      <FileIcon
+        className="size-4 shrink-0"
+        fileName={path}
+      />
+      <span className="min-w-0 truncate">
+        {name}
+        {suffix}
+      </span>
+    </span>
+  );
+}
 
 export function codexFileChangeView(contractEvents: readonly unknown[]): CodexFileChangeView | null {
   const rawEvents = observationContractRawEvents(contractEvents);
@@ -95,43 +164,24 @@ export function claudeFileChangeView(
   };
 }
 
-export function CodexFileChangeCard({
-  timestamp,
-  view
-}: {
-  timestamp?: string;
-  view: CodexFileChangeView;
-}): React.ReactElement {
+export function CodexFileChangeCard({ view }: { view: CodexFileChangeView }): React.ReactElement {
   const t = workplaceExperienceT();
   const [showAll, setShowAll] = useObservationDisclosure('file-change/all');
   const visibleFiles = showAll ? view.files : view.files.slice(0, INITIAL_FILE_COUNT);
   const hiddenCount = view.files.length - visibleFiles.length;
-  const status = fileChangeStatus(view.status);
   return (
-    <article
-      className="w-full min-w-0 max-w-full overflow-hidden rounded-xl border border-border bg-card"
+    <div
+      className="w-full min-w-0 max-w-full overflow-hidden rounded-md border border-border/60 bg-secondary/20"
       data-codex-file-change-card="true"
     >
-      <header className="flex min-w-0 items-center gap-3 border-border border-b px-4 py-3">
-        <span className="inline-flex size-9 shrink-0 items-center justify-center rounded-lg bg-secondary text-muted-foreground">
-          <HugeiconsIcon
-            aria-hidden="true"
-            icon={FileCodeIcon}
-            size={18}
-          />
-        </span>
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 font-semibold text-foreground text-sm">
-            <span>{t('web.workplace.fileChange.editedFiles', { count: view.files.length })}</span>
-            <ObservationToolStatusIndicator status={status} />
-          </div>
+      {view.files.length > 1 ? (
+        <div className="flex justify-end border-border/70 border-b px-4 py-2.5">
           <FileChangeStats
             additions={view.additions}
             deletions={view.deletions}
           />
         </div>
-        {timestamp ? <time className="shrink-0 font-ui text-[10px] text-muted-foreground">{timestamp}</time> : null}
-      </header>
+      ) : null}
       <div className="divide-y divide-border/70">
         {visibleFiles.map((file) => (
           <CodexFileChangeRow
@@ -157,15 +207,8 @@ export function CodexFileChangeCard({
           {t('web.workplace.fileChange.showFewer')}
         </button>
       ) : null}
-    </article>
+    </div>
   );
-}
-
-function fileChangeStatus(status: string | undefined): ObservationToolStatus {
-  const normalized = status?.trim().toLowerCase();
-  if (normalized === 'error' || normalized === 'failed') return 'error';
-  if (normalized === 'running' || normalized === 'pending' || normalized === 'in_progress') return 'running';
-  return 'success';
 }
 
 function CodexFileChangePath({ file }: { file: CodexFileChange }): React.ReactElement {

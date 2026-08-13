@@ -9,7 +9,9 @@ import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import {
   CodexFileChangeCard,
-  codexFileChangeView
+  type CodexFileChangeView,
+  codexFileChangeView,
+  FileChangeToolHeader
 } from '../../src/workplace-experiences/chat-room/components/observation/codex-file-change-card.tsx';
 import {
   ObservationTimelineRowView,
@@ -18,6 +20,8 @@ import {
 } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 import { setupDomTestEnvironment } from '../dom-test-env.ts';
+
+if (typeof document === 'undefined') await import('../register-dom-first.ts');
 
 const changes = [
   {
@@ -178,7 +182,7 @@ test('Codex fileChange timeline renders the exact read-only summary for a long f
   );
 
   expect(visibleText(markup)).toBe(
-    'Edited 4 files +6 -2 docs/plan.md +2 -1 packages/atoms/src/adapter.ts +1 -1 packages/atoms/src/index.ts +1 -0 Show 1 more file'
+    'tool call Edited 4 files +6 -2 docs/plan.md +2 -1 packages/atoms/src/adapter.ts +1 -1 packages/atoms/src/index.ts +1 -0 Show 1 more file'
   );
 });
 
@@ -203,7 +207,7 @@ test('Codex fileChange timeline renders a bare history item as the read-only sum
   );
 
   expect(visibleText(markup)).toBe(
-    'Edited 4 files +6 -2 docs/plan.md +2 -1 packages/atoms/src/adapter.ts +1 -1 packages/atoms/src/index.ts +1 -0 Show 1 more file'
+    'tool call Edited 4 files +6 -2 docs/plan.md +2 -1 packages/atoms/src/adapter.ts +1 -1 packages/atoms/src/index.ts +1 -0 Show 1 more file'
   );
 });
 
@@ -226,10 +230,47 @@ test('Codex fileChange controls reveal the remaining files and an individual dif
     expandedFiles
   }).toEqual({
     expandedDiff:
-      'Edited 4 files + 6 - 2 docs/plan.md + 2 - 1 @@ -1,2 +1,3 @@ 1 - old 1 + new 2 + verified packages/atoms/src/adapter.ts + 1 - 1 packages/atoms/src/index.ts + 1 - 0 packages/atoms/test/adapter.test.ts + 2 - 0 Show fewer files',
+      '+ 6 - 2 docs/plan.md + 2 - 1 @@ -1,2 +1,3 @@ 1 - old 1 + new 2 + verified packages/atoms/src/adapter.ts + 1 - 1 packages/atoms/src/index.ts + 1 - 0 packages/atoms/test/adapter.test.ts + 2 - 0 Show fewer files',
     expandedFiles:
-      'Edited 4 files + 6 - 2 docs/plan.md + 2 - 1 packages/atoms/src/adapter.ts + 1 - 1 packages/atoms/src/index.ts + 1 - 0 packages/atoms/test/adapter.test.ts + 2 - 0 Show fewer files'
+      '+ 6 - 2 docs/plan.md + 2 - 1 packages/atoms/src/adapter.ts + 1 - 1 packages/atoms/src/index.ts + 1 - 0 packages/atoms/test/adapter.test.ts + 2 - 0 Show fewer files'
   });
+});
+
+test('file change titles distinguish create and edit operations across running and completed states', () => {
+  const title = (kind: string, status: string, files = 1) => {
+    const markup = renderToStaticMarkup(
+      <FileChangeToolHeader
+        view={{
+          additions: files,
+          deletions: 0,
+          files: Array.from({ length: files }, (_, index) => ({
+            additions: 1,
+            deletions: 0,
+            kind,
+            path: files === 1 ? '/workspace/result.ts' : `/workspace/result-${index}.ts`
+          })),
+          status
+        }}
+      />
+    );
+    return { fileIcon: markup.includes('data-file-icon="result.ts"'), text: visibleText(markup) };
+  };
+
+  expect([
+    title('create', 'running'),
+    title('create', 'completed'),
+    title('create', 'running', 3),
+    title('update', 'running'),
+    title('update', 'completed'),
+    title('update', 'completed', 4)
+  ]).toEqual([
+    { fileIcon: true, text: 'tool call Creating result.ts' },
+    { fileIcon: true, text: 'tool call Created result.ts' },
+    { fileIcon: false, text: 'tool call Creating 3 files' },
+    { fileIcon: true, text: 'tool call Editing result.ts' },
+    { fileIcon: true, text: 'tool call Edited result.ts' },
+    { fileIcon: false, text: 'tool call Edited 4 files' }
+  ]);
 });
 
 test('Codex fileChange rows truncate directories while retaining the complete filename', () => {
@@ -252,5 +293,31 @@ test('Codex fileChange rows truncate directories while retaining the complete fi
     directory: '/Users/zeke/Projects/monad/apps/web/src/components/workspace/',
     filename: 'research-desk-final.md',
     reusablePath: true
+  });
+});
+
+test('file change cards omit aggregate totals for one file and retain them for multiple files', () => {
+  const markup = (files: CodexFileChangeView['files']) =>
+    visibleText(
+      renderToStaticMarkup(
+        <CodexFileChangeCard
+          view={{
+            additions: files.reduce((total, file) => total + file.additions, 0),
+            deletions: files.reduce((total, file) => total + file.deletions, 0),
+            files,
+            status: 'completed'
+          }}
+        />
+      )
+    );
+  const first = { additions: 6, deletions: 6, kind: 'update', path: '/workspace/first.ts' };
+  const second = { additions: 2, deletions: 1, kind: 'update', path: '/workspace/second.ts' };
+
+  expect({
+    multiple: markup([first, second]),
+    single: markup([first])
+  }).toEqual({
+    multiple: '+8 -7 /workspace/first.ts +6 -6 /workspace/second.ts +2 -1',
+    single: '/workspace/first.ts +6 -6'
   });
 });

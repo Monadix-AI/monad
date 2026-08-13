@@ -19,16 +19,35 @@ export type ObservationMessageCardProps = {
   timestamp?: string;
 };
 
+function observationReasoningSummaries(summary: string | undefined): string[] {
+  return (
+    summary
+      ?.split(/\n\s*\n/)
+      .map((part) => part.trim())
+      .filter(Boolean) ?? []
+  );
+}
+
 export function observationReasoningTitle(summary: string | undefined): string | undefined {
-  const titles = summary
-    ?.split(/\n\s*\n/)
-    .map((part) => {
-      const title = part.trim();
-      const emphasized = /^(\*\*|__)([\s\S]*?)\1$/.exec(title);
-      return emphasized?.[2]?.trim() || title;
-    })
-    .filter(Boolean);
-  return titles && titles.length > 0 ? titles.join(' · ') : undefined;
+  const summaries = observationReasoningSummaries(summary);
+  if (summaries.length !== 1) return undefined;
+  const title = summaries[0];
+  if (!title) return undefined;
+  const emphasized = /^(\*\*|__)([\s\S]*?)\1$/.exec(title);
+  return emphasized?.[2]?.trim() || title;
+}
+
+export function observationReasoningTokenCount(summary: string | undefined): number | undefined {
+  const match = /thinking(?:…|\.\.\.)\s+([\d,]+)\s+tokens?\s*$/i.exec(summary?.trim() ?? '');
+  if (!match?.[1]) return undefined;
+  const count = Number(match[1].replaceAll(',', ''));
+  return Number.isSafeInteger(count) && count >= 0 ? count : undefined;
+}
+
+export function observationReasoningContent(summary: string | undefined, text: string): string {
+  return observationReasoningSummaries(summary).length > 1 && observationReasoningTokenCount(summary) === undefined
+    ? (summary?.trim() ?? text)
+    : text;
 }
 
 export function ObservationMessageCard({
@@ -44,9 +63,11 @@ export function ObservationMessageCard({
   const timestampLabel = formatMessageTimestamp(timestamp, locale);
   const reasoningState = messageRole === 'reasoning' ? { streaming, text, ...reasoning } : reasoning;
   const reasoningTitle = observationReasoningTitle(reasoningState?.summary);
-  const reasoningTriggerTitle =
-    reasoningTitle && reasoningState?.streaming ? `${t('web.reasoning.thinking')} ${reasoningTitle}` : reasoningTitle;
-  const hasReasoningContent = reasoningState?.hasContent ?? !!reasoningState?.text.trim();
+  const reasoningTokenCount = observationReasoningTokenCount(reasoningState?.summary);
+  const reasoningContent = observationReasoningContent(reasoningState?.summary, reasoningState?.text ?? '');
+  const reasoningSummaryCount = observationReasoningSummaries(reasoningState?.summary).length;
+  const hasSummaryContent = reasoningSummaryCount > 1 && reasoningTokenCount === undefined;
+  const hasReasoningContent = hasSummaryContent || (reasoningState?.hasContent ?? !!reasoningContent.trim());
   const reasoningBody = reasoningState ? (
     <Reasoning
       className={messageRole === 'reasoning' ? 'mb-0 w-full' : 'mb-2 w-full'}
@@ -58,7 +79,27 @@ export function ObservationMessageCard({
         className="min-h-6 min-w-0 overflow-hidden px-0 py-0 font-ui text-muted-foreground text-sm leading-5 disabled:pointer-events-none"
         disabled={!hasReasoningContent}
         getThinkingMessage={
-          reasoningTriggerTitle ? () => <p className="min-w-0 truncate">{reasoningTriggerTitle}</p> : undefined
+          reasoningTitle
+            ? (isStreaming, duration) => (
+                <p className="min-w-0 truncate">
+                  {isStreaming
+                    ? `${t('web.reasoning.thinking')} ${duration ?? 0}s · ${
+                        reasoningTokenCount === undefined
+                          ? reasoningTitle
+                          : t('web.model.tok', { count: reasoningTokenCount })
+                      }`
+                    : `${
+                        duration === undefined
+                          ? t('web.reasoning.thoughtFew')
+                          : t('web.reasoning.thoughtSeconds', { count: duration })
+                      } · ${
+                        reasoningTokenCount === undefined
+                          ? reasoningTitle
+                          : t('web.model.tok', { count: reasoningTokenCount })
+                      }`}
+                </p>
+              )
+            : undefined
         }
         hideChevron={!hasReasoningContent}
         iconClassName="shrink-0"
@@ -71,7 +112,7 @@ export function ObservationMessageCard({
       />
       {hasReasoningContent ? (
         <ReasoningContent className="mt-2 max-h-48 overflow-y-auto overscroll-contain text-xs">
-          {reasoningState.text}
+          {reasoningContent}
         </ReasoningContent>
       ) : null}
     </Reasoning>

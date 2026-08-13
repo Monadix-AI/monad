@@ -23,7 +23,7 @@ test('streaming reasoning uses a solving orb as its live status indicator', () =
     label: /<canvas[^>]+aria-label="([^"]+)"/.exec(markup)?.[1],
     orbCount: markup.match(/<canvas/g)?.length ?? 0,
     state: /<canvas[^>]+data-orb-state="([^"]+)"/.exec(markup)?.[1],
-    text: markup.includes('Thinking...')
+    text: markup.includes('Thinking... 0s')
   }).toEqual({
     hidden: true,
     label: 'Solving…',
@@ -38,4 +38,22 @@ test('completed reasoning returns to the static status icon', () => {
 
   expect(markup.match(/<canvas/g) ?? []).toHaveLength(0);
   expect(markup).toContain('Thought for');
+});
+
+test('completed zero-duration reasoning never falls back to the streaming label', () => {
+  const markup = renderToStaticMarkup(
+    <Reasoning
+      defaultOpen
+      duration={0}
+      isStreaming={false}
+    >
+      <ReasoningTrigger />
+      <ReasoningContent>Finished immediately.</ReasoningContent>
+    </Reasoning>
+  );
+
+  expect({
+    completed: markup.includes('Thought for 0s'),
+    streaming: markup.includes('Thinking...')
+  }).toEqual({ completed: true, streaming: false });
 });

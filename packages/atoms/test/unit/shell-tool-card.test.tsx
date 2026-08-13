@@ -10,7 +10,10 @@ import { hermesObservationProjection } from '../../src/agent-adapters/hermes/obs
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { openClawObservationProjection } from '../../src/agent-adapters/openclaw/observation.ts';
 import { qwenObservationProjection } from '../../src/agent-adapters/qwen/observation.ts';
-import { ObservationToolCardShell } from '../../src/workplace-experiences/chat-room/components/observation/card-shell.tsx';
+import {
+  ObservationToolCardShell,
+  observationElapsedSeconds
+} from '../../src/workplace-experiences/chat-room/components/observation/card-shell.tsx';
 import {
   ShellToolHeader,
   shellToolView
@@ -76,7 +79,7 @@ test('the shell card projection normalizes provider command inputs and result me
     cwd: '/workspace',
     durationMs: 420,
     exitCode: 0,
-    output: ' .../canvas.ts | 1 +\n .../projection.ts | 59 +++',
+    output: ' .../canvas.ts | 1 +\n .../projection.ts | 59 +++\n',
     provider: 'codex',
     status: 'completed',
     type: 'command_execution'
@@ -89,7 +92,7 @@ test('the shell card projection normalizes provider command inputs and result me
   });
 });
 
-test('the Claude shell card uses the Bash description as its title', () => {
+test('the Claude shell card uses the Shell title and follows it with the description summary', () => {
   const call = {
     id: 'claude-shell-call',
     kind: 'tool-call',
@@ -111,11 +114,11 @@ test('the Claude shell card uses the Bash description as its title', () => {
   const header = renderToStaticMarkup(<ShellToolHeader view={view} />);
 
   expect({ header: visibleText(header), view }).toEqual({
-    header: 'Tool call Check repo status and chat-room dir In progress',
+    header: 'Tool call Shell · Check repo status and chat-room dir In progress',
     view: {
       command: 'git status --short && ls packages/atoms/src/workplace-experiences/chat-room/',
       provider: 'claude-code',
-      title: 'Check repo status and chat-room dir',
+      summary: 'Check repo status and chat-room dir',
       type: 'Bash'
     }
   });
@@ -178,8 +181,8 @@ test('shell and generic tool timeline cards render with distinct icon kinds', ()
   expect([toolKind('shell', 'Bash'), toolKind(undefined, 'ToolSearch')]).toEqual(['command', 'tool']);
 });
 
-test('running tool kinds replace their 16px static icon and status dot with the shaping orb', () => {
-  const rendered = (kind: 'command' | 'file' | 'mcp' | 'tool') => {
+test('running tool kinds replace their static icon and status dot with the solving orb', () => {
+  const rendered = (kind: 'command' | 'file' | 'file-change' | 'mcp' | 'tool') => {
     const markup = renderToStaticMarkup(
       <ObservationToolCardShell
         header={<span>Running</span>}
@@ -190,18 +193,25 @@ test('running tool kinds replace their 16px static icon and status dot with the 
       </ObservationToolCardShell>
     );
     return {
+      elapsed: markup.includes('data-slot="observation-running-duration">0s</span>'),
+      expandedRail: markup.includes('border-l'),
       orb: /data-orb-state="([^"]+)"/.exec(markup)?.[1],
       statusDot: markup.includes('data-slot="observation-tool-status"'),
       toolKind: /data-tool-kind="([^"]+)"/.exec(markup)?.[1]
     };
   };
 
-  expect([rendered('file'), rendered('command'), rendered('mcp'), rendered('tool')]).toEqual([
-    { orb: 'shaping', statusDot: false, toolKind: 'file' },
-    { orb: 'shaping', statusDot: false, toolKind: 'command' },
-    { orb: 'shaping', statusDot: false, toolKind: 'mcp' },
-    { orb: 'shaping', statusDot: false, toolKind: 'tool' }
+  expect([rendered('file'), rendered('file-change'), rendered('command'), rendered('mcp'), rendered('tool')]).toEqual([
+    { elapsed: true, expandedRail: false, orb: 'solving', statusDot: false, toolKind: 'file' },
+    { elapsed: true, expandedRail: false, orb: 'solving', statusDot: false, toolKind: 'file-change' },
+    { elapsed: true, expandedRail: false, orb: 'solving', statusDot: false, toolKind: 'command' },
+    { elapsed: true, expandedRail: false, orb: 'solving', statusDot: false, toolKind: 'mcp' },
+    { elapsed: true, expandedRail: false, orb: 'solving', statusDot: false, toolKind: 'tool' }
   ]);
+});
+
+test('running tool elapsed time advances at one-second boundaries', () => {
+  expect([999, 1000, 1999, 2000].map((now) => observationElapsedSeconds(0, now))).toEqual([0, 1, 1, 2]);
 });
 
 test('visible text decoding applies HTML entities exactly once', () => {

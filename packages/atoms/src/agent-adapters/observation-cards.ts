@@ -4,7 +4,7 @@ import { agentObservationProvenanceSchema } from '@monad/protocol';
 import { z } from 'zod';
 
 // The experience layer's view model grouping/pairing neutral `AgentObservationEvent`s into
-// renderable units (a tool call+result pair, a codex MCP startup-progress collapse, …). The daemon
+// renderable units (a tool call+result pair, an MCP startup-progress collapse, …). The daemon
 // never produces or parses this — only `agentObservationCards()` below constructs it — so it lives
 // here rather than in `@monad/protocol` or the third-party `@monad/sdk-atom` authoring contract.
 export const agentObservationCardKindSchema = z.enum([
@@ -16,7 +16,8 @@ export const agentObservationCardKindSchema = z.enum([
   'diagnostic',
   'system',
   'unknown',
-  'codex-mcp-startup-progress'
+  'mcp-startup-progress',
+  'plan-progress'
 ]);
 export type AgentObservationCardKind = z.infer<typeof agentObservationCardKindSchema>;
 
@@ -39,10 +40,12 @@ function cardProvenance(events: AgentObservationEvent[]): AgentObservationCard['
   return { contractEvents: events.flatMap((event) => event.provenance.contractEvents) as [unknown, ...unknown[]] };
 }
 
-type CodexMcpStartupUpdate = {
+type McpStartupUpdate = {
   name: string;
   status: string;
   error?: string;
+  failureReason?: string;
+  threadId?: string;
 };
 
 function recordValue(value: unknown): Record<string, unknown> | undefined {
@@ -53,21 +56,44 @@ function textValue(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function codexMcpStartupUpdate(event: AgentObservationEvent): CodexMcpStartupUpdate | null {
-  const raw = recordValue(event.provenance.contractEvents[0]);
+function contractRawEvent(event: AgentObservationEvent): Record<string, unknown> | undefined {
+  const contract = recordValue(event.provenance.contractEvents[0]);
+  const provenance = recordValue(contract?.provenance);
+  const rawEvents = Array.isArray(provenance?.rawEvents) ? provenance.rawEvents : [];
+  return recordValue(rawEvents[0]) ?? contract;
+}
+
+function codexMcpStartupUpdate(event: AgentObservationEvent): McpStartupUpdate | null {
+  const raw = contractRawEvent(event);
   if (raw?.method !== 'mcpServer/startupStatus/updated') return null;
   const params = recordValue(raw.params);
   if (!params) return null;
   const error = textValue(params.error);
+  const failureReason = textValue(params.failureReason);
+  const threadId = textValue(params.threadId);
   return {
     name: textValue(params.name) ?? 'unknown',
     status: textValue(params.status) ?? 'updated',
-    ...(error ? { error } : {})
+    ...(error ? { error } : {}),
+    ...(failureReason ? { failureReason } : {}),
+    ...(threadId ? { threadId } : {})
   };
 }
 
-function collapseCodexMcpStartupUpdates(updates: readonly CodexMcpStartupUpdate[]): CodexMcpStartupUpdate[] {
-  const collapsed: CodexMcpStartupUpdate[] = [];
+function claudeMcpStartupUpdates(event: AgentObservationEvent): McpStartupUpdate[] | null {
+  const raw = contractRawEvent(event);
+  if (raw?.type !== 'system' || raw.subtype !== 'init' || !Array.isArray(raw.mcp_servers)) return null;
+  const servers = raw.mcp_servers.flatMap((value): McpStartupUpdate[] => {
+    const server = recordValue(value);
+    const name = textValue(server?.name);
+    if (!name) return [];
+    return [{ name, status: textValue(server?.status) ?? 'updated' }];
+  });
+  return servers.length > 0 ? servers : null;
+}
+
+function collapseMcpStartupUpdates(updates: readonly McpStartupUpdate[]): McpStartupUpdate[] {
+  const collapsed: McpStartupUpdate[] = [];
   const indexByName = new Map<string, number>();
   for (const update of updates) {
     const index = indexByName.get(update.name);
@@ -81,16 +107,148 @@ function collapseCodexMcpStartupUpdates(updates: readonly CodexMcpStartupUpdate[
   return collapsed;
 }
 
-function startupCard(events: AgentObservationEvent[], updates: CodexMcpStartupUpdate[]): AgentObservationCard {
+const MCP_STARTUP_READY = new Set(['ready', 'connected']);
+const MCP_STARTUP_FAILED = new Set(['failed', 'needs-auth']);
+// A cancelled or disabled server never finishes starting, so it must settle the card instead of
+// leaving it pending — otherwise the running indicator counts up forever.
+const MCP_STARTUP_SKIPPED = new Set(['cancelled', 'canceled', 'disabled']);
+
+type McpStartupGroup = {
+  events: AgentObservationEvent[];
+  updates: McpStartupUpdate[];
+};
+
+// Codex reports MCP startup one server at a time, and the batches are interleaved with unrelated
+// notifications (`thread/settings/updated`, `turn/started`, …). Grouping by adjacency would split a
+// single boot into a "starting" card and a later "ready/failed" card, so the whole window is keyed
+// by thread instead and rendered as one progress card.
+function mcpStartupGroups(events: readonly AgentObservationEvent[]): Map<AgentObservationEvent, McpStartupGroup> {
+  const byThread = new Map<string, McpStartupGroup>();
+  const anchors = new Map<AgentObservationEvent, McpStartupGroup>();
+  for (const event of events) {
+    const snapshot = claudeMcpStartupUpdates(event);
+    if (snapshot) {
+      anchors.set(event, { events: [event], updates: snapshot });
+      continue;
+    }
+    const update = codexMcpStartupUpdate(event);
+    if (!update) continue;
+    const key = update.threadId ?? '';
+    const group = byThread.get(key);
+    if (group) {
+      group.events.push(event);
+      group.updates.push(update);
+      continue;
+    }
+    const started: McpStartupGroup = { events: [event], updates: [update] };
+    byThread.set(key, started);
+    anchors.set(event, started);
+  }
+  return anchors;
+}
+
+function startupCard(events: AgentObservationEvent[], updates: McpStartupUpdate[]): AgentObservationCard {
   const first = events[0];
   const last = events[events.length - 1];
   if (!first || !last) throw new Error('startup card requires at least one event');
+  const servers = collapseMcpStartupUpdates(updates);
+  const ready = servers.filter((server) => MCP_STARTUP_READY.has(server.status)).length;
+  const failed = servers.filter((server) => MCP_STARTUP_FAILED.has(server.status)).length;
+  const skipped = servers.filter((server) => MCP_STARTUP_SKIPPED.has(server.status)).length;
+  const pending = servers.filter(
+    (server) =>
+      !MCP_STARTUP_READY.has(server.status) &&
+      !MCP_STARTUP_FAILED.has(server.status) &&
+      !MCP_STARTUP_SKIPPED.has(server.status)
+  );
+  const active = pending[pending.length - 1]?.name;
   return {
-    id: `codex-mcp-startup:${eventIdentity(first)}`,
-    kind: 'codex-mcp-startup-progress',
-    streaming: last.streaming,
-    payload: { updates: collapseCodexMcpStartupUpdates(updates) },
+    id: `mcp-startup:${eventIdentity(first)}`,
+    kind: 'mcp-startup-progress',
+    streaming: pending.length > 0 || last.streaming,
+    payload: {
+      servers,
+      total: servers.length,
+      ready,
+      failed,
+      skipped,
+      pending: pending.length,
+      ...(active ? { active } : {})
+    },
     provenance: cardProvenance(events),
+    ...(last.at ? { at: last.at } : {})
+  };
+}
+
+type PlanStep = {
+  status: string;
+  step: string;
+};
+
+type PlanSnapshot = {
+  steps: PlanStep[];
+  turnId?: string;
+};
+
+function codexPlanSnapshot(event: AgentObservationEvent): PlanSnapshot | null {
+  const raw = contractRawEvent(event);
+  if (raw?.method !== 'turn/plan/updated') return null;
+  const params = recordValue(raw.params);
+  if (!Array.isArray(params?.plan)) return null;
+  const steps = params.plan.flatMap((value): PlanStep[] => {
+    const entry = recordValue(value);
+    const step = textValue(entry?.step);
+    return step ? [{ status: textValue(entry?.status) ?? 'pending', step }] : [];
+  });
+  if (steps.length === 0) return null;
+  const turnId = textValue(params.turnId);
+  return { steps, ...(turnId ? { turnId } : {}) };
+}
+
+type PlanGroup = {
+  events: AgentObservationEvent[];
+  snapshot: PlanSnapshot;
+};
+
+// Every `turn/plan/updated` carries the whole plan, so a turn's later frames supersede its earlier
+// ones instead of adding to them — the card keeps one row per turn and renders the newest snapshot.
+function planGroups(events: readonly AgentObservationEvent[]): Map<AgentObservationEvent, PlanGroup> {
+  const byTurn = new Map<string, PlanGroup>();
+  const anchors = new Map<AgentObservationEvent, PlanGroup>();
+  for (const event of events) {
+    const snapshot = codexPlanSnapshot(event);
+    if (!snapshot) continue;
+    const group = byTurn.get(snapshot.turnId ?? '');
+    if (group) {
+      group.events.push(event);
+      group.snapshot = snapshot;
+      continue;
+    }
+    const started: PlanGroup = { events: [event], snapshot };
+    byTurn.set(snapshot.turnId ?? '', started);
+    anchors.set(event, started);
+  }
+  return anchors;
+}
+
+function planCard(group: PlanGroup): AgentObservationCard {
+  const first = group.events[0];
+  const last = group.events[group.events.length - 1];
+  if (!first || !last) throw new Error('plan card requires at least one event');
+  const steps = group.snapshot.steps;
+  const completed = steps.filter((step) => step.status === 'completed').length;
+  const active = steps.find((step) => step.status === 'inProgress')?.step;
+  return {
+    id: `plan:${eventIdentity(first)}`,
+    kind: 'plan-progress',
+    streaming: completed < steps.length,
+    payload: {
+      completed,
+      steps,
+      total: steps.length,
+      ...(active ? { active } : {})
+    },
+    provenance: cardProvenance(group.events),
     ...(last.at ? { at: last.at } : {})
   };
 }
@@ -156,6 +314,8 @@ export function agentObservationCards(
 ): AgentObservationCard[] {
   const resultsByCallId = toolResultIndexesByCallId(events);
   const pairedResults = new Set<AgentObservationEvent>();
+  const startupAnchors = mcpStartupGroups(events);
+  const planAnchors = planGroups(events);
   const cards: AgentObservationCard[] = [];
 
   for (let index = 0; index < events.length; index += 1) {
@@ -163,22 +323,19 @@ export function agentObservationCards(
     if (!event) continue;
     if (pairedResults.has(event)) continue;
 
-    const startup = codexMcpStartupUpdate(event);
-    if (startup) {
-      const startupEvents = [event];
-      const updates = [startup];
-      while (index + 1 < events.length) {
-        const next = events[index + 1];
-        if (!next) break;
-        const nextUpdate = codexMcpStartupUpdate(next);
-        if (!nextUpdate) break;
-        startupEvents.push(next);
-        updates.push(nextUpdate);
-        index += 1;
-      }
-      cards.push(startupCard(startupEvents, updates));
+    const startupGroup = startupAnchors.get(event);
+    if (startupGroup) {
+      cards.push(startupCard(startupGroup.events, startupGroup.updates));
       continue;
     }
+    if (codexMcpStartupUpdate(event) || claudeMcpStartupUpdates(event)) continue;
+
+    const planGroup = planAnchors.get(event);
+    if (planGroup) {
+      cards.push(planCard(planGroup));
+      continue;
+    }
+    if (codexPlanSnapshot(event)) continue;
 
     if (event.kind === 'tool-call') {
       // Pair strictly by `callId`. Adjacency is not a correlation signal: the convenience plane is

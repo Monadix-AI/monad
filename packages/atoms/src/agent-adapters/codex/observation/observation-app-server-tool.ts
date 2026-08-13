@@ -146,7 +146,7 @@ export function codexAppServerToolResultObservation(args: {
       : undefined;
   const output =
     imageResult ??
-    textValue(
+    rawTextValue(
       args.item.output,
       args.item.result,
       args.item.results,

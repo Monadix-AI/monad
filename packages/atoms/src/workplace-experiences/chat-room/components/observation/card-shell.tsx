@@ -4,6 +4,7 @@ import type { ObservationVisualRole, OrbState } from '@monad/ui';
 import {
   ArrowDown01Icon,
   FileCodeIcon,
+  FileEditIcon,
   LinkSquare01Icon,
   TerminalIcon,
   Wrench01Icon
@@ -11,6 +12,7 @@ import {
 import { HugeiconsIcon } from '@hugeicons/react';
 import { ObservationCard, ThinkingOrb } from '@monad/ui';
 import { requestVirtualListRowMeasurement } from '@monad/ui/components/VirtualList';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { useObservationDisclosure } from './disclosure.tsx';
 
@@ -36,8 +38,31 @@ export function ObservationCardShell({
   );
 }
 
-type ObservationToolKind = 'command' | 'file' | 'mcp' | 'tool';
+type ObservationToolKind = 'command' | 'file' | 'file-change' | 'mcp' | 'tool';
 export type ObservationToolStatus = 'error' | 'running' | 'success';
+
+export function observationElapsedSeconds(startedAt: number, now: number): number {
+  return Math.max(0, Math.floor((now - startedAt) / 1000));
+}
+
+export function ObservationRunningDuration({ running }: { running: boolean }): React.ReactElement | null {
+  const [seconds, setSeconds] = useState(0);
+  useEffect(() => {
+    if (!running) return;
+    const startedAt = Date.now();
+    setSeconds(0);
+    const timer = setInterval(() => setSeconds(observationElapsedSeconds(startedAt, Date.now())), 1000);
+    return () => clearInterval(timer);
+  }, [running]);
+  return running ? (
+    <span
+      className="shrink-0 text-muted-foreground tabular-nums"
+      data-slot="observation-running-duration"
+    >
+      {seconds}s
+    </span>
+  ) : null;
+}
 
 export function ObservationToolStatusIndicator({
   status
@@ -67,7 +92,7 @@ export function ObservationToolCardShell({
   error = false,
   header,
   kind,
-  runningOrbState = 'shaping',
+  runningOrbState = 'solving',
   status,
   timestamp
 }: {
@@ -82,19 +107,25 @@ export function ObservationToolCardShell({
 }): React.ReactElement {
   const resolvedStatus = error ? 'error' : status;
   const [open, setOpen] = useObservationDisclosure('card', defaultOpen);
+  const cardRef = useRef<HTMLDetailsElement>(null);
+  const measuredOpenRef = useRef(open);
+  useLayoutEffect(() => {
+    if (measuredOpenRef.current === open) return;
+    measuredOpenRef.current = open;
+    const card = cardRef.current;
+    if (card) requestVirtualListRowMeasurement(card);
+  }, [open]);
   return (
     <details
       className="group/tool rounded-md open:bg-secondary/15"
       data-slot="observation-tool-card"
       data-tool-kind={kind}
       data-visual-role={resolvedStatus === 'error' ? 'error' : 'tool'}
-      onToggle={(event) => {
-        setOpen(event.currentTarget.open);
-        requestVirtualListRowMeasurement(event.currentTarget);
-      }}
+      onToggle={(event) => setOpen(event.currentTarget.open)}
       open={open}
+      ref={cardRef}
     >
-      <summary className="group/tool-trigger flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-0 py-0 text-left font-ui text-muted-foreground text-sm leading-5 transition-colors hover:bg-secondary/40 hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
+      <summary className="group/tool-trigger flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-0 py-0 text-left font-ui text-muted-foreground text-sm leading-5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
         {resolvedStatus === 'running' ? (
           <ThinkingOrb
             aria-hidden="true"
@@ -116,6 +147,7 @@ export function ObservationToolCardShell({
         <div className="min-w-0 flex-[0_1_auto] [&_span]:transition-colors group-hover/tool-trigger:[&_span]:text-foreground">
           {header}
         </div>
+        <ObservationRunningDuration running={resolvedStatus === 'running'} />
         <ObservationToolStatusIndicator status={resolvedStatus === 'running' ? undefined : resolvedStatus} />
         <HugeiconsIcon
           aria-hidden="true"
@@ -128,13 +160,14 @@ export function ObservationToolCardShell({
           <time className="ml-auto shrink-0 font-ui text-[10px] text-muted-foreground/70">{timestamp}</time>
         ) : null}
       </summary>
-      <div className="ml-3 border-border/50 border-l py-2 pr-2 pl-5">{children}</div>
+      <div className="py-2">{children}</div>
     </details>
   );
 }
 
 function observationToolIcon(kind: ObservationToolKind): IconSvgElement {
   if (kind === 'command') return TerminalIcon;
+  if (kind === 'file-change') return FileEditIcon;
   if (kind === 'file') return FileCodeIcon;
   if (kind === 'mcp') return LinkSquare01Icon;
   return Wrench01Icon;

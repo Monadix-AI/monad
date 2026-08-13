@@ -5,7 +5,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
-import { claudeFileChangeView } from '../../src/workplace-experiences/chat-room/components/observation/codex-file-change-card.tsx';
+import {
+  claudeFileChangeView,
+  fileChangeStatus
+} from '../../src/workplace-experiences/chat-room/components/observation/codex-file-change-card.tsx';
 import {
   ObservationTimelineRowView,
   observationTimelineEntries,
@@ -55,6 +58,15 @@ function claudeFileToolPipeline(tool: 'Write' | 'Edit' | 'MultiEdit', input: Rec
   };
 }
 
+test('file changes normalize Codex and Claude running statuses before choosing the orb', () => {
+  expect(['inProgress', 'in_progress', 'running', 'pending'].map(fileChangeStatus)).toEqual([
+    'running',
+    'running',
+    'running',
+    'running'
+  ]);
+});
+
 test('Claude Write renders through the shared file-edit card', () => {
   const projected = claudeFileToolPipeline('Write', {
     file_path: '/workspace/src/new-file.ts',
@@ -63,9 +75,11 @@ test('Claude Write renders through the shared file-edit card', () => {
 
   expect({
     sharedCard: projected.markup.includes('data-codex-file-change-card="true"'),
+    toolKind: /data-tool-kind="([^"]+)"/.exec(projected.markup)?.[1],
     view: projected.view
   }).toEqual({
     sharedCard: true,
+    toolKind: 'file-change',
     view: {
       additions: 1,
       deletions: 0,

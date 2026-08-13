@@ -1,6 +1,29 @@
 import type { FileReadToolView, ObservationItem } from './types.ts';
 
-export { FileReadCard as FileReadToolCard, FileReadCardHeader as FileReadToolHeader } from '@monad/ui';
+import { FileReadCardHeader } from '@monad/ui';
+
+import { workplaceExperienceT } from '../../../i18n.ts';
+
+export { FileReadCard as FileReadToolCard } from '@monad/ui';
+
+export function FileReadToolHeader({
+  completed,
+  quiet = false,
+  view
+}: {
+  completed: boolean;
+  quiet?: boolean;
+  view: FileReadToolView;
+}): React.ReactElement {
+  const t = workplaceExperienceT();
+  return (
+    <FileReadCardHeader
+      quiet={quiet}
+      title={t(completed ? 'web.workplace.fileRead.read' : 'web.workplace.fileRead.reading')}
+      view={view}
+    />
+  );
+}
 
 export function isFileReadToolCall(call: ObservationItem): boolean {
   const name = call.tool?.name;
@@ -85,7 +108,7 @@ function partialJsonStringField(input: string, key: string): string | undefined 
 }
 
 function toolOutput(output: unknown): string | undefined {
-  if (typeof output === 'string') return output.trim() || undefined;
+  if (typeof output === 'string') return output.length > 0 ? output : undefined;
   if (output === undefined || output === null) return undefined;
   try {
     return JSON.stringify(output, null, 2);

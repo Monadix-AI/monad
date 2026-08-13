@@ -139,9 +139,7 @@ const highlighterCache = new Map<string, Promise<HighlighterGeneric<BundledLangu
 
 // Token cache
 const tokensCache = new Map<string, TokenizedCode>();
-
-// Subscribers for async token updates
-const subscribers = new Map<string, Set<(result: TokenizedCode) => void>>();
+const tokenizationCache = new Map<string, Promise<TokenizedCode>>();
 
 const getTokensCacheKey = (code: string, language: BundledLanguage) => {
   const start = code.slice(0, 100);
@@ -180,65 +178,57 @@ const createRawTokens = (code: string): TokenizedCode => ({
   )
 });
 
-// Synchronous highlight with callback for async results
-const highlightCode = (
-  code: string,
-  language: BundledLanguage,
-  // oxlint-disable-next-line eslint-plugin-promise(prefer-await-to-callbacks)
-  callback?: (result: TokenizedCode) => void
-): TokenizedCode | null => {
+const highlightedTokens = (code: string, language: BundledLanguage): Promise<TokenizedCode> => {
   const tokensCacheKey = getTokensCacheKey(code, language);
-
-  // Return cached result if available
   const cached = tokensCache.get(tokensCacheKey);
-  if (cached) {
-    return cached;
-  }
+  if (cached) return Promise.resolve(cached);
+  const pending = tokenizationCache.get(tokensCacheKey);
+  if (pending) return pending;
 
-  // Subscribe callback if provided
-  if (callback) {
-    if (!subscribers.has(tokensCacheKey)) {
-      subscribers.set(tokensCacheKey, new Set());
-    }
-    subscribers.get(tokensCacheKey)?.add(callback);
-  }
-
-  // Start highlighting in background - fire-and-forget async pattern
-  getHighlighter(language)
-    // oxlint-disable-next-line eslint-plugin-promise(prefer-await-to-then)
-    .then((highlighter) => {
-      const availableLangs = highlighter.getLoadedLanguages();
-      const langToUse = availableLangs.includes(language) ? language : 'text';
-
-      const result = highlighter.codeToTokens(code, {
-        lang: langToUse,
-        themes: SHIKI_THEMES
-      });
-
-      const tokenized: TokenizedCode = {
-        bg: result.bg ?? 'transparent',
-        fg: result.fg ?? 'inherit',
-        tokens: result.tokens
-      };
-
-      // Cache the result
-      tokensCache.set(tokensCacheKey, tokenized);
-
-      // Notify all subscribers
-      const subs = subscribers.get(tokensCacheKey);
-      if (subs) {
-        for (const sub of subs) {
-          sub(tokenized);
-        }
-        subscribers.delete(tokensCacheKey);
-      }
-    })
-    // oxlint-disable-next-line eslint-plugin-promise(prefer-await-to-then), eslint-plugin-promise(prefer-await-to-callbacks)
-    .catch(() => {
-      subscribers.delete(tokensCacheKey);
+  const tokenization = getHighlighter(language).then((highlighter) => {
+    const availableLangs = highlighter.getLoadedLanguages();
+    const langToUse = availableLangs.includes(language) ? language : 'text';
+    const result = highlighter.codeToTokens(code, {
+      lang: langToUse,
+      themes: SHIKI_THEMES
     });
+    const tokenized: TokenizedCode = {
+      bg: result.bg ?? 'transparent',
+      fg: result.fg ?? 'inherit',
+      tokens: result.tokens
+    };
+    tokensCache.set(tokensCacheKey, tokenized);
+    return tokenized;
+  });
+  tokenizationCache.set(tokensCacheKey, tokenization);
+  void tokenization.then(
+    () => tokenizationCache.delete(tokensCacheKey),
+    () => tokenizationCache.delete(tokensCacheKey)
+  );
+  return tokenization;
+};
 
-  return null;
+const useHighlightedCode = (code: string, language: BundledLanguage): TokenizedCode => {
+  const key = getTokensCacheKey(code, language);
+  const rawTokens = useMemo(() => createRawTokens(code), [code]);
+  const cached = tokensCache.get(key);
+  const [resolved, setResolved] = useState<{ key: string; value: TokenizedCode } | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    void highlightedTokens(code, language).then(
+      (value) => {
+        if (!cancelled) setResolved({ key, value });
+      },
+      () => undefined
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [code, key, language]);
+
+  if (cached) return cached;
+  return resolved?.key === key ? resolved.value : rawTokens;
 };
 
 const CodeBlockBody = memo(
@@ -367,37 +357,7 @@ const CodeBlockContent = ({
   scrollShadowSize?: number;
   showLineNumbers?: boolean;
 }) => {
-  // Memoized raw tokens for immediate display
-  const rawTokens = useMemo(() => createRawTokens(code), [code]);
-
-  // Synchronous cache lookup — avoids setState in effect for cached results
-  const syncTokens = useMemo(() => highlightCode(code, language) ?? rawTokens, [code, language, rawTokens]);
-
-  // Async highlighting result (populated after shiki loads)
-  const [asyncTokens, setAsyncTokens] = useState<TokenizedCode | null>(null);
-  const asyncKeyRef = useRef({ code, language });
-
-  // Invalidate stale async tokens synchronously during render
-  if (asyncKeyRef.current.code !== code || asyncKeyRef.current.language !== language) {
-    asyncKeyRef.current = { code, language };
-    setAsyncTokens(null);
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    highlightCode(code, language, (result) => {
-      if (!cancelled) {
-        setAsyncTokens(result);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [code, language]);
-
-  const tokenized = asyncTokens ?? syncTokens;
+  const tokenized = useHighlightedCode(code, language);
 
   const content = (
     <>
@@ -443,31 +403,7 @@ export const CodeInline = ({
   language: BundledLanguage;
   className?: string;
 }) => {
-  const rawTokens = useMemo(() => createRawTokens(code), [code]);
-  const syncTokens = useMemo(() => highlightCode(code, language) ?? rawTokens, [code, language, rawTokens]);
-  const [asyncTokens, setAsyncTokens] = useState<TokenizedCode | null>(null);
-  const asyncKeyRef = useRef({ code, language });
-
-  if (asyncKeyRef.current.code !== code || asyncKeyRef.current.language !== language) {
-    asyncKeyRef.current = { code, language };
-    setAsyncTokens(null);
-  }
-
-  useEffect(() => {
-    let cancelled = false;
-
-    highlightCode(code, language, (result) => {
-      if (!cancelled) {
-        setAsyncTokens(result);
-      }
-    });
-
-    return () => {
-      cancelled = true;
-    };
-  }, [code, language]);
-
-  const tokenized = asyncTokens ?? syncTokens;
+  const tokenized = useHighlightedCode(code, language);
   const tokens = tokenized.tokens.flatMap((line, lineIndex) =>
     line.map((token, tokenIndex) => ({
       key: `line-${lineIndex}-${tokenIndex}`,

@@ -8,6 +8,8 @@ import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { rawJsonText } from '../../src/workplace-experiences/chat-room/components/observation/card-shell.tsx';
+import { commandToolView } from '../../src/workplace-experiences/chat-room/components/observation/command-card.tsx';
+import { fileReadToolView } from '../../src/workplace-experiences/chat-room/components/observation/file-read-card.tsx';
 import { imageToolView } from '../../src/workplace-experiences/chat-room/components/observation/image-tool-card.tsx';
 import {
   observationContractRawEvents,
@@ -394,11 +396,15 @@ test('Qwen Code observation uses SDK-shaped assistant and result messages', () =
   ]);
 });
 
-test('Codex app-server observation renders reasoning and diff streams', () => {
+test('Codex app-server observation renders reasoning without exposing cumulative turn diffs as tool events', () => {
   const output = [
     JSON.stringify({ method: 'item/reasoning/summaryTextDelta', params: { itemId: 'r1', delta: 'Considering ' } }),
     JSON.stringify({ method: 'item/reasoning/summaryTextDelta', params: { itemId: 'r1', delta: 'the plan.' } }),
-    JSON.stringify({ method: 'turn/diff/updated', params: { threadId: 't', turnId: 'u', diff: '--- a\n+++ b\n' } })
+    JSON.stringify({ method: 'turn/diff/updated', params: { threadId: 't', turnId: 'u', diff: '--- a\n+++ b\n' } }),
+    JSON.stringify({
+      method: 'turn/diff/updated',
+      params: { threadId: 't', turnId: 'u', diff: '--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new\n' }
+    })
   ].join('\n');
 
   const items = meshAgentStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output });
@@ -417,8 +423,7 @@ test('Codex app-server observation renders reasoning and diff streams', () => {
       summary: 'Considering the plan.',
       type: 'item/reasoning/delta',
       text: 'Thinking…'
-    },
-    { hasContent: undefined, role: 'tool', summary: undefined, type: 'turn/diff/updated', text: '--- a\n+++ b\n' }
+    }
   ]);
 });
 
@@ -1292,7 +1297,7 @@ test('Codex app-server observation keeps a lone chunk raw record unwrapped', () 
   expect(items[0]?.provenance.rawEvents).toEqual([record]);
 });
 
-test('Codex MCP startup status stays unknown instead of becoming a tool call', () => {
+test('Codex MCP startup status stays unknown and becomes a startup card through the live pipeline', () => {
   const raw = {
     method: 'mcpServer/startupStatus/updated',
     params: {
@@ -1303,19 +1308,46 @@ test('Codex MCP startup status stays unknown instead of becoming a tool call', (
     }
   };
 
-  expect(
-    meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output: JSON.stringify(raw) }).map(
-      neutralSnapshot
-    )
-  ).toEqual([
-    {
-      id: 'mesh_codex0000000:json:0:mcp-status',
-      kind: 'unknown',
-      streaming: false,
-      text: 'codex-security ready',
-      rawEvents: [raw]
-    }
-  ]);
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_codex0000000',
+    provider: 'codex',
+    output: JSON.stringify(raw)
+  });
+
+  expect({
+    events: events.map(neutralSnapshot),
+    cards: agentObservationCards(events, 'codex').map(({ id, kind, streaming, payload }) => ({
+      id,
+      kind,
+      streaming,
+      payload
+    }))
+  }).toEqual({
+    events: [
+      {
+        id: 'mesh_codex0000000:json:0:mcp-status',
+        kind: 'unknown',
+        streaming: false,
+        text: 'codex-security ready',
+        rawEvents: [raw]
+      }
+    ],
+    cards: [
+      {
+        id: 'mcp-startup:mesh_codex0000000:json:0:mcp-status',
+        kind: 'mcp-startup-progress',
+        streaming: false,
+        payload: {
+          failed: 0,
+          pending: 0,
+          ready: 1,
+          servers: [{ name: 'codex-security', status: 'ready', threadId: 'thread_1' }],
+          skipped: 0,
+          total: 1
+        }
+      }
+    ]
+  });
 });
 
 test('chat timeline groups consecutive Codex MCP startup statuses and keeps each server latest state', () => {
@@ -1345,12 +1377,17 @@ test('chat timeline groups consecutive Codex MCP startup statuses and keeps each
     {
       kind: 'public',
       card: {
-        kind: 'codex-mcp-startup-progress',
+        kind: 'mcp-startup-progress',
         payload: {
-          updates: [
+          failed: 0,
+          pending: 0,
+          ready: 2,
+          servers: [
             { name: 'codex-security', status: 'ready' },
             { name: 'node_repl', status: 'ready' }
-          ]
+          ],
+          skipped: 0,
+          total: 2
         }
       }
     }
@@ -1392,13 +1429,20 @@ test('chat timeline recognizes Codex MCP startup raw records after legacy system
     )
   ).toEqual([
     {
-      id: 'codex-mcp-startup:legacy-startup',
+      id: 'mcp-startup:legacy-startup',
       kind: 'public',
       card: {
-        id: 'codex-mcp-startup:legacy-startup',
-        kind: 'codex-mcp-startup-progress',
+        id: 'mcp-startup:legacy-startup',
+        kind: 'mcp-startup-progress',
         streaming: false,
-        payload: { updates: [{ name: 'codex_apps', status: 'ready' }] },
+        payload: {
+          failed: 0,
+          pending: 0,
+          ready: 1,
+          servers: [{ name: 'codex_apps', status: 'ready', threadId: '019f6b1f-a60e-7d82-9dd0-3f6dfbc46e5a' }],
+          skipped: 0,
+          total: 1
+        },
         provenance: { contractEvents: [raw] }
       },
       contractEvents: [raw]
@@ -1406,7 +1450,64 @@ test('chat timeline recognizes Codex MCP startup raw records after legacy system
   ]);
 });
 
-test('chat timeline splits Codex startup groups around ordinary messages', () => {
+test('chat timeline merges Codex startup batches split by unrelated events into one thread progress card', () => {
+  const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
+    id,
+    kind: 'unknown',
+    streaming: false,
+    text: id,
+    provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] }
+  });
+  const thread = '019ffadc-2dcb-73f2-b464-76a2a081657e';
+  const entries = observationTimelineEntries(
+    cardsFromNeutral(
+      [
+        startup('shadcn-starting', { threadId: thread, name: 'shadcn', status: 'starting' }),
+        startup('monad-starting', { threadId: thread, name: 'monad', status: 'starting' }),
+        {
+          id: 'turn',
+          kind: 'turn-start',
+          streaming: false,
+          text: 'turn/started',
+          provenance: { contractEvents: [{ method: 'turn/started', params: {} }] }
+        },
+        startup('monad-ready', { threadId: thread, name: 'monad', status: 'ready' }),
+        startup('shadcn-failed', {
+          threadId: thread,
+          name: 'shadcn',
+          status: 'failed',
+          error: 'MCP startup failed: connection closed',
+          failureReason: 'reauthenticationRequired'
+        })
+      ],
+      'codex'
+    ),
+    'codex'
+  );
+  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual([
+    'mcp-startup-progress',
+    'turn'
+  ]);
+  expect(entries[0]?.kind === 'public' ? entries[0].card.payload : undefined).toEqual({
+    failed: 1,
+    pending: 0,
+    ready: 1,
+    servers: [
+      {
+        error: 'MCP startup failed: connection closed',
+        failureReason: 'reauthenticationRequired',
+        name: 'shadcn',
+        status: 'failed',
+        threadId: thread
+      },
+      { name: 'monad', status: 'ready', threadId: thread }
+    ],
+    skipped: 0,
+    total: 2
+  });
+});
+
+test('chat timeline reports the in-flight Codex MCP server and keeps separate threads apart', () => {
   const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
     id,
     kind: 'unknown',
@@ -1417,32 +1518,47 @@ test('chat timeline splits Codex startup groups around ordinary messages', () =>
   const entries = observationTimelineEntries(
     cardsFromNeutral(
       [
-        startup('first', { name: 'codex-security', status: 'failed', error: 'timeout' }),
-        {
-          id: 'message',
-          kind: 'assistant-message',
-          streaming: false,
-          text: 'Continuing.',
-          provenance: { contractEvents: [{ type: 'assistant', text: 'Continuing.' }] }
-        },
-        startup('second', {})
+        startup('a-ready', { threadId: 'thread-a', name: 'monad', status: 'ready' }),
+        startup('a-starting', { threadId: 'thread-a', name: 'codex_apps', status: 'starting' }),
+        startup('b-ready', { threadId: 'thread-b', name: 'codegraph', status: 'ready' })
       ],
       'codex'
     ),
     'codex'
   );
-  expect(entries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual([
-    'codex-mcp-startup-progress',
-    'message',
-    'codex-mcp-startup-progress'
-  ]);
   expect(
     entries.flatMap((entry) =>
-      entry.kind === 'public' && entry.card.kind === 'codex-mcp-startup-progress' ? [entry.card.payload.updates] : []
+      entry.kind === 'public' && entry.card.kind === 'mcp-startup-progress'
+        ? [{ payload: entry.card.payload, streaming: entry.card.streaming }]
+        : []
     )
   ).toEqual([
-    [{ error: 'timeout', name: 'codex-security', status: 'failed' }],
-    [{ name: 'unknown', status: 'updated' }]
+    {
+      payload: {
+        active: 'codex_apps',
+        failed: 0,
+        pending: 1,
+        ready: 1,
+        servers: [
+          { name: 'monad', status: 'ready', threadId: 'thread-a' },
+          { name: 'codex_apps', status: 'starting', threadId: 'thread-a' }
+        ],
+        skipped: 0,
+        total: 2
+      },
+      streaming: true
+    },
+    {
+      payload: {
+        failed: 0,
+        pending: 0,
+        ready: 1,
+        servers: [{ name: 'codegraph', status: 'ready', threadId: 'thread-b' }],
+        skipped: 0,
+        total: 1
+      },
+      streaming: false
+    }
   ]);
 });
 
@@ -2208,14 +2324,18 @@ test('Codex app-server observation projects turns page responses', () => {
   ]);
 });
 
-test('Codex app-server full turn reasoning projects each summary as a separate item', () => {
+test('Codex app-server full turn reasoning keeps every summary in one expandable item', () => {
   const output = JSON.stringify({
     id: 'turn_with_summary',
     items: [
       {
         type: 'reasoning',
         id: 'item_reasoning',
-        summary: ['**Enumerating MCP tools by server grouping**', '**Checking tool availability**'],
+        summary: [
+          '**Analyzing package test failures and reruns**',
+          '**Comparing baseline and new test failures**',
+          '**Planning typecheck and lint rerun**'
+        ],
         content: []
       }
     ],
@@ -2234,13 +2354,8 @@ test('Codex app-server full turn reasoning projects each summary as a separate i
     {
       hasContent: false,
       kind: 'reasoning',
-      summary: '**Enumerating MCP tools by server grouping**',
-      text: 'Thinking…'
-    },
-    {
-      hasContent: false,
-      kind: 'reasoning',
-      summary: '**Checking tool availability**',
+      summary:
+        '**Analyzing package test failures and reruns**\n\n**Comparing baseline and new test failures**\n\n**Planning typecheck and lint rerun**',
       text: 'Thinking…'
     },
     { hasContent: undefined, kind: 'turn-end', summary: undefined, text: 'Turn completed' }
@@ -3186,6 +3301,51 @@ test('observation card projection normalizes JSON-like generic tool output', () 
   ).toEqual(['\n"{\\"ok\\":true}"\n']);
 });
 
+test('tool outputs preserve provider whitespace through projection and specialized card views', () => {
+  const rawOutput = '  first line\n    indented line\n\n';
+  const projected = meshAgentNeutralStreamItems({
+    id: 'mesh_gemini_whitespace',
+    provider: 'gemini',
+    output: JSON.stringify({ type: 'tool_result', output: rawOutput })
+  });
+  const result = projected.find((item) => item.kind === 'tool-result');
+  if (!result) throw new Error('Expected projected tool result');
+  const shell = commandToolView(
+    {
+      id: 'shell-call-whitespace',
+      kind: 'tool-call',
+      streaming: false,
+      tool: { name: 'shell', category: 'shell', callId: 'call_whitespace', input: 'pwd' },
+      provenance: { contractEvents: [{}] }
+    },
+    {
+      ...result,
+      tool: { ...result.tool, name: 'shell', callId: 'call_whitespace', output: rawOutput, status: 'completed' }
+    },
+    'gemini'
+  );
+  const fileRead = fileReadToolView(
+    {
+      id: 'read-call-whitespace',
+      kind: 'tool-call',
+      streaming: false,
+      tool: { name: 'Read', callId: 'read_whitespace', input: { path: '/tmp/example.txt' } },
+      provenance: { contractEvents: [{}] }
+    },
+    {
+      ...result,
+      tool: { ...result.tool, name: 'Read', callId: 'read_whitespace', output: rawOutput, status: 'completed' }
+    },
+    'gemini'
+  );
+
+  expect({ fileRead: fileRead?.content, projected: result.text, shell: shell?.output }).toEqual({
+    fileRead: rawOutput,
+    projected: rawOutput,
+    shell: rawOutput
+  });
+});
+
 test('observation card projection maps standalone Codex function call output to the shared command card', () => {
   const entries = renderTimeline([
     {
@@ -3332,5 +3492,146 @@ test('Claude Code observation keeps result-delimited SDK queries in timeline ord
     'claude-code-sdk',
     'claude-code-sdk',
     'claude-code-sdk'
+  ]);
+});
+
+test('Codex plan updates collapse per turn into one card holding the newest snapshot', () => {
+  const output = [
+    JSON.stringify({
+      method: 'turn/plan/updated',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        plan: [
+          { step: 'Capture the baseline', status: 'inProgress' },
+          { step: 'Implement the projection', status: 'pending' }
+        ]
+      }
+    }),
+    JSON.stringify({ method: 'item/agentMessage/delta', params: { delta: 'Working.' } }),
+    JSON.stringify({
+      method: 'turn/plan/updated',
+      params: {
+        threadId: 'thread-1',
+        turnId: 'turn-1',
+        plan: [
+          { step: 'Capture the baseline', status: 'completed' },
+          { step: 'Implement the projection', status: 'inProgress' }
+        ]
+      }
+    }),
+    JSON.stringify({
+      method: 'turn/plan/updated',
+      params: { threadId: 'thread-1', turnId: 'turn-2', plan: [{ step: 'Report the handoff', status: 'completed' }] }
+    })
+  ].join('\n');
+
+  const cards = cardsFromNeutral(
+    meshAgentNeutralStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output }),
+    'codex'
+  );
+
+  expect(
+    cards.flatMap((card) =>
+      card.kind === 'plan-progress' ? [{ payload: card.payload, streaming: card.streaming }] : []
+    )
+  ).toEqual([
+    {
+      payload: {
+        active: 'Implement the projection',
+        completed: 1,
+        steps: [
+          { status: 'completed', step: 'Capture the baseline' },
+          { status: 'inProgress', step: 'Implement the projection' }
+        ],
+        total: 2
+      },
+      streaming: true
+    },
+    {
+      payload: {
+        completed: 1,
+        steps: [{ status: 'completed', step: 'Report the handoff' }],
+        total: 1
+      },
+      streaming: false
+    }
+  ]);
+});
+
+test('Codex retryable stream errors project as warnings and successful hooks stay out of the timeline', () => {
+  const retry = {
+    method: 'error',
+    params: {
+      error: {
+        message: 'Reconnecting... 2/5',
+        additionalDetails: 'stream disconnected before completion: tls handshake eof'
+      },
+      willRetry: true,
+      threadId: 'thread-1'
+    }
+  };
+  const hookOk = {
+    method: 'hook/completed',
+    params: { threadId: 'thread-1', run: { eventName: 'sessionStart', status: 'completed', durationMs: 531 } }
+  };
+  const hookFailed = {
+    method: 'hook/completed',
+    params: {
+      threadId: 'thread-1',
+      run: { eventName: 'preToolUse', status: 'failed', statusMessage: 'exit code 1' }
+    }
+  };
+
+  expect(
+    meshAgentNeutralStreamItems({
+      id: 'mesh_codex0000000',
+      provider: 'codex',
+      output: [retry, hookOk, hookFailed].map((record) => JSON.stringify(record)).join('\n')
+    }).map((event) => ({ diagnostic: event.diagnostic, text: event.text }))
+  ).toEqual([
+    {
+      diagnostic: {
+        severity: 'warning',
+        message: 'Reconnecting... 2/5',
+        detail: 'stream disconnected before completion: tls handshake eof'
+      },
+      text: 'Reconnecting... 2/5'
+    },
+    {
+      diagnostic: { severity: 'warning', message: 'Hook preToolUse failed', detail: 'exit code 1' },
+      text: 'Hook preToolUse failed'
+    }
+  ]);
+});
+
+test('a cancelled Codex MCP boot stops the startup card from streaming', () => {
+  const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
+    id,
+    kind: 'unknown',
+    streaming: false,
+    text: id,
+    provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] }
+  });
+  const cards = cardsFromNeutral(
+    [
+      startup('starting', { threadId: 'thread-1', name: 'codex_apps', status: 'starting' }),
+      startup('cancelled', { threadId: 'thread-1', name: 'codex_apps', status: 'cancelled' })
+    ],
+    'codex'
+  );
+
+  expect(cards.map((card) => ({ payload: card.payload, streaming: card.streaming }))).toEqual([
+    {
+      payload: {
+        failed: 0,
+        pending: 0,
+        ready: 0,
+        servers: [{ name: 'codex_apps', status: 'cancelled', threadId: 'thread-1' }],
+        skipped: 1,
+        total: 1
+      },
+      streaming: false
+    }
   ]);
 });
