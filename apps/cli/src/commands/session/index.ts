@@ -3,7 +3,7 @@ import type { SessionCommandDef } from './types.ts';
 
 import { t } from '../../lib/i18n.ts';
 import { checkInitialized } from '../../lib/init-flow.ts';
-import { bold, dim } from '../../lib/output.ts';
+import { bold, cyan, dim, green } from '../../lib/output.ts';
 import { CliError, EXIT, FLAG_COL } from '../types.ts';
 import { command as abort } from './abort.ts';
 import { command as branch } from './branch.ts';
@@ -44,9 +44,15 @@ function buildSessionUsage(): string {
   const rows = sessionCommands.map((c) => {
     const aliasHint = c.aliases?.length ? dim(`  (${c.aliases.join(', ')})`) : '';
     const desc = c.descriptionKey ? t(c.descriptionKey) : c.description;
-    return `  ${bold(c.synopsis.padEnd(colWidth))}${desc}${aliasHint}`;
+    const separator = c.synopsis.indexOf(' ');
+    const name = separator === -1 ? c.synopsis : c.synopsis.slice(0, separator);
+    const args = separator === -1 ? '' : c.synopsis.slice(separator);
+    const padding = ' '.repeat(colWidth - c.synopsis.length);
+    return `  ${bold(green(name))}${cyan(args)}${padding}${desc}${aliasHint}`;
   });
-  return [`${bold('monad session')} <subcommand>`, '', `${bold(t('cli.subcommands'))}`, ...rows].join('\n');
+  return [`${bold('monad session')} ${cyan('<subcommand>')}`, '', `${bold(cyan(t('cli.subcommands')))}`, ...rows].join(
+    '\n'
+  );
 }
 
 /** Localized help for one session subcommand — the sub's own `help()` when it has verbs/flags of its
@@ -58,17 +64,19 @@ export function renderSessionSubHelp(args: string[]): string | undefined {
   if (!sub) return undefined;
   if (sub.help) return sub.help();
   const lines = [
-    bold(`monad session ${sub.synopsis}`),
+    `${bold('monad session')} ${bold(green(sub.name))}${cyan(sub.synopsis.slice(sub.name.length))}`,
     '',
     sub.descriptionKey ? t(sub.descriptionKey) : sub.description
   ];
   if (sub.aliases?.length) lines.push('', `${dim('aliases:')} ${sub.aliases.join(', ')}`);
   const flagEntries = Object.entries(sub.flags ?? {});
   if (flagEntries.length) {
-    lines.push('', bold(t('cli.usage.flags')));
+    lines.push('', bold(cyan(t('cli.usage.flags'))));
     for (const [name, spec] of flagEntries) {
       const head = `${spec.alias ? `-${spec.alias}, ` : ''}--${name}`;
-      lines.push(`  ${bold(head.padEnd(FLAG_COL))}${spec.descriptionKey ? t(spec.descriptionKey) : spec.description}`);
+      lines.push(
+        `  ${bold(cyan(head.padEnd(FLAG_COL)))}${spec.descriptionKey ? t(spec.descriptionKey) : spec.description}`
+      );
     }
   }
   return lines.join('\n');

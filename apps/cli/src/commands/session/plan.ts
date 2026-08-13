@@ -216,20 +216,25 @@ const planFlags: Record<string, FlagSpec> = {
 // localized — same split the usage lines use).
 function renderPlanHelp(): string {
   const col = 48;
-  const verbLine = (syntax: string, key: string): string => `  ${bold(syntax.padEnd(col))}${t(key)}`;
-  const flagLine = (head: string, key: string): string => `  ${bold(head.padEnd(col))}${t(key)}`;
+  const verbLine = (syntax: string, key: string): string => {
+    const separator = syntax.indexOf(' ');
+    const verb = separator === -1 ? syntax : syntax.slice(0, separator);
+    const args = separator === -1 ? '' : syntax.slice(separator);
+    return `  ${bold(green(verb))}${cyan(args)}${' '.repeat(col - syntax.length)}${t(key)}`;
+  };
+  const flagLine = (head: string, key: string): string => `  ${bold(cyan(head.padEnd(col)))}${t(key)}`;
   return [
-    bold('monad session plan <list|add|update|rm> <sessionId> …'),
+    `${bold('monad session')} ${bold(green('plan'))} ${cyan('<list|add|update|rm> <sessionId> …')}`,
     '',
     t('cli.session.plan.desc'),
     '',
-    bold('Subcommands:'),
+    bold(cyan('Subcommands:')),
     verbLine('list <sessionId>', 'cli.session.plan.help.list'),
     verbLine('add <sessionId> <text|->', 'cli.session.plan.help.add'),
     verbLine('update <sessionId> <todoId> <expectedVersion>', 'cli.session.plan.help.update'),
     verbLine('rm <sessionId> <todoId> <expectedVersion>', 'cli.session.plan.help.rm'),
     '',
-    bold('Flags:'),
+    bold(cyan('Flags:')),
     flagLine('--status <pending|in_progress|completed>', 'cli.session.plan.flag.status'),
     flagLine('--assignee <projectMemberId>', 'cli.session.plan.flag.assignee'),
     flagLine('--unassign', 'cli.session.plan.flag.unassign'),

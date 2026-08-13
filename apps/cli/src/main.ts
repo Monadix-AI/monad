@@ -13,7 +13,7 @@ import { interactionProducerLabel, startCliInteractionPresenter } from './intera
 import { DaemonError } from './lib/daemon-error.ts';
 import { initCliI18n, t } from './lib/i18n.ts';
 import { startAndOpenWeb } from './lib/open-web.ts';
-import { bold, cyan, dim, isJson, out, red, setOutputMode, yellow } from './lib/output.ts';
+import { bold, cyan, dim, green, isJson, out, red, setOutputMode, yellow } from './lib/output.ts';
 
 // Visible (non-hidden) commands, in registration order — the source for the usage table.
 const visibleCommands = commands.filter((c) => !c.hidden);
@@ -31,44 +31,56 @@ function buildUsage(): string {
   const colWidth = Math.min(Math.max(...visibleCommands.map((c) => c.synopsis.length)) + 2, 46);
   const row = (c: (typeof visibleCommands)[number]) => {
     const desc = c.descriptionKey ? t(c.descriptionKey) : c.description;
-    if (c.synopsis.length + 2 > colWidth) return `  ${bold(c.synopsis)}\n  ${' '.repeat(colWidth)}${desc}`;
-    return `  ${bold(c.synopsis.padEnd(colWidth))}${desc}`;
+    if (c.synopsis.length + 2 > colWidth) return `  ${colorSynopsis(c.synopsis)}\n  ${' '.repeat(colWidth)}${desc}`;
+    return `  ${colorSynopsis(c.synopsis.padEnd(colWidth))}${desc}`;
   };
   const sections = USAGE_SECTIONS.flatMap(({ group, titleKey }) => {
     const rows = visibleCommands.filter((c) => (c.group ?? 'configure') === group).map(row);
-    return rows.length ? [bold(t(titleKey)), ...rows, ''] : [];
+    return rows.length ? [bold(cyan(t(titleKey))), ...rows, ''] : [];
   });
   return [
-    `${bold('monad')} <command>`,
+    `${bold('monad')} ${cyan('<command>')}`,
     '',
     ...sections,
-    `  ${bold('-V, --version'.padEnd(colWidth))}${t('cli.usage.version')}`,
-    `  ${bold('-v, --verbose'.padEnd(colWidth))}${t('cli.usage.verbose')}`,
-    `  ${bold('--json'.padEnd(colWidth))}${t('cli.usage.json')}`,
-    `  ${bold('-q, --quiet'.padEnd(colWidth))}${t('cli.usage.quiet')}`,
-    `  ${bold('--debug'.padEnd(colWidth))}${t('cli.usage.debug')}`,
-    `  ${bold('--force'.padEnd(colWidth))}${t('cli.usage.force')}`,
-    `  ${bold('--token-file'.padEnd(colWidth))}${t('cli.usage.tokenFile')}`,
+    `  ${bold(cyan('-V, --version'.padEnd(colWidth)))}${t('cli.usage.version')}`,
+    `  ${bold(cyan('-v, --verbose'.padEnd(colWidth)))}${t('cli.usage.verbose')}`,
+    `  ${bold(cyan('--json'.padEnd(colWidth)))}${t('cli.usage.json')}`,
+    `  ${bold(cyan('-q, --quiet'.padEnd(colWidth)))}${t('cli.usage.quiet')}`,
+    `  ${bold(cyan('--debug'.padEnd(colWidth)))}${t('cli.usage.debug')}`,
+    `  ${bold(cyan('--force'.padEnd(colWidth)))}${t('cli.usage.force')}`,
+    `  ${bold(cyan('--token-file'.padEnd(colWidth)))}${t('cli.usage.tokenFile')}`,
     '',
-    `${bold(t('cli.usage.environment'))}`,
-    `  ${bold('MONAD_PORT'.padEnd(colWidth))}${t('cli.usage.portDesc', { example: cyan('MONAD_PORT=8000 monad') })}`,
-    `  ${bold('MONAD_HOME'.padEnd(colWidth))}${t('cli.usage.homeDesc')}`,
+    `${bold(cyan(t('cli.usage.environment')))}`,
+    `  ${bold(green('MONAD_PORT'.padEnd(colWidth)))}${t('cli.usage.portDesc', { example: cyan('MONAD_PORT=8000 monad') })}`,
+    `  ${bold(green('MONAD_HOME'.padEnd(colWidth)))}${t('cli.usage.homeDesc')}`,
     '',
     dim(t('cli.usage.portNote')),
     dim(t('cli.usage.remoteNote'))
   ].join('\n');
 }
 
+function colorSynopsis(synopsis: string): string {
+  const separator = synopsis.indexOf(' ');
+  if (separator === -1) return bold(green(synopsis));
+  return `${bold(green(synopsis.slice(0, separator)))}${cyan(synopsis.slice(separator))}`;
+}
+
 /** Per-command help: synopsis, localized description, aliases, and the declared flags. */
 function renderCommandHelp(cmd: CommandDef): string {
-  const lines = [`${bold(`monad ${cmd.synopsis}`)}`, '', cmd.descriptionKey ? t(cmd.descriptionKey) : cmd.description];
+  const lines = [
+    `${bold('monad')} ${colorSynopsis(cmd.synopsis)}`,
+    '',
+    cmd.descriptionKey ? t(cmd.descriptionKey) : cmd.description
+  ];
   if (cmd.aliases?.length) lines.push('', `${dim('aliases:')} ${cmd.aliases.join(', ')}`);
   const flagEntries = Object.entries(cmd.flags ?? {});
   if (flagEntries.length) {
-    lines.push('', bold(t('cli.usage.flags')));
+    lines.push('', bold(cyan(t('cli.usage.flags'))));
     for (const [name, spec] of flagEntries) {
       const head = `${spec.alias ? `-${spec.alias}, ` : ''}--${name}`;
-      lines.push(`  ${bold(head.padEnd(FLAG_COL))}${spec.descriptionKey ? t(spec.descriptionKey) : spec.description}`);
+      lines.push(
+        `  ${bold(cyan(head.padEnd(FLAG_COL)))}${spec.descriptionKey ? t(spec.descriptionKey) : spec.description}`
+      );
     }
   }
   return lines.join('\n');
