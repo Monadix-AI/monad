@@ -210,12 +210,14 @@ export function userMessageTokens(text: string, commands: CommandItem[] = []): U
   return tokens.sort((a, b) => a.start - b.start);
 }
 
-function UserMessageText({
+export function UserMessageText({
   commands,
+  compact = false,
   text,
   onSkillPreview
 }: {
   commands?: CommandItem[];
+  compact?: boolean;
   text: string;
   onSkillPreview?: (id: string) => void;
 }) {
@@ -225,7 +227,9 @@ function UserMessageText({
     if (!value) return;
     parts.push(
       <MentionText
+        className={compact ? 'whitespace-nowrap break-normal [overflow-wrap:normal]' : undefined}
         key={key}
+        linkify={!compact}
         text={value}
       />
     );
@@ -243,7 +247,14 @@ function UserMessageText({
     );
     last = token.end;
   }
-  if (parts.length === 0) return <MentionText text={text} />;
+  if (parts.length === 0)
+    return (
+      <MentionText
+        className={compact ? 'whitespace-nowrap break-normal [overflow-wrap:normal]' : undefined}
+        linkify={!compact}
+        text={text}
+      />
+    );
   if (last < text.length) pushText(text.slice(last), `text:${last}`);
   return <>{parts}</>;
 }

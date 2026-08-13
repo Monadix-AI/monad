@@ -333,6 +333,53 @@ test('message reply preview invokes navigation only for a resolved target', () =
   expect({ opened, unavailableDisabled: unavailable.props.disabled }).toEqual({ opened: 1, unavailableDisabled: true });
 });
 
+test('user reply previews render command, mention, and skill chips without nested controls', () => {
+  let opened = 0;
+  const preview = createElement(MessageReplyPreview, {
+    commands: [
+      {
+        aliases: [],
+        description: 'Show help',
+        enabled: true,
+        id: 'help',
+        name: 'Help',
+        source: 'builtin',
+        type: 'action'
+      },
+      {
+        aliases: [],
+        description: 'Deploy',
+        enabled: true,
+        id: 'global:deploy',
+        name: 'Deploy',
+        source: 'custom',
+        type: 'skill'
+      }
+    ],
+    onOpen: () => {
+      opened += 1;
+    },
+    target: {
+      id: 'msg_chip_target',
+      label: 'You',
+      role: 'user',
+      text: '/help ask @[name="Ada" id="agent_ada"] to use /global:deploy'
+    },
+    unavailableLabel: 'Message unavailable'
+  });
+  const markup = renderToStaticMarkup(preview);
+  const rendered = MessageReplyPreview(preview.props);
+
+  rendered.props.onClick();
+
+  expect({
+    chipKinds: [...markup.matchAll(/data-composer-chip="([^"]+)"/g)].map((match) => match[1]),
+    nestedControls: (markup.match(/<button/g) ?? []).length,
+    opened,
+    quoteMarker: markup.includes('data-reply-quote-marker=""')
+  }).toEqual({ chipKinds: ['command', 'mention', 'skill'], nestedControls: 1, opened: 1, quoteMarker: true });
+});
+
 test('rewind editor keeps the transcript unchanged until an edited message is submitted', () => {
   const editing = rewindEditorReducer({ draft: '', mode: 'idle' }, { type: 'open', text: 'Original prompt' });
   const changed = rewindEditorReducer(editing, { type: 'change', text: 'Edited prompt' });

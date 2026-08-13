@@ -134,6 +134,7 @@ export function SessionComposerRegion({
                     <div className="mb-2 flex min-w-0 items-center gap-2 rounded-md border bg-card/85 p-2">
                       <MessageReplyPreview
                         className="mb-0 flex-1"
+                        commands={commands}
                         onOpen={model.onOpenReplyTarget}
                         target={
                           model.replyTarget

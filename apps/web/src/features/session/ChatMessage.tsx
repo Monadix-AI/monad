@@ -37,6 +37,7 @@ import { MessageBody } from './MessageBody';
 import { MessageReplyPreview } from './MessageReplyPreview';
 import { formatMessageTimestamp } from './message-time';
 import { nextReasoningFollowState } from './reasoning-follow';
+import { useOptionalSessionContext } from './session-context';
 
 export interface Msg {
   attachments?: MessageAttachmentView[];
@@ -216,6 +217,7 @@ export const Message = memo(function Message({
 }) {
   const t = useT();
   const locale = useLocale();
+  const sessionContext = useOptionalSessionContext();
   const isUser = msg.role === 'user';
   // Constant for the message's lifetime; recomputing per streamed token would re-parse the same ISO
   // string on every frame of the active message.
@@ -289,6 +291,7 @@ export const Message = memo(function Message({
       {replyTarget !== undefined ? (
         <MessageReplyPreview
           className={cn(isUser ? 'bg-accent/60' : 'max-w-2xl bg-muted/40')}
+          commands={commands ?? sessionContext?.commands}
           onOpen={() => onOpenReplyTarget?.()}
           target={replyTarget}
           unavailableLabel={t('web.chat.replyUnavailable')}

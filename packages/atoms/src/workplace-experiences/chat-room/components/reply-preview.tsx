@@ -1,5 +1,7 @@
 import type { Message } from '../../experience/types.ts';
 
+import { MentionText } from '@monad/ui/components/MentionText';
+
 export function shouldSuppressReplyPreview(
   replyToMessageId: string | undefined,
   previousMessageId: string | undefined
@@ -18,17 +20,27 @@ export function ReplyPreview({
 }): React.ReactElement {
   return (
     <button
-      className="mb-1 block w-full min-w-0 border-0 border-current/20 border-l-2 bg-transparent py-0 pr-0 pl-2 text-left text-current/50 text-xs transition-colors hover:text-current/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
+      className="relative mb-1 block w-full min-w-0 overflow-hidden border-0 bg-transparent py-0 pr-0 pl-2 text-left text-current/50 text-xs transition-colors hover:text-current/65 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none"
       disabled={!target}
       onClick={onOpen}
       type="button"
     >
+      <span
+        aria-hidden="true"
+        className="absolute inset-y-0 left-0 w-0.5 bg-accent-blue"
+        data-reply-quote-marker=""
+      />
       {target ? (
-        <span className="block truncate">
-          {target.authorName}: {target.text}
+        <span className="block max-h-[1lh] w-full min-w-0 truncate whitespace-nowrap">
+          {target.authorName}:{' '}
+          <MentionText
+            className="whitespace-nowrap break-normal [overflow-wrap:normal]"
+            linkify={false}
+            text={target.text}
+          />
         </span>
       ) : (
-        <span className="block truncate">{unavailableLabel}</span>
+        <span className="block w-full min-w-0 truncate">{unavailableLabel}</span>
       )}
     </button>
   );
