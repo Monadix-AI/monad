@@ -1,4 +1,4 @@
-// Boot-phase helper: wraps the atom-pack rediscovery sweep (connectors / commands / hooks /
+// Boot-phase helper: wraps the atom-pack rediscovery sweep (commands / hooks /
 // providers / workplace experiences / locales / file-MCP) in a serialised, closure-free factory so main.ts can hand the
 // returned function to both the API handler and the fs-watcher without re-capturing local variables.
 // Tools are first-party only (wired once at startup) and never part of a rediscovery sweep.
@@ -91,7 +91,6 @@ export function createAtomPackRediscoverer(deps: AtomPackRediscovererDeps): () =
       const discovered: DiscoveredSinks = {
         onProvider: (p) => candidateProviders.push(p),
         channelPins: pins.channel,
-        connectorPins: pins.connector,
         onCommand: (atomName, command) => candidateCommands.push({ atomName, command }),
         onCollision: (c) => candidateConflicts.push(c),
         onHook: (h) => candidateAtoms.registerHook(h),

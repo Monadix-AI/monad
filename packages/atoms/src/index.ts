@@ -3,7 +3,7 @@
 // (loadManifestAtomPack) as any third-party pack — the "core is all atoms" invariant: nothing
 // first-party bypasses the gate.
 //
-// Every built-in *atom* monad ships — connectors, channels, reserved slash commands, and model
+// Every built-in *atom* monad ships — channels, reserved slash commands, and model
 // providers — is bundled here. Tools are NOT an atom kind: they are always first-party, built into
 // the daemon (apps/monad/src/tools), and wired straight into the tool registry — never through an
 // atom pack. The daemon owns the sandbox + credentials wrapping. See main.ts's builtin tool wiring.
@@ -40,7 +40,6 @@ import { wecomChannelAtom } from './channels/wecom.ts';
 import { whatsappChannelAtom } from './channels/whatsapp.ts';
 import { whatsappBusinessChannelAtom } from './channels/whatsapp-business.ts';
 import { BUILTIN_COMMANDS } from './commands/builtins.ts';
-import { builtinConnectors } from './connectors/registry.ts';
 import { configureBuiltinMeshAgentObservationAdapters } from './mesh-agent-observation-setup.ts';
 import { builtinModelProviders } from './providers/registry.ts';
 import { builtinWorkplaceExperiences } from './workplace-experiences/registry.ts';
@@ -52,11 +51,10 @@ export default defineAtomPack({
     name: 'monad-builtins',
     version: '1.0.0',
     sdkVersion: SDK_VERSION,
-    atoms: ['connector', 'channel', 'command', 'provider', 'workplace-experience', 'agent-adapter'],
+    atoms: ['channel', 'command', 'provider', 'workplace-experience', 'agent-adapter'],
     description: 'First-party atoms bundled with Monad',
     author: 'Monad'
   },
-  connectors: builtinConnectors,
   channels: [
     telegramChannelAtom,
     discordChannelAtom,

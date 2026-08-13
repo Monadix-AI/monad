@@ -6,7 +6,6 @@ import type {
 } from '@monad/protocol';
 import type {
   ChannelAdapterFactory,
-  Connector,
   ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
@@ -21,7 +20,7 @@ import builtinAtomPack from '@monad/atoms';
 
 import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
 
-/** The single first-party atom pack — every built-in atom (connectors, Telegram channel, reserved
+/** The single first-party atom pack — every built-in atom (Telegram channel, reserved
  *  commands, en/zh locales, model providers) bundled and loaded through the SAME atom-kind-gated
  *  path (loadManifestAtomPack) as third-party atom packs. Non-channel atoms flow to their
  *  respective sinks; commands route to the reserved builtin registry (see the daemon). Tools are
@@ -32,7 +31,6 @@ const BUILTIN_CHANNEL_ATOM_PACKS: ManifestAtomPack[] = [builtinAtomPack];
 export function builtinChannelAdapters(
   onError?: (atomPack: string, error: unknown) => void,
   sinks: {
-    onConnector?: (connector: Connector) => void;
     onCommand?: (atomPackName: string, command: unknown) => void;
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;

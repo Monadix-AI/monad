@@ -42,10 +42,6 @@ function channel(type: string) {
   });
 }
 
-function connector(name: string) {
-  return { name, scopes: [], start: async () => {}, stop: async () => {} };
-}
-
 function provider(type: string): ModelProvider {
   return defineProvider({
     type,
@@ -94,20 +90,12 @@ test('cross-pack channel-type clash: namespace-coexist — both addressable, bar
   expect(warnings.some((w) => w.includes('shared') && w.includes('first'))).toBe(true);
 });
 
-test('onCollision emits structured conflicts for the UI (channel + connector)', async () => {
-  const mixed = (name: string) =>
-    defineAtomPack({
-      manifest: { name, version: '1.0.0', sdkVersion: SDK_VERSION, atoms: ['channel', 'connector'] },
-      channels: [channel('shared')],
-      connectors: [connector('search')]
-    });
+test('onCollision emits structured channel conflicts for the UI', async () => {
   const conflicts: { kind: string; bareId: string; winner: string; shadowed: string[] }[] = [];
-  await loadChannelAtomPacks([mixed('a'), mixed('b')], {
-    onConnector: () => {},
+  await loadChannelAtomPacks([pack('a', { channels: ['shared'] }), pack('b', { channels: ['shared'] })], {
     onCollision: (c) => conflicts.push(c)
   });
   expect(conflicts).toContainEqual({ kind: 'channel', bareId: 'shared', winner: 'a', shadowed: ['b'] });
-  expect(conflicts).toContainEqual({ kind: 'connector', bareId: 'search', winner: 'a', shadowed: ['b'] });
 });
 
 test('channel pin overrides first-wins for the bare type', async () => {
@@ -134,38 +122,6 @@ test('same-pack duplicate id aborts that pack (authoring bug), others unaffected
   // The clean pack is unaffected; both bare types resolve ('x' from dup's first registration, 'y').
   expect(channels.has('x')).toBe(true);
   expect(channels.has('y')).toBe(true);
-});
-
-test('cross-pack connector-name clash: first wins, second rejected + warned', async () => {
-  const connPack = (name: string, connectors: string[]) =>
-    defineAtomPack({
-      manifest: { name, version: '1.0.0', sdkVersion: SDK_VERSION, atoms: ['connector'] },
-      connectors: connectors.map(connector)
-    });
-  const warnings: string[] = [];
-  const registered: string[] = [];
-  await loadChannelAtomPacks([connPack('a', ['t1']), connPack('b', ['t1', 't2'])], {
-    onConnector: (c) => registered.push(c.name),
-    log: (lvl, msg) => lvl === 'warn' && warnings.push(msg)
-  });
-  // namespace-coexist: a's t1 wins the bare name; b's t1 is still reachable as 'b__t1'; b's t2 is bare
-  expect(registered.sort()).toEqual(['b__t1', 't1', 't2']);
-  expect(warnings.some((w) => w.includes('connector') && w.includes('t1') && w.includes('a'))).toBe(true);
-});
-
-test('cross-pack connector-name clash: a pin makes the bare name resolve to the pinned pack', async () => {
-  const connPack = (name: string, connectors: string[]) =>
-    defineAtomPack({
-      manifest: { name, version: '1.0.0', sdkVersion: SDK_VERSION, atoms: ['connector'] },
-      connectors: connectors.map(connector)
-    });
-  const registered: string[] = [];
-  await loadChannelAtomPacks([connPack('a', ['t1']), connPack('b', ['t1'])], {
-    onConnector: (c) => registered.push(c.name),
-    connectorPins: { t1: 'b' } // pin bare 't1' to pack b
-  });
-  // b wins the bare name; a's is reachable as 'a__t1'
-  expect(registered.sort()).toEqual(['a__t1', 't1']);
 });
 
 // message-type: namespaced under packId, so cross-pack same type name is never a collision.

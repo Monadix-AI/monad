@@ -30,7 +30,6 @@ const safeEntrySchema = z
 // need to appear in atoms[] for discovery to work. Listing them in atoms[] is allowed for
 // tooling/documentation purposes but has no runtime effect.
 export const atomKindSchema = z.enum([
-  'connector',
   'channel',
   'command',
   'message-type',
@@ -147,7 +146,7 @@ export const installedAtomPackSchema = z.object({
 export type InstalledAtomPack = z.infer<typeof installedAtomPackSchema>;
 
 // Atom kinds that share a namespace and can produce bare-id collisions.
-export const namespacedAtomKindSchema = z.enum(['channel', 'connector', 'command', 'skill']);
+export const namespacedAtomKindSchema = z.enum(['channel', 'command', 'skill']);
 export type NamespacedAtomKind = z.infer<typeof namespacedAtomKindSchema>;
 
 // A surfaced bare-name collision: two+ packs claimed the same id for a namespace-coexist kind. The

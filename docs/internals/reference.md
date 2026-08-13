@@ -40,7 +40,7 @@ This reference maps Monad's runtime, execution, extension, collaboration, and cl
 | **Provider** | Hosted or local model backend used by the first-party engine | [Model providers](/internals/infra/model-providers) |
 | **Workplace Experience** | Web-only projection over daemon-owned project state | [Workplace Experiences](/internals/agent-team-runtime/workplace-experiences) |
 
-Atom Packs can declare skills, MCP servers, locales, channels, providers, commands, connectors, message types, hooks, sandbox launchers, agent adapters, and Workplace Experiences. File-based kinds use their documented discovery paths. JavaScript-registered kinds must be declared in the manifest before registration.
+Atom Packs can declare skills, MCP servers, locales, channels, providers, commands, message types, hooks, sandbox launchers, agent adapters, and Workplace Experiences. File-based kinds use their documented discovery paths. JavaScript-registered kinds must be declared in the manifest before registration.
 
 Built-in tools are not an Atom kind. They remain first-party so their schema, approval, guard, and sandbox boundaries stay under daemon control.
 

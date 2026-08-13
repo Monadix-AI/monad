@@ -164,11 +164,6 @@ Every HTTP/WS/disk boundary parses with zod (the schema *is* the type — see
   `OPENROUTER_API_KEY` from the environment; keep that path gated to development and
   test use, and ensure all Monad settings files are ignored so a persisted key can
   never be committed.
-- **Validate webhook payloads.** Verify the HMAC against the **raw** body with
-  `verifyWebhookSignature` (`@monad/atoms`, `src/connectors/security.ts`) before ingesting — a webhook URL is an
-  unauthenticated entry point. Add per-source rate limiting (`createIpRateLimiter`). The
-  primitive exists; wire it when the webhook route is mounted.
-
 ## 7. Data layer (keep it safe)
 
 - **All SQL stays parameterized.** The store uses Drizzle + bound `?`/`$named`

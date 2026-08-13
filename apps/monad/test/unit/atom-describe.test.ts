@@ -8,7 +8,6 @@ test('describeAtomPack enumerates each individual atom of the built-in pack', as
   const atoms = await describeAtomPack(builtinAtomPack);
 
   expect([...new Set(atoms.map((atom) => atom.kind))]).toEqual([
-    'connector',
     'channel',
     'command',
     'provider',

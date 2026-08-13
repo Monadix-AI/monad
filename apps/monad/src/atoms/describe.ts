@@ -74,7 +74,6 @@ function toDescriptor(kind: AtomKind, atom: unknown): AtomDescriptor {
 export async function describeAtomPack(pack: ManifestAtomPack): Promise<AtomDescriptor[]> {
   const atoms: AtomDescriptor[] = [];
   const ctx: AtomPackContext = {
-    registerConnector: (c) => atoms.push(toDescriptor('connector', c)),
     registerChannel: (c) => atoms.push(toDescriptor('channel', c)),
     registerCommand: (c) => atoms.push(toDescriptor('command', c)),
     registerMessageType: (m) => atoms.push(toDescriptor('message-type', m)),

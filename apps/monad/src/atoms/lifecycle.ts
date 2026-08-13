@@ -1,8 +1,7 @@
 // Atom pack + channel registry discovery: built-in and third-party atom packs load through the
-// SAME atom-kind-gated loader (see ../channels.ts), routing tools/connectors/commands/providers/
+// SAME atom-kind-gated loader (see ../channels.ts), routing commands/providers/
 // hooks/workplace-experiences/agent-adapters/sandbox-launchers into the daemon's live registries.
-// This must run BEFORE the agent snapshots its tools, so a third-party atom pack's declared tools/
-// connectors reach the agent from the first turn.
+// This must run before dependent runtime modules consume those registries.
 
 import type { MonadAuth, MonadConfig, MonadPaths } from '@monad/environment';
 import type { AtomDescriptor } from '@monad/protocol';
@@ -57,7 +56,7 @@ export async function createAtomDiscovery(deps: {
     if (!(error instanceof Error) || !error.message.includes('already registered')) throw error;
   }
 
-  // Bare-name collisions surfaced from the latest load sweep (channel/connector/command),
+  // Bare-name collisions surfaced from the latest load sweep (channel/command),
   // mutated in place so the read accessor handed to the atoms module stays valid across re-discovery.
   const atomConflicts: AtomConflict[] = [];
   // Per-pack individual atoms from the latest sweep (packId → its atoms), read by the atom-pack
@@ -76,7 +75,6 @@ export async function createAtomDiscovery(deps: {
   }
   const channelRegistry = await createChannelRegistry(paths, {
     builtin: {
-      onConnector: (c) => registry.registerConnector(c),
       // First-party commands are reserved (non-overridable). atomPackName is ignored — they are built-ins.
       onCommand: (_atomPackName, cmd) =>
         commandRegistry.registerBuiltin(cmd as Parameters<typeof commandRegistry.registerBuiltin>[0]),
@@ -99,7 +97,6 @@ export async function createAtomDiscovery(deps: {
         interactions.request({ kind: 'builtin', id: atomPackId, label: atomPackId }, request, { mode: 'background' })
     },
     discovered: {
-      onConnector: (c) => registry.registerConnector(c),
       // Third-party atom commands register through the SAME registry as built-ins; built-in
       // names are reserved, so an atom cannot shadow /reset, /model, etc. (rejected + warned).
       onCommand: (atomName, cmd) => commandRegistry.registerAtom(atomName, cmd),
@@ -110,7 +107,6 @@ export async function createAtomDiscovery(deps: {
       onProvider: (p) => modelService.registry.register(p),
       // Namespace-coexist pins: bare name resolves to the user pin (atomPins.<kind>) or first-wins.
       channelPins: cfg.atomPins.channel,
-      connectorPins: cfg.atomPins.connector,
       onCollision: (c) => atomConflicts.push(c),
       // An atom pack declaring the `hook` capability registers lifecycle hooks into the registry,
       // which the HookRunner reads alongside config.json command hooks.

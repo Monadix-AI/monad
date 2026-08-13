@@ -1,9 +1,9 @@
 ---
 title: "Atom Packs"
 description: "Understand Monad's manifest-gated extension packs and the atom kinds they can contribute."
-keywords: ["Atom Packs", "Monad extensions", "atom manifest", "channels", "connectors"]
+keywords: ["Atom Packs", "Monad extensions", "atom manifest", "channels"]
 ---
-Monad has a **unified atom pack system**: one atom pack can contribute connectors, channels,
+Monad has a **unified atom pack system**: one atom pack can contribute channels,
 commands, skills, MCP servers, locale packs, hooks, message types, model providers, sandbox
 backends, agent adapters, and workplace experiences. (**Tools are not an atom kind** — they are always
 first-party and built into the daemon; atom packs cannot contribute them. See "Why tools aren't
@@ -19,7 +19,7 @@ flowchart TB
   Consent --> Load["Load through the gated AtomPackContext"]
   Load --> JS{"registration kind<br/>in atoms[]?"}
   JS -- no --> Err["UndeclaredAtomError at load"]
-  JS -- yes --> Reg["Daemon registries<br/>channel · command · provider · message-type · hook · connector"]
+  JS -- yes --> Reg["Daemon registries<br/>channel · command · provider · message-type · hook"]
   Scan["Disk scan<br/>skill · mcp · locale (file-based, self-declaring)"] --> Reg
   Reg --> Live["Live without restart (hot reload)"]
 ```
@@ -41,9 +41,9 @@ export default defineAtomPack({
 ```
 
 - **Declared = audited + enforced.** An atom pack that declares `['channel']` cannot
-  `registerConnector` — that throws `UndeclaredAtomError` at load. An atom pack gets a capability
+  `registerProvider` — that throws `UndeclaredAtomError` at load. An atom pack gets a capability
   only after the user audits and consents to it (default-deny).
-- **JS-registered atoms** (`connector` / `channel` / `command` / `message-type` / `provider` /
+- **JS-registered atoms** (`channel` / `command` / `message-type` / `provider` /
   `hook` / `sandbox` / `agent-adapter` / `workplace-experience`) are enforced in-process via the
   gated `AtomPackContext` — must be listed in `atoms[]`. The full enum is `atomKindSchema` in
   [`packages/protocol/src/atom-pack.ts`](https://github.com/Monadix-AI/monad/blob/main/packages/protocol/src/atom-pack.ts).
@@ -87,7 +87,7 @@ For command authoring, including structured args and subcommands, see
 Same identifier claimed by two atoms. The policy is **per atom kind**, but the kinds fall into three
 families with one shared resolution rule:
 
-**Family 1 — namespace-coexist + pinnable** (`connector`, `channel`, `command`, `skill`).
+**Family 1 — namespace-coexist + pinnable** (`channel`, `command`, `skill`).
 Nothing is rejected: every atom is registered under a fully-qualified name
 (`<packId>__<name>`, commands as `/<packId>.<command>`), so two same-named atoms simply become two
 distinct qualified names — the model/user/config can always address either explicitly. The **bare
@@ -122,7 +122,7 @@ taken. This also prevents a third-party pack from shadowing a built-in provider 
 > sorted > builtin), `mcp` file-based (daemon scans `<packDir>/mcp.json` + `~/.monad/atoms/mcp/*.json` at
 > startup), `skill` file-based (daemon scans `<packDir>/skills/*/` + `~/.monad/atoms/skills/*/`),
 > `channel` namespace-coexist + pin, `command` namespace-coexist + pin (built-ins reserved),
-> `connector` namespace-coexist + pin, `message-type` namespacing, and `hook` additivity
+> `message-type` namespacing, and `hook` additivity
 > are all live. Remaining: conflict-surfacing UI for skill bare-name collisions; bundled MCP
 > server variant (cross-language, deferred).
 
@@ -143,7 +143,7 @@ they run **in-process with the daemon's full authority**, gated only by the sand
 wrappers the daemon owns. Letting a third-party atom pack contribute a tool would hand untrusted code
 that authority directly. So tools are **always first-party**: they live in the daemon
 (`apps/monad/src/capabilities/tools`) and are wired straight into the tool registry at startup, never through the
-atom-pack loader. Atom packs extend the agent's *reach* (channels, connectors, providers, commands)
+atom-pack loader. Atom packs extend the agent's *reach* (channels, providers, commands)
 but never its *hands*. MCP servers remain the supported path for adding external tool-like
 capability — they run out-of-process behind their own trust prompts.
 

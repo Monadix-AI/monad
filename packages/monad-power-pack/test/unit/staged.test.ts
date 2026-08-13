@@ -22,7 +22,6 @@ test('the default runtime entry registers the real pack through the gated loader
   const apis: WorkplaceExperienceApi[] = [];
   const workers: ExperienceWorker[] = [];
   await loadManifestAtomPack(defaultAtomPack, {
-    registerConnector: () => {},
     registerChannel: () => {},
     registerCommand: () => {},
     registerMessageType: () => {},

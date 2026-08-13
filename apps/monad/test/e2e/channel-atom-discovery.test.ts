@@ -65,78 +65,24 @@ test('an empty / absent atoms dir yields nothing, no throw', async () => {
   expect(errors).toEqual([]);
 });
 
-// An atom pack that declares + registers BOTH a channel and a connector — the connector routes to
-// the sink.
-function channelConnectorBundle(declared: string[]): string {
-  return `
-const cap = { edit:false, typing:false, threads:false, maxMessageChars:1000, markdown:false };
-const channel = { type:'multi', name:'Multi', capabilities:cap, create:()=>({ type:'multi', capabilities:cap, connect:async()=>{}, disconnect:async()=>{}, send:async(c)=>({ref:'1',chatId:c}) }) };
-const connector = { name:'multi_connector', scopes:[], start:async()=>{}, stop:async()=>{} };
-export default {
-  manifest: { name:'multi', version:'1.0.0', sdkVersion:'0', atoms:${JSON.stringify(declared)} },
-  register(ctx){ ctx.registerChannel(channel); ctx.registerConnector(connector); }
-};`;
-}
-
-test('an atom pack declaring channel+connector routes its connector to the daemon (atom kind honored)', async () => {
-  const pdir = join(dir, 'multi');
+test('a removed connector atom kind is rejected at the manifest boundary', async () => {
+  const pdir = join(dir, 'legacy-connector');
   await mkdir(pdir, { recursive: true });
   await writeFile(
     join(pdir, 'atom-pack.json'),
     JSON.stringify({
-      name: 'multi',
+      name: 'legacy-connector',
       version: '1.0.0',
       sdkVersion: '0',
       entry: 'atom-pack.js',
-      atoms: ['channel', 'connector']
+      atoms: ['connector']
     })
   );
-  await writeFile(join(pdir, 'atom-pack.js'), channelConnectorBundle(['channel', 'connector']));
+  await writeFile(join(pdir, 'atom-pack.js'), 'export default {};');
 
-  const connectors: { name: string }[] = [];
-  const { factories, errors } = await discoverChannelAdapters(dir, {
-    onConnector: (c) => connectors.push(c as { name: string })
-  });
-  expect(errors).toEqual([]);
-  expect(factories.has('multi')).toBe(true);
-  expect(connectors.map((c) => c.name)).toEqual(['multi_connector']); // connector reached the daemon sink
-});
-
-test('an atom pack that registers a connector WITHOUT declaring it is rejected (channel already registered survives)', async () => {
-  const pdir = join(dir, 'multi');
-  await mkdir(pdir, { recursive: true });
-  await writeFile(
-    join(pdir, 'atom-pack.json'),
-    JSON.stringify({ name: 'multi', version: '1.0.0', sdkVersion: '0', entry: 'atom-pack.js', atoms: ['channel'] })
-  );
-  await writeFile(join(pdir, 'atom-pack.js'), channelConnectorBundle(['channel'])); // 'connector' NOT declared
-
-  const connectors: unknown[] = [];
-  const { factories, errors } = await discoverChannelAdapters(dir, { onConnector: (c) => connectors.push(c) });
-  expect(connectors).toEqual([]); // connector never routed
-  expect(errors.some((e) => /atom/i.test(e.error))).toBe(true);
-  // registerChannel() succeeded before registerConnector() threw — no rollback, channel stays in factories
-  expect(factories.has('multi')).toBe(true);
-});
-
-test('consent-bypass guard: a bundle self-declaring atoms beyond the consented atom-pack.json is refused whole', async () => {
-  // The user consented to a channel-only pack (atom-pack.json), but the shipped bundle embeds
-  // atoms:['channel','connector'] and registers a connector. The gate is the consented set, not the
-  // bundle's self-declaration, so the WHOLE pack is refused (no channel, no connector) with an
-  // overreach error.
-  const pdir = join(dir, 'overreach');
-  await mkdir(pdir, { recursive: true });
-  await writeFile(
-    join(pdir, 'atom-pack.json'),
-    JSON.stringify({ name: 'overreach', version: '1.0.0', sdkVersion: '0', entry: 'atom-pack.js', atoms: ['channel'] })
-  );
-  await writeFile(join(pdir, 'atom-pack.js'), channelConnectorBundle(['channel', 'connector'])); // bundle over-declares
-
-  const connectors: unknown[] = [];
-  const { factories, errors } = await discoverChannelAdapters(dir, { onConnector: (c) => connectors.push(c) });
-  expect(connectors).toEqual([]); // connector never routed
-  expect(factories.has('multi')).toBe(false); // refused upfront — channel not registered either
-  expect(errors.some((e) => e.atom === 'overreach' && /beyond consented/i.test(e.error))).toBe(true);
+  const { factories, errors } = await discoverChannelAdapters(dir);
+  expect(factories.size).toBe(0);
+  expect(errors.some((e) => e.atom === 'legacy-connector' && /Invalid option/.test(e.error))).toBe(true);
 });
 
 test('an atom pack with a mismatched sdkVersion is rejected (goes to errors, no factory)', async () => {
@@ -171,35 +117,6 @@ test('an atom pack with invalid JSON in atom-pack.json is recorded as an error, 
   const { factories, errors } = await discoverChannelAdapters(dir);
   expect(errors.some((e) => e.atom === 'bad-json')).toBe(true);
   expect(factories.has('good-platform')).toBe(true); // good atom pack still loaded
-});
-
-test('an atom pack declaring connector routes its connector to the onConnector sink', async () => {
-  const pdir = join(dir, 'with-connector');
-  await mkdir(pdir, { recursive: true });
-  await writeFile(
-    join(pdir, 'atom-pack.json'),
-    JSON.stringify({
-      name: 'with-connector',
-      version: '1.0.0',
-      sdkVersion: '0',
-      entry: 'atom-pack.js',
-      atoms: ['connector']
-    })
-  );
-  await writeFile(
-    join(pdir, 'atom-pack.js'),
-    `
-const connector = { name:'my-connector', scopes:[], start:async()=>{}, stop:async()=>{} };
-export default {
-  manifest: { name:'with-connector', version:'1.0.0', sdkVersion:'0', atoms:['connector'] },
-  register(ctx){ ctx.registerConnector(connector); }
-};`
-  );
-
-  const connectors: { name: string }[] = [];
-  const { errors } = await discoverChannelAdapters(dir, { onConnector: (c) => connectors.push(c as { name: string }) });
-  expect(errors).toEqual([]);
-  expect(connectors.map((c) => c.name)).toEqual(['my-connector']);
 });
 
 test('an atom pack with .install.json enabled:false is skipped without an error', async () => {

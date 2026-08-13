@@ -446,7 +446,7 @@
   "web.atoms.updateSource": "更新来源",
   "web.atoms.updateTitle": "更新 {name}？",
   "web.atoms.updating": "更新中…",
-  "web.atoms.subtitle": "安装并管理包含工具、连接器、命令和 provider 的 Atom Pack。",
+  "web.atoms.subtitle": "安装并管理包含频道、命令、provider 和工作区体验的 Atom Pack。",
   "web.atoms.author": "作者",
   "web.atoms.builtin": "内置",
   "web.atoms.compatibility": "需要 Monad",

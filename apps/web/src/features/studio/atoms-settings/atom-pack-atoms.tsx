@@ -7,7 +7,6 @@ import {
   MessageMultiple01Icon,
   MessageSquareCodeIcon,
   PackageIcon,
-  Plug01Icon,
   PuzzleIcon,
   ServerStack01Icon,
   ShieldIcon,
@@ -55,12 +54,6 @@ const KIND_META: Record<AtomKind, KindMeta> = {
     label: 'Channels',
     icon: MessageMultiple01Icon,
     blurb: 'Inbound chat gateways that route messages into sessions.',
-    form: 'detail'
-  },
-  connector: {
-    label: 'Connectors',
-    icon: Plug01Icon,
-    blurb: 'Webhook and integration endpoints.',
     form: 'detail'
   },
   'agent-adapter': {

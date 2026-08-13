@@ -15,7 +15,6 @@ function collectingHost() {
   const providers: ModelProvider[] = [];
   const messageTypes: { atomPackId: string; descriptor: MessageTypeDescriptor }[] = [];
   const host: ManifestAtomPackHost = {
-    registerConnector: () => {},
     registerChannel: (c) => channels.push(c.type),
     registerCommand: (c) => commands.push(c),
     registerMessageType: (atomPackId, descriptor) => messageTypes.push({ atomPackId, descriptor }),

@@ -115,7 +115,6 @@ import type {
   ConsolidateSummary,
   ContradictionCheckSummary
 } from './command.ts';
-import type { Connector, ConnectorHost } from './connector.ts';
 import type { HookDefinition, HookHandler } from './hook.ts';
 import type {
   DriverContext,
@@ -243,8 +242,6 @@ export type {
   CommandSubcommand,
   CommandSubcommandDefinition,
   CompactSummary,
-  Connector,
-  ConnectorHost,
   ConsolidateMemorySummary,
   ConsolidateSummary,
   ContradictionCheckSummary,
@@ -572,7 +569,6 @@ export interface WorkplaceExperienceApi {
  *  Tools are NOT an atom kind: they are always first-party and built into the daemon, so atom
  *  packs cannot register them. */
 export interface AtomPackContext {
-  registerConnector(connector: Connector): void;
   registerChannel(channel: ChannelDefinition): void;
   registerCommand(command: unknown): void;
   /** Register a custom message type. The host namespaces it under the atom pack id, so the rendered
@@ -611,7 +607,6 @@ export interface ManifestAtomPack {
 
 /** What the daemon implements to receive gated registrations. */
 export interface ManifestAtomPackHost {
-  registerConnector(connector: Connector): void;
   registerChannel(channel: ChannelDefinition): void;
   registerCommand(command: unknown): void;
   /** `atomPackId` lets the host namespace the type (delegates to the protocol registry). */
@@ -640,7 +635,6 @@ export interface ManifestAtomPackHost {
  *  path enforces atom kinds (a payload array for an undeclared atom kind throws on load). */
 export function defineAtomPack(spec: {
   manifest: AtomPackManifest;
-  connectors?: Connector[];
   channels?: ChannelDefinition[];
   commands?: unknown[];
   messageTypes?: MessageTypeDescriptor[];
@@ -657,7 +651,6 @@ export function defineAtomPack(spec: {
     manifest: spec.manifest,
     ...(spec.deactivate ? { deactivate: spec.deactivate } : {}),
     register(ctx: AtomPackContext) {
-      for (const connector of spec.connectors ?? []) ctx.registerConnector(connector);
       for (const channel of spec.channels ?? []) ctx.registerChannel(channel);
       for (const command of spec.commands ?? []) ctx.registerCommand(command);
       for (const mt of spec.messageTypes ?? []) ctx.registerMessageType(mt);
@@ -693,10 +686,6 @@ export async function loadManifestAtomPack(
     if (!declared.has(atom)) throw new UndeclaredAtomError(atom, name);
   };
   const ctx: AtomPackContext = {
-    registerConnector: (c) => {
-      gate('connector');
-      host.registerConnector(c);
-    },
     registerChannel: (ch) => {
       gate('channel');
       host.registerChannel(ch);

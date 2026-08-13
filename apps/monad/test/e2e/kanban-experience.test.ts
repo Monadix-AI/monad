@@ -29,7 +29,6 @@ async function harness(kind: TransportKind = 'tcp') {
   const registry = new AtomPackRegistry();
   const permissions = monadPowerPack.manifest.permissions ?? [];
   await loadManifestAtomPack(monadPowerPack, {
-    registerConnector: () => {},
     registerChannel: () => {},
     registerCommand: () => {},
     registerMessageType: () => {},

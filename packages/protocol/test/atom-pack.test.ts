@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 
 import {
   atomDescriptorSchema,
+  atomPackManifestSchema,
   createSkillRequestSchema,
   installAtomPackRequestSchema,
   installedAtomPackSchema,
@@ -18,6 +19,17 @@ const installedPack = {
   enabled: true,
   source: 'github:example/pack@abc123'
 };
+
+test('connector is not an Atom Pack kind', () => {
+  expect(() =>
+    atomPackManifestSchema.parse({
+      name: 'legacy-connector',
+      version: '1.0.0',
+      sdkVersion: '0',
+      atoms: ['connector']
+    })
+  ).toThrow();
+});
 
 test('installed atom packs carry daemon-owned update eligibility with a backward-compatible default', () => {
   expect({

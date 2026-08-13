@@ -21,7 +21,6 @@ import type {
 import type {
   AtomPackLog,
   ChannelAdapterFactory,
-  Connector,
   ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
@@ -65,7 +64,6 @@ function isManifestAtomPack(v: unknown): v is ManifestAtomPack {
 export async function discoverChannelAdapters(
   dir: string,
   sinks: {
-    onConnector?: (connector: Connector) => void;
     onCommand?: (atomName: string, command: unknown) => void;
     onProvider?: (provider: ModelProvider) => void;
     onHook?: (hook: HookDefinition) => void;
@@ -98,8 +96,6 @@ export async function discoverChannelAdapters(
     reservedProviderTypes?: ReadonlySet<string>;
     /** User pins for the `channel` kind (bare type → packId) — resolves the bare name on collision. */
     channelPins?: Readonly<Record<string, string>>;
-    /** User pins for the `connector` kind (bare name → packId). */
-    connectorPins?: Readonly<Record<string, string>>;
     /** Structured bare-name collision report for the conflict UI. */
     onCollision?: (conflict: AtomConflict) => void;
     /** Loader diagnostics, including atoms refused because the pack is not accepted for their kind. */
@@ -203,9 +199,7 @@ export async function discoverChannelAdapters(
   }
 
   // Load through the atom-kind-gated path (gates on the consented atoms + checks sdkVersion).
-  // Connectors an atom pack declares + registers are routed to the daemon's sinks.
   const factories = await loadChannelAtomPacks(atomPacks, {
-    onConnector: sinks.onConnector,
     onCommand: sinks.onCommand,
     onProvider: sinks.onProvider,
     onHook: sinks.onHook,
@@ -218,7 +212,6 @@ export async function discoverChannelAdapters(
     onAtoms: sinks.onAtoms,
     reservedProviderTypes: sinks.reservedProviderTypes,
     channelPins: sinks.channelPins,
-    connectorPins: sinks.connectorPins,
     onCollision: sinks.onCollision,
     grantedAtomsFor: (atomPack) => granted.get(atomPack),
     grantedPermissionsFor: (atomPack) => grantedPermissions.get(atomPack),

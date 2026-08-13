@@ -121,8 +121,8 @@ by the `~/.monad/atoms` watcher) is build-then-swap:
    dropped twice is torn down once, and a teardown that throws is logged without failing the
    sweep.
 
-A sweep that throws before the swap leaves the previous working set serving. Tools and
-connectors are wired once at startup and are not part of a sweep.
+A sweep that throws before the swap leaves the previous working set serving. Tools are wired once
+at startup and are not part of a sweep.
 
 ## Authoring one
 

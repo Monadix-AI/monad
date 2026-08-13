@@ -1,7 +1,6 @@
 import type {
   AtomPackManifest,
   ChannelDefinition,
-  Connector,
   ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
@@ -52,27 +51,23 @@ function manifest(over: Partial<AtomPackManifest>): AtomPackManifest {
 }
 
 function collectingHost(): ManifestAtomPackHost & {
-  connectors: Connector[];
   channels: ChannelDefinition[];
   hooks: HookDefinition[];
   workplaceExperienceApis: WorkplaceExperienceApi[];
   workplaceExperiences: WorkplaceExperienceDefinition[];
   experienceWorkers: ExperienceWorker[];
 } {
-  const connectors: Connector[] = [];
   const channels: ChannelDefinition[] = [];
   const hooks: HookDefinition[] = [];
   const workplaceExperienceApis: WorkplaceExperienceApi[] = [];
   const workplaceExperiences: WorkplaceExperienceDefinition[] = [];
   const experienceWorkers: ExperienceWorker[] = [];
   return {
-    connectors,
     channels,
     hooks,
     workplaceExperienceApis,
     workplaceExperiences,
     experienceWorkers,
-    registerConnector: (c) => connectors.push(c),
     registerChannel: (c) => channels.push(c as ChannelDefinition),
     registerCommand: () => {},
     registerMessageType: () => {},
@@ -85,7 +80,6 @@ function collectingHost(): ManifestAtomPackHost & {
 
 const dummyHook: HookDefinition = { event: 'BeforeTool', handler: () => {} };
 
-const dummyConnector: Connector = { name: 'c', scopes: [], start: async () => {}, stop: async () => {} };
 const dummyWorkplaceExperience: WorkplaceExperienceDefinition = {
   id: 'custom-workspace',
   title: 'Custom workspace',
@@ -227,9 +221,9 @@ test('an atom pack registering a DECLARED atom kind succeeds', async () => {
 test('registering an UNDECLARED atom kind throws UndeclaredAtomError', async () => {
   const host = collectingHost();
   const pack: ManifestAtomPack = {
-    // declares only 'channel' — but tries to register a connector
+    // declares only 'channel' — but tries to register a hook
     manifest: manifest({ name: 'sneaky', atoms: ['channel'] }),
-    register: (ctx) => ctx.registerConnector(dummyConnector)
+    register: (ctx) => ctx.registerHook(dummyHook)
   };
   await expect(loadManifestAtomPack(pack, host)).rejects.toBeInstanceOf(UndeclaredAtomError);
 });
@@ -238,14 +232,14 @@ test('UndeclaredAtomError names the atom kind and atom pack', async () => {
   const host = collectingHost();
   const pack: ManifestAtomPack = {
     manifest: manifest({ name: 'sneaky', atoms: [] }),
-    register: (ctx) => ctx.registerConnector(dummyConnector)
+    register: (ctx) => ctx.registerHook(dummyHook)
   };
   try {
     await loadManifestAtomPack(pack, host);
     throw new Error('should have thrown');
   } catch (err) {
     expect(err).toBeInstanceOf(UndeclaredAtomError);
-    expect((err as UndeclaredAtomError).atom).toBe('connector');
+    expect((err as UndeclaredAtomError).atom).toBe('hook');
     expect((err as UndeclaredAtomError).atomPack).toBe('sneaky');
   }
 });
@@ -260,12 +254,10 @@ test('defineAtomPack sugar still enforces — an undeclared payload array throws
 test('defineAtomPack sugar routes declared payloads to the host', async () => {
   const host = collectingHost();
   const pack = defineAtomPack({
-    manifest: manifest({ atoms: ['connector', 'channel'] }),
-    connectors: [dummyConnector],
+    manifest: manifest({ atoms: ['channel'] }),
     channels: [dummyChannelAtom]
   });
   await loadManifestAtomPack(pack, host);
-  expect(host.connectors.length).toBe(1);
   expect(host.channels.length).toBe(1);
 });
 

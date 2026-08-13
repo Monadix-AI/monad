@@ -1,7 +1,7 @@
 // Bridges the unified atom pack loader to the channel registry. Builtin (first-party) and
 // discovered (third-party) atom packs both load through loadManifestAtomPack into this host —
 // so a channel atom's declared `channel` atom kind is enforced the same way for everyone.
-// registerChannel collects type→factory; connectors/commands are forwarded to optional sinks (the
+// registerChannel collects type→factory; commands are forwarded to optional sinks (the
 // daemon wires them into their respective registries, including on rediscovery after an atom pack
 // install). Tools are NOT an atom kind — they are first-party only and never registered here.
 //
@@ -20,7 +20,6 @@ import type {
   AtomPackLog,
   ChannelAdapterFactory,
   ChannelDefinition,
-  Connector,
   ExperienceWorker,
   HookDefinition,
   ManifestAtomPack,
@@ -41,7 +40,6 @@ import { describeAtomPack } from '#/atoms/describe.ts';
 import { type AtomConflict, qualifiedAtomName, resolveAtomPins } from '#/atoms/resolve.ts';
 
 interface ChannelAtomPackHostOptions {
-  onConnector?: (connector: Connector) => void;
   /** Receives each command an atom pack registers (atom-kind-gated like the others). */
   onCommand?: (command: unknown) => void;
   /** Receives each model provider an atom pack registers (atom-kind-gated like the others). */
@@ -89,9 +87,7 @@ interface ChannelAtomPackHostOptions {
   /** User pins for the `channel` kind: bare type → packId. Resolves the bare name when several packs
    *  register the same channel type; unset → first-wins by load order. */
   channelPins?: Readonly<Record<string, string>>;
-  /** User pins for the `connector` kind (bare name → packId), same resolution as channelPins. */
-  connectorPins?: Readonly<Record<string, string>>;
-  /** Structured bare-name collision report (channel/connector) for the conflict UI. */
+  /** Structured bare-name collision report for the conflict UI. */
   onCollision?: (conflict: AtomConflict) => void;
   log?: AtomPackLog;
 }
@@ -103,19 +99,12 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
    *  already addressable as `<packId>__<type>`; this sets the bare `<type>` to the winner (pin ?? the
    *  first pack by load order). Call once after the load loop. */
   finalizeChannels: () => void;
-  /** Forward collected connectors after the sweep: winner under the bare name, shadowed losers
-   *  under `<packId>__<name>`. Call once after the load loop. */
-  finalizeConnectors: () => void;
 } {
   const channels = new Map<ChannelType, ChannelAdapterFactory>();
   // Channels namespace-coexist: each is registered as `<packId>__<type>` (always addressable) and
   // collected as a candidate; the bare `<type>` is resolved to one winner in finalizeChannels.
   const channelCandidates: { type: ChannelType; packId: string; create: ChannelAdapterFactory }[] = [];
-  // connectors namespace-coexist like channels, but they're name-keyed in external registries:
-  // the WINNER (pin ?? first-wins) keeps the bare name; only SHADOWED losers are forwarded under the
-  // qualified `<packId>__<name>`. provider is hard-unique (see registerProvider).
   const providerOwners = new Map<string, string>();
-  const connectorCandidates: { name: string; packId: string; value: Connector }[] = [];
   const pack = () => opts.currentAtomPack?.() ?? '';
   // A workplace experience runs in-process in the Web host and drives project state, so an atom-kind
   // grant alone is not enough — the pack must also be accepted for this kind. Refusing just the
@@ -127,13 +116,6 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
     return false;
   };
   const host: ManifestAtomPackHost = {
-    registerConnector: (c) => {
-      const pk = pack();
-      if (connectorCandidates.some((x) => x.packId === pk && x.name === c.name)) {
-        throw new Error(`Atom Pack "${pk}" registers duplicate connector "${c.name}"`);
-      }
-      connectorCandidates.push({ name: c.name, packId: pk, value: c });
-    },
     registerChannel: (def: ChannelDefinition) => {
       const pk = pack();
       // Same-pack duplicate type is an authoring bug → abort the pack (consistent with other kinds).
@@ -198,44 +180,7 @@ function createChannelAtomPackHost(opts: ChannelAtomPackHostOptions = {}): {
       );
     }
   };
-  // connector finalize: winner keeps the bare name; shadowed losers go out under the qualified
-  // name (so they stay reachable without bloating the common no-collision case).
-  function finalizeNamed<V extends { name: string }>(
-    candidates: { name: string; packId: string; value: V }[],
-    pins: Readonly<Record<string, string>> | undefined,
-    forward: ((v: V, sourceName: string) => void) | undefined,
-    rename: (v: V, name: string) => V,
-    kind: 'connector'
-  ): void {
-    if (!forward) return;
-    const { winners, collisions } = resolveAtomPins(
-      candidates.map((c) => ({ bareId: c.name, packId: c.packId })),
-      pins ?? {}
-    );
-    for (const c of candidates) {
-      forward(
-        c.packId === winners.get(c.name) ? c.value : rename(c.value, qualifiedAtomName(c.packId, c.name)),
-        c.packId
-      );
-    }
-    for (const col of collisions) {
-      opts.onCollision?.({ kind, ...col });
-      opts.log?.(
-        'warn',
-        `${kind} "${col.bareId}": "${col.winner}" active; shadowed ${col.shadowed.join(', ')} — reachable as <packId>__${col.bareId}`
-      );
-    }
-  }
-  const finalizeConnectors = (): void => {
-    finalizeNamed(
-      connectorCandidates,
-      opts.connectorPins,
-      opts.onConnector,
-      (c, name) => ({ ...c, name }),
-      'connector'
-    );
-  };
-  return { host, channels, finalizeChannels, finalizeConnectors };
+  return { host, channels, finalizeChannels };
 }
 
 export type LoadChannelAtomPacksOptions = Omit<ChannelAtomPackHostOptions, 'onCommand'> & {
@@ -270,8 +215,7 @@ export async function loadChannelAtomPacks(
   let currentAtomPack = '';
   let currentWorkplaceExperiencePermissions: readonly WorkplaceExperiencePermission[] = [];
   let currentWorkplaceExperienceTrust: AtomPackTrustDecision = { trusted: true, reasons: [] };
-  const { host, channels, finalizeChannels, finalizeConnectors } = createChannelAtomPackHost({
-    onConnector: opts.onConnector,
+  const { host, channels, finalizeChannels } = createChannelAtomPackHost({
     onProvider: opts.onProvider,
     onHook: opts.onHook,
     onAgentAdapter: opts.onAgentAdapter,
@@ -282,7 +226,6 @@ export async function loadChannelAtomPacks(
     onRequestInteraction: opts.onRequestInteraction,
     reservedProviderTypes: opts.reservedProviderTypes,
     channelPins: opts.channelPins,
-    connectorPins: opts.connectorPins,
     onCollision: opts.onCollision,
     log: opts.log,
     currentAtomPack: () => currentAtomPack,
@@ -318,6 +261,5 @@ export async function loadChannelAtomPacks(
     }
   }
   finalizeChannels(); // resolve bare channel types to one winner (pin ?? first-wins) after the sweep
-  finalizeConnectors(); // forward connectors: winner bare, shadowed losers qualified
   return channels;
 }

@@ -1,7 +1,7 @@
 # `@monad/atoms` docs
 
-The built-in atom pack: channel adapters, model providers, connectors, commands,
-agent adapters, and workplace experiences.
+The built-in atom pack contains channel adapters, model providers, commands, agent adapters, and
+workplace experiences.
 
 | Doc | Covers |
 |---|---|

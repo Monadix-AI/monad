@@ -6,7 +6,7 @@ import { listWorkplaceExperiencesApi } from './list-workplace-experiences.ts';
 export const listAtomKindsApi = listWorkplaceExperiencesApi.injectEndpoints({
   overrideExisting: true,
   endpoints: (builder) => ({
-    // The atom kinds registered system-wide (tool/connector/channel/command/message-type/locale/provider).
+    // The atom kinds registered system-wide (channel/command/message-type/locale/provider/etc.).
     listAtomKinds: builder.query<ListAtomKindsResponse, void>({
       queryFn: (_arg, api: { extra: unknown }) =>
         runTreaty(() => clientOf(api).treaty.v1.settings.model['atom-kinds'].get()),

@@ -1,4 +1,4 @@
-// Bare-name resolution for namespace-coexist atom kinds (tool/connector/channel/command/...).
+// Bare-name resolution for namespace-coexist atom kinds (channel/command/skill).
 //
 // Every atom is also addressable by its fully-qualified `<packId>__<id>` name, so nothing is lost
 // when two packs claim the same bare id. The BARE id resolves to one winner: the user's pin if the
@@ -7,7 +7,7 @@
 // decides how to spell the qualified name and what to do with shadowed entries.
 
 export interface AtomCandidate {
-  /** The bare id two packs might collide on (tool/connector name, channel type, command name, …). */
+  /** The bare id two packs might collide on (channel type, command or skill name, …). */
   bareId: string;
   /** The owning atom pack's identity (folder name). */
   packId: string;

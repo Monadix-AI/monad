@@ -128,7 +128,7 @@
   "web.atoms.rescan": "Scan local files again",
   "web.atoms.rescanErrors": "Some Atom Packs could not load:",
   "web.atoms.source": "Source",
-  "web.atoms.subtitle": "Install and manage Atom Packs that contain tools, connectors, commands, and providers.",
+  "web.atoms.subtitle": "Install and manage Atom Packs that contain channels, commands, providers, and experiences.",
   "web.atoms.author": "Author",
   "web.atoms.builtin": "Built-in",
   "web.atoms.compatibility": "Requires Monad",

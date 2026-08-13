@@ -1,6 +1,5 @@
 import type { HookEvent, WorkplaceExperiencePermission } from '@monad/protocol';
 import type {
-  Connector,
   ExperienceWorker,
   HookDefinition,
   WorkplaceExperienceApi,
@@ -37,11 +36,9 @@ export interface RegisteredExperienceWorker {
   worker: ExperienceWorker;
 }
 
-/** Collects tools/connectors/hooks registered by loaded atom packs — the daemon's host sink for the
- *  `tool`/`connector`/`hook` atom kinds (see createChannelRegistry). */
+/** Collects daemon tools and hooks registered by loaded atom packs. */
 export class AtomPackRegistry {
   readonly tools = new Map<string, Tool>();
-  readonly connectors = new Map<string, Connector>();
   readonly hooks = new Map<HookEvent, HookDefinition[]>();
   readonly workplaceExperiences = new Map<string, RegisteredWorkplaceExperience>();
   readonly workplaceExperienceApiRoutes = new Map<string, RegisteredWorkplaceExperienceApiRoute>();
@@ -101,10 +98,6 @@ export class AtomPackRegistry {
       this.rev++;
       this.cachedList = null;
     }
-  }
-
-  registerConnector(connector: Connector): void {
-    this.connectors.set(connector.name, connector);
   }
 
   registerHook(hook: HookDefinition): void {
@@ -221,8 +214,8 @@ export class AtomPackRegistry {
    * synchronous and cannot fail, so a reader never observes a half-populated registry, and a sweep
    * that throws leaves the previous working set untouched.
    *
-   * Tools and connectors are deliberately not part of this: they are wired once at startup and no
-   * sweep re-registers them.
+   * Tools are deliberately not part of this: they are wired once at startup and no sweep
+   * re-registers them.
    */
   adoptReloadableAtoms(candidate: AtomPackRegistry): void {
     this.hooks.clear();
