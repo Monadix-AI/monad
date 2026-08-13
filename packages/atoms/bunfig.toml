@@ -1,2 +1,2 @@
-[run]
-silent = true
+[test]
+preload = ["./test/register-dom-first.ts"]

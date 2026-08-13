@@ -7,27 +7,18 @@ import type {
   MeshRawEventPage,
   SessionId
 } from '@monad/protocol';
-import type { ReactElement } from 'react';
 import type {
-  ObservationPanelController,
   ObservationPanelHooks,
   UseObservationPanelArgs
 } from '../../src/workplace-experiences/chat-room/components/observation/use-observation-panel.ts';
 
 import { expect, test } from 'bun:test';
-import { createElement } from 'react';
+import { act, renderHook } from '@testing-library/react';
 
 import { useObservationPanel } from '../../src/workplace-experiences/chat-room/components/observation/use-observation-panel.ts';
+import { setupDomTestEnvironment } from '../dom-test-env.ts';
 
-const { act, create } = require('react-test-renderer') as {
-  act: (operation: () => void | Promise<void>) => Promise<void>;
-  create: (element: ReactElement) => {
-    update: (element: ReactElement) => void;
-    unmount: () => void;
-  };
-};
-
-(globalThis as typeof globalThis & { IS_REACT_ACT_ENVIRONMENT: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
+setupDomTestEnvironment();
 
 const transcriptTargetId = 'ses_observation01' as SessionId;
 
@@ -85,8 +76,6 @@ test('observation hook retains one agent plane through reconnect and clears it a
   let snapshot = connected(firstSessionId, 'e1', 1);
   let convenienceFrames = frames('e1', oldEvent);
   const pendingPages: ReturnType<typeof deferredPage>[] = [];
-  let controller: ObservationPanelController | undefined;
-
   const hooks: ObservationPanelHooks = {
     useConnection: () => ({ currentData: snapshot, refetch: () => {} }),
     useRawStream: () => ({ currentData: { fatalError: false, frames: [], frameOffset: 0 } }),
@@ -111,11 +100,6 @@ test('observation hook retains one agent plane through reconnect and clears it a
     useSessionUsage: () => ({})
   };
 
-  function Harness(props: Omit<UseObservationPanelArgs, 'hooks'>): null {
-    controller = useObservationPanel({ ...props, hooks });
-    return null;
-  }
-
   const props = (meshSessionId: string): Omit<UseObservationPanelArgs, 'hooks'> => ({
     meshSessionId,
     transcriptTargetId,
@@ -123,62 +107,69 @@ test('observation hook retains one agent plane through reconnect and clears it a
     provider: 'codex'
   });
 
-  let renderer!: ReturnType<typeof create>;
+  const rendered = renderHook(
+    (input: Omit<UseObservationPanelArgs, 'hooks'>) => useObservationPanel({ ...input, hooks }),
+    {
+      initialProps: props(firstSessionId)
+    }
+  );
   await act(async () => {
-    renderer = create(createElement(Harness, props(firstSessionId)));
     await Promise.resolve();
   });
-  expect(controller?.events.map((item) => item.text)).toEqual(['visible before wake']);
+  expect(rendered.result.current.events.map((item) => item.text)).toEqual(['visible before wake']);
 
   const reconnectPage = deferredPage();
   pendingPages.push(reconnectPage);
   snapshot = disconnected(firstSessionId, 2);
   convenienceFrames = [];
   await act(async () => {
-    renderer.update(createElement(Harness, props(firstSessionId)));
+    rendered.rerender(props(firstSessionId));
     await Promise.resolve();
   });
   expect({
-    events: controller?.events.map((item) => item.text),
-    loading: controller?.loading
+    events: rendered.result.current.events.map((item) => item.text),
+    loading: rendered.result.current.loading
   }).toEqual({ events: ['visible before wake'], loading: false });
 
   snapshot = connected(firstSessionId, 'e2', 3);
   convenienceFrames = frames('e2', newEvent);
   await act(async () => {
-    renderer.update(createElement(Harness, props(firstSessionId)));
+    rendered.rerender(props(firstSessionId));
     await Promise.resolve();
   });
-  expect(controller?.events.map((item) => item.text)).toEqual(['visible after wake']);
+  expect(rendered.result.current.events.map((item) => item.text)).toEqual(['visible after wake']);
 
   const emptyReplacement = deferredPage();
   pendingPages.push(emptyReplacement);
   snapshot = disconnected(firstSessionId, 4);
   convenienceFrames = [];
   await act(async () => {
-    renderer.update(createElement(Harness, props(firstSessionId)));
+    rendered.rerender(props(firstSessionId));
     await Promise.resolve();
   });
-  expect(controller?.events.map((item) => item.text)).toEqual(['visible after wake']);
+  expect(rendered.result.current.events.map((item) => item.text)).toEqual(['visible after wake']);
   await act(async () => {
     emptyReplacement.resolve({ frames: [] });
     await emptyReplacement.promise;
   });
-  expect({ events: controller?.events, loading: controller?.loading }).toEqual({ events: [], loading: false });
+  expect({ events: rendered.result.current.events, loading: rendered.result.current.loading }).toEqual({
+    events: [],
+    loading: false
+  });
 
   const otherAgentPage = deferredPage();
   pendingPages.push(otherAgentPage);
   snapshot = disconnected(secondSessionId, 1);
   await act(async () => {
-    renderer.update(createElement(Harness, props(secondSessionId)));
+    rendered.rerender(props(secondSessionId));
     await Promise.resolve();
   });
-  expect(controller?.events).toEqual([]);
+  expect(rendered.result.current.events).toEqual([]);
 
   reconnectPage.resolve({ frames: [] });
   otherAgentPage.resolve({ frames: [] });
   await act(async () => {
-    renderer.unmount();
+    rendered.unmount();
     await Promise.all([reconnectPage.promise, otherAgentPage.promise]);
   });
 });
@@ -199,8 +190,6 @@ test('observation hook preserves both planes through repeated activity and raw m
   };
   let convenienceFrames = frames('e1', activityEvent);
   let rawFrames = [rawFrame];
-  let controller: ObservationPanelController | undefined;
-
   const hooks: ObservationPanelHooks = {
     useConnection: () => ({ currentData: snapshot, refetch: () => {} }),
     useRawStream: () => ({ currentData: { fatalError: false, frames: rawFrames, frameOffset: 0 } }),
@@ -222,54 +211,50 @@ test('observation hook preserves both planes through repeated activity and raw m
     useSessionUsage: () => ({})
   };
 
-  function Harness(): null {
-    controller = useObservationPanel({
+  const rendered = renderHook(() =>
+    useObservationPanel({
       meshSessionId,
       transcriptTargetId,
       agentName: meshSessionId,
       provider: 'codex',
       hooks
-    });
-    return null;
-  }
-
-  let renderer!: ReturnType<typeof create>;
+    })
+  );
   await act(async () => {
-    renderer = create(createElement(Harness));
     await Promise.resolve();
   });
-  expect(controller?.events.map((item) => item.text)).toEqual(['activity survives']);
+  expect(rendered.result.current.events.map((item) => item.text)).toEqual(['activity survives']);
 
   await act(async () => {
-    controller?.setMode('raw');
+    rendered.result.current.setMode('raw');
     await Promise.resolve();
   });
-  expect(controller?.rawRows.map((row) => row.preview)).toEqual(['raw survives']);
+  expect(rendered.result.current.rawRows.map((row) => row.preview)).toEqual(['raw survives']);
 
   convenienceFrames = [];
   rawFrames = [];
   for (let cycle = 0; cycle < 2; cycle += 1) {
     await act(async () => {
-      controller?.setMode('convenience');
+      rendered.result.current.setMode('convenience');
       await Promise.resolve();
     });
     expect({
-      mode: controller?.mode,
-      events: controller?.events.map((item) => item.text)
+      mode: rendered.result.current.mode,
+      events: rendered.result.current.events.map((item) => item.text)
     }).toEqual({ mode: 'convenience', events: ['activity survives'] });
 
     await act(async () => {
-      controller?.setMode('raw');
+      rendered.result.current.setMode('raw');
       await Promise.resolve();
     });
     expect({
-      mode: controller?.mode,
-      rawRows: controller?.rawRows.map((row) => row.preview)
+      mode: rendered.result.current.mode,
+      rawRows: rendered.result.current.rawRows.map((row) => row.preview)
     }).toEqual({ mode: 'raw', rawRows: ['raw survives'] });
   }
 
   await act(async () => {
-    renderer.unmount();
+    rendered.unmount();
     await Promise.resolve();
   });
 });

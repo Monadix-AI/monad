@@ -2,7 +2,7 @@ import type { AgentObservationEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { parseUnifiedDiff } from '@monad/ui';
-import React from 'react';
+import { fireEvent, render } from '@testing-library/react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
@@ -17,6 +17,7 @@ import {
   observationTimelineRows
 } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
+import { setupDomTestEnvironment } from '../dom-test-env.ts';
 
 const changes = [
   {
@@ -76,11 +77,11 @@ function visibleText(markup: string): string {
     .trim();
 }
 
-function renderedText(node: unknown): string {
-  if (typeof node === 'string' || typeof node === 'number') return String(node);
-  if (Array.isArray(node)) return node.map(renderedText).join(' ');
-  if (!node || typeof node !== 'object') return '';
-  return renderedText((node as { children?: unknown }).children);
+setupDomTestEnvironment();
+
+function domText(node: Node): string {
+  if (node.nodeType === Node.TEXT_NODE) return node.textContent ?? '';
+  return Array.from(node.childNodes, domText).join(' ');
 }
 
 test('Codex fileChange projects exact files and diff totals from app-server provenance', () => {
@@ -207,36 +208,18 @@ test('Codex fileChange timeline renders a bare history item as the read-only sum
 });
 
 test('Codex fileChange controls reveal the remaining files and an individual diff', async () => {
-  (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-  const { act, create } = require('react-test-renderer') as {
-    act: (run: () => void) => Promise<void>;
-    create: (element: React.ReactElement) => {
-      root: {
-        findAllByType(type: string): Array<{ props: { onClick?: () => void }; children: unknown[] }>;
-      };
-      toJSON(): unknown;
-      unmount(): void;
-    };
-  };
   const event = pipeline().cards[0]?.payload.call as AgentObservationEvent | undefined;
   const card = pipeline().cards[0];
   if (!event || !card) throw new Error('Expected Codex file change card');
   const view = codexFileChangeView(card.provenance.contractEvents);
   if (!view) throw new Error('Expected Codex file change view');
-  let renderer: ReturnType<typeof create> | undefined;
-  await act(() => {
-    renderer = create(<CodexFileChangeCard view={view} />);
-  });
-  const mounted = renderer;
-  if (!mounted) throw new Error('Expected mounted Codex file change card');
-
-  const initialButtons = mounted.root.findAllByType('button');
-  await act(() => initialButtons.at(-1)?.props.onClick?.());
-  const expandedFiles = renderedText(mounted.toJSON()).replace(/\s+/g, ' ').replace(/\/ /g, '/').trim();
-  const fileButtons = mounted.root.findAllByType('button');
-  await act(() => fileButtons[0]?.props.onClick?.());
-  const expandedDiff = renderedText(mounted.toJSON()).replace(/\s+/g, ' ').replace(/\/ /g, '/').trim();
-  await act(() => mounted.unmount());
+  const rendered = render(<CodexFileChangeCard view={view} />);
+  const initialButtons = rendered.getAllByRole('button');
+  fireEvent.click(initialButtons.at(-1) as HTMLButtonElement);
+  const expandedFiles = domText(rendered.container).replace(/\s+/g, ' ').replace(/\/ /g, '/').trim();
+  const fileButtons = rendered.getAllByRole('button');
+  fireEvent.click(fileButtons[0] as HTMLButtonElement);
+  const expandedDiff = domText(rendered.container).replace(/\s+/g, ' ').replace(/\/ /g, '/').trim();
 
   expect({
     expandedDiff,

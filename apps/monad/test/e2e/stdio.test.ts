@@ -3,7 +3,7 @@
 // framing path an embedded host (IDE, shell script, editor plugin) uses with --stdio, and
 // cannot be covered by the in-process HTTP transport tests.
 
-import { afterEach, expect, test } from 'bun:test';
+import { afterAll, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 
 const helper = resolve(import.meta.dir, 'stdio.helper.ts');
@@ -50,36 +50,37 @@ function spawnStdioHelper() {
     return JSON.parse(await readLine()) as JsonRpcResponse;
   }
 
-  return { proc, call };
+  async function close(): Promise<void> {
+    proc.stdin.end();
+    await proc.exited;
+    reader.releaseLock();
+  }
+
+  return { call, close };
 }
 
-const procs: ReturnType<typeof Bun.spawn>[] = [];
+const stdio = spawnStdioHelper();
 
-afterEach(() => {
-  for (const p of procs.splice(0)) p.kill();
-});
+afterAll(() => stdio.close());
 
 test(
   'stdio JSON-RPC: sessions.create → sessions.get → sessions.list round-trip',
   async () => {
-    const { proc, call } = spawnStdioHelper();
-    procs.push(proc);
-
     // Create a session.
-    const created = await call('sessions.create', { title: 'stdio-test' });
+    const created = await stdio.call('sessions.create', { title: 'stdio-test' });
     expect(created.error).toBeUndefined();
     const { sessionId } = created.result as { sessionId: string };
     expect(sessionId).toMatch(/^ses_/);
 
     // Fetch by ID.
-    const got = await call('sessions.get', { id: sessionId });
+    const got = await stdio.call('sessions.get', { id: sessionId });
     expect(got.error).toBeUndefined();
     const session = got.result as { session: { id: string; title: string } };
     expect(session.session.id).toBe(sessionId);
     expect(session.session.title).toBe('stdio-test');
 
     // List includes the new session.
-    const listed = await call('sessions.list', {});
+    const listed = await stdio.call('sessions.list', {});
     expect(listed.error).toBeUndefined();
     const { sessions } = listed.result as { sessions: { id: string }[] };
     expect(sessions.some((s) => s.id === sessionId)).toBe(true);
@@ -90,10 +91,7 @@ test(
 test(
   'stdio JSON-RPC: unknown method returns -32601 METHOD_NOT_FOUND',
   async () => {
-    const { proc, call } = spawnStdioHelper();
-    procs.push(proc);
-
-    const res = await call('no.such.method', {});
+    const res = await stdio.call('no.such.method', {});
     expect(res.result).toBeUndefined();
     expect(res.error?.code).toBe(-32601);
   },
@@ -103,11 +101,8 @@ test(
 test(
   'stdio JSON-RPC: invalid params returns -32602 INVALID_PARAMS',
   async () => {
-    const { proc, call } = spawnStdioHelper();
-    procs.push(proc);
-
     // sessions.create requires a `title` field — omitting it should fail schema validation.
-    const res = await call('sessions.create', {});
+    const res = await stdio.call('sessions.create', {});
     expect(res.result).toBeUndefined();
     expect(res.error?.code).toBe(-32602);
   },
@@ -117,14 +112,11 @@ test(
 test(
   'stdio JSON-RPC: multiple sequential requests share one connection',
   async () => {
-    const { proc, call } = spawnStdioHelper();
-    procs.push(proc);
-
     // Fire three creates in order — stdio is sequential, responses must match requests.
     const titles = ['alpha', 'beta', 'gamma'];
     const ids: string[] = [];
     for (const title of titles) {
-      const res = await call('sessions.create', { title });
+      const res = await stdio.call('sessions.create', { title });
       expect(res.error).toBeUndefined();
       ids.push((res.result as { sessionId: string }).sessionId);
     }
