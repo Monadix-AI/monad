@@ -67,6 +67,7 @@ export const atomPackManifestSchema = z.object({
     .min(1)
     .regex(/^[a-z0-9][a-z0-9._-]*$/i, 'Atom Pack name must be a safe slug'),
   version: z.string().min(1),
+  /** Semver range of compatible @monad/sdk-atom versions, e.g. "^0.1.5". */
   sdkVersion: z.string().min(1),
   /** Semver range of supported Monad host versions, e.g. ">=0.1.0 <0.2.0". Absent means no host-version gate. */
   monadVersion: z.string().min(1).optional(),

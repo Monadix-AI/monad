@@ -44,6 +44,13 @@ export function resolveConfirmActionLabel(
   return pending ? (pendingLabel ?? confirmLabel) : confirmLabel;
 }
 
+export function resolveConfirmActionState(
+  pending: boolean,
+  confirmDisabled: boolean
+): { cancelDisabled: boolean; confirmDisabled: boolean } {
+  return { cancelDisabled: pending, confirmDisabled: pending || confirmDisabled };
+}
+
 function Confirm({
   open,
   onOpenChange,
@@ -60,6 +67,7 @@ function Confirm({
   onConfirm
 }: ConfirmProps) {
   const submittingRef = useRef(false);
+  const actionState = resolveConfirmActionState(pending, confirmDisabled);
 
   useEffect(() => {
     if (!open || !pending) submittingRef.current = false;
@@ -100,7 +108,7 @@ function Confirm({
         <AlertDialogFooter>
           <AlertDialogCancel asChild>
             <Button
-              disabled={pending || confirmDisabled}
+              disabled={actionState.cancelDisabled}
               type="button"
               variant="outline"
             >
@@ -109,10 +117,10 @@ function Confirm({
           </AlertDialogCancel>
           <AlertDialogAction asChild>
             <Button
-              disabled={pending}
+              disabled={actionState.confirmDisabled}
               onClick={(event) => {
                 event.preventDefault();
-                if (pending || submittingRef.current) return;
+                if (actionState.confirmDisabled || submittingRef.current) return;
                 submittingRef.current = true;
                 try {
                   onConfirm();

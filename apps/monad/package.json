@@ -82,7 +82,7 @@
     "devtools": "bunx @ai-sdk/devtools",
     "generate": "bun run --cwd ../web generate && bun ../../scripts/generate-licenses.ts",
     "start": "bun src/main.ts",
-    "start:dev": "NODE_ENV=development bun --env-file=../../.env.local --watch ../cli/src/bin.ts daemon --dev",
+    "start:dev": "NODE_ENV=development bun --env-file=../../.env.local ../cli/src/bin.ts daemon --dev",
     "test": "bun ../../scripts/quiet-run.ts bun scripts/run-unit-tests.ts",
     "test:e2e": "bun ../../scripts/quiet-run.ts bun scripts/run-e2e-tests.ts",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"

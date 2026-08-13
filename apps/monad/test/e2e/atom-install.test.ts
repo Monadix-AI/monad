@@ -344,6 +344,22 @@ test('incompatible sdkVersion is rejected', async () => {
   ).rejects.toThrow(/SDK/i);
 });
 
+test('compatible sdkVersion range installs against the host package version', async () => {
+  const out = await installAtomPack('local:/x', {
+    atomPacksDir: atomsDir,
+    fetch: async () => staged({ name: 'wa', type: 'whatsapp', atoms: ['channel'], sdkVersion: '^0.1.0' }),
+    consent: () => true
+  });
+
+  expect(out).toEqual({
+    atoms: ['channel'],
+    dir: join(atomsDir, 'wa'),
+    installed: true,
+    name: 'wa',
+    warnings: []
+  });
+});
+
 test('incompatible monadVersion is rejected at install time', async () => {
   await expect(
     installAtomPack('local:/x', {
@@ -399,6 +415,31 @@ test('re-installing the same source updates in place (dedup), even across a vers
   });
   const dirs = (await readdir(atomsDir, { withFileTypes: true })).filter((e) => e.isDirectory());
   expect(dirs.length).toBe(1); // updated in place, not duplicated
+});
+
+test('a failed in-place update keeps the installed pack loadable', async () => {
+  await installAtomPack('local:/x', {
+    atomPacksDir: atomsDir,
+    fetch: async () => staged({ name: 'wa', type: 'whatsapp', atoms: ['channel'] }),
+    consent: () => true
+  });
+
+  const brokenUpdate = staged({ name: 'wa', type: 'whatsapp', atoms: ['channel'] });
+  brokenUpdate.files = new Map([
+    ['conflict', new TextEncoder().encode('file')],
+    ['conflict/child', new TextEncoder().encode('cannot be written below a file')]
+  ]);
+  await expect(
+    installAtomPack('local:/x', {
+      atomPacksDir: atomsDir,
+      fetch: async () => brokenUpdate,
+      consent: () => true
+    })
+  ).rejects.toThrow();
+
+  const { factories, errors } = await discoverChannelAdapters(atomsDir);
+  expect(errors).toEqual([]);
+  expect(factories.has('whatsapp')).toBe(true);
 });
 
 test('a different source with the same name coexists under a disambiguated dir (no clobber)', async () => {

@@ -37,7 +37,7 @@ import { isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseAtomPackManifest } from '@monad/protocol';
 
-import { assertAtomPackMonadCompatibility } from '#/atoms/compat.ts';
+import { assertAtomPackMonadCompatibility, assertAtomPackSdkCompatibility } from '#/atoms/compat.ts';
 import { type AtomPackInstallRecord, atomPackInstallRecordSchema } from '#/atoms/install/index.ts';
 import {
   type AtomPackExperienceReview,
@@ -150,6 +150,7 @@ export async function discoverChannelAdapters(
         /* no install record → treat as enabled (drop-in pack, no recorded integrity) */
       }
       const manifest = parseAtomPackManifest(JSON.parse(await readFile(join(atomPackDir, 'atom-pack.json'), 'utf8')));
+      assertAtomPackSdkCompatibility(manifest.name, manifest.sdkVersion);
       assertAtomPackMonadCompatibility(manifest.name, manifest.monadVersion);
       const grantedAtoms = manifest.atoms ?? [];
       const entryRel = manifest.entry ?? 'dist/atom-pack.js';

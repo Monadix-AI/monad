@@ -33,9 +33,9 @@ import type {
 import type { AtomPackTrustDecision } from '#/atoms/trust.ts';
 
 import { registerMessageType } from '@monad/protocol';
-import { loadManifestAtomPack, SDK_VERSION } from '@monad/sdk-atom';
+import { loadManifestAtomPack } from '@monad/sdk-atom';
 
-import { assertAtomPackMonadCompatibility } from '#/atoms/compat.ts';
+import { assertAtomPackMonadCompatibility, assertAtomPackSdkCompatibility } from '#/atoms/compat.ts';
 import { describeAtomPack } from '#/atoms/describe.ts';
 import { type AtomConflict, qualifiedAtomName, resolveAtomPins } from '#/atoms/resolve.ts';
 
@@ -234,11 +234,10 @@ export async function loadChannelAtomPacks(
     onCommand: opts.onCommand ? (cmd) => opts.onCommand?.(currentAtomPack, cmd) : undefined
   });
   for (const atomPack of atomPacks) {
-    if (atomPack.manifest.sdkVersion !== SDK_VERSION) {
-      opts.onError?.(
-        atomPack.manifest.name,
-        new Error(`incompatible sdkVersion ${atomPack.manifest.sdkVersion} (daemon: ${SDK_VERSION})`)
-      );
+    try {
+      assertAtomPackSdkCompatibility(atomPack.manifest.name, atomPack.manifest.sdkVersion);
+    } catch (error) {
+      opts.onError?.(atomPack.manifest.name, error instanceof Error ? error : new Error(String(error)));
       continue;
     }
     currentAtomPack = opts.packIdFor?.(atomPack) ?? atomPack.manifest.name;

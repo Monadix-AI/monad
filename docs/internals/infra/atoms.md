@@ -27,18 +27,23 @@ flowchart TB
 ## The capability model
 
 ```ts
-import { defineAtomPack } from '@monad/sdk-atom';
+import { defineAtomPack, SDK_COMPATIBILITY_RANGE } from '@monad/sdk-atom';
 
 export default defineAtomPack({
   manifest: {
     name: 'my-atom-pack',
     version: '1.0.0',
-    sdkVersion: '0',
+    sdkVersion: SDK_COMPATIBILITY_RANGE,
     atoms: ['channel'], // ← declared, auditable, enforced
   },
   channels: [myChannel],
 });
 ```
+
+`sdkVersion` is a semver compatibility range. `SDK_COMPATIBILITY_RANGE` derives its default from
+the installed `@monad/sdk-atom` package version, so an author does not duplicate that version in
+source. The daemon resolves its own SDK version from the same package manifest and rejects packs
+whose range does not contain it.
 
 - **Declared = audited + enforced.** An atom pack that declares `['channel']` cannot
   `registerProvider` — that throws `UndeclaredAtomError` at load. An atom pack gets a capability
@@ -61,11 +66,13 @@ matching payload arrays. This is the "one submission, many atoms" shape: a vendo
 pack that adds a channel, a few slash commands, a provider, and a custom message type together.
 
 ```ts
+import { defineAtomPack, SDK_COMPATIBILITY_RANGE } from '@monad/sdk-atom';
+
 export default defineAtomPack({
   manifest: {
     name: 'acme',
     version: '1.0.0',
-    sdkVersion: '0',
+    sdkVersion: SDK_COMPATIBILITY_RANGE,
     atoms: ['channel', 'command', 'provider', 'message-type'], // declare ALL kinds used
   },
   channels: [acmeChannel],
@@ -252,7 +259,7 @@ in `@monad/atoms/src/providers` happen to use ai-sdk internally via a shared ada
 an implementation detail, not part of the contract.)
 
 ```ts
-import { defineProvider, defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
+import { defineProvider, defineAtomPack, SDK_COMPATIBILITY_RANGE } from '@monad/sdk-atom';
 
 const myProvider = defineProvider({
   type: 'my-vendor', // open string; also the Provider.type stored in config.json
@@ -273,7 +280,12 @@ const myProvider = defineProvider({
 });
 
 export default defineAtomPack({
-  manifest: { name: 'my-vendor', version: '1.0.0', sdkVersion: SDK_VERSION, atoms: ['provider'] },
+  manifest: {
+    name: 'my-vendor',
+    version: '1.0.0',
+    sdkVersion: SDK_COMPATIBILITY_RANGE,
+    atoms: ['provider'],
+  },
   providers: [myProvider],
 });
 ```

@@ -187,6 +187,7 @@ import type {
   SandboxViolation
 } from './sandbox.ts';
 
+import sdkPackage from '../package.json' with { type: 'json' };
 import { MeshAgentError, meshAgentOutputEventSchema } from './agent-adapter.ts';
 import { canonicalJson, contentHash, toFallbackAgentObservationEvent } from './agent-observation.ts';
 import { defaultBinProbes, resolveBinary } from './bin-probes.ts';
@@ -398,9 +399,11 @@ export {
   usageFromProviderMetadataJson
 };
 
-/** The SDK contract version. Atom packs are built against it; the host checks compatibility at load.
- *  Single source of truth — bump when the atom pack/channel contract changes incompatibly. */
-export const SDK_VERSION = '0';
+/** The installed SDK package version. Atom packs declare a semver range that the host checks at load. */
+export const SDK_VERSION = sdkPackage.version;
+
+/** Default compatibility range for atom packs authored against this SDK release. */
+export const SDK_COMPATIBILITY_RANGE = `^${SDK_VERSION}`;
 
 /** Registration-type atom kinds — fully enforced in-process via the gated AtomPackContext.
  *  Resource-type kinds (network/fs/llm) are audit-only until atom packs run out-of-process. Aliased

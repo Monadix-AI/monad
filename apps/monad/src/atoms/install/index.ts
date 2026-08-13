@@ -6,13 +6,13 @@ import type { Dirent } from 'node:fs';
 import type { AtomKind, AtomPackManifestWire } from '@monad/protocol';
 import type { AtomPackSource } from '#/atoms/install/source.ts';
 
-import { mkdir, readdir, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, rename, rm, stat } from 'node:fs/promises';
 import { basename, dirname, join, posix } from 'node:path';
 import { parseAtomPackManifest } from '@monad/protocol';
 import { SDK_VERSION } from '@monad/sdk-atom';
 import { z } from 'zod';
 
-import { assertAtomPackMonadCompatibility } from '#/atoms/compat.ts';
+import { assertAtomPackMonadCompatibility, assertAtomPackSdkCompatibility } from '#/atoms/compat.ts';
 import { scanBundle } from '#/atoms/install/scan.ts';
 import { parseAtomPackSource, sourceIdentity } from '#/atoms/install/source.ts';
 
@@ -154,6 +154,30 @@ async function writeStagedFiles(dir: string, files: Map<string, Uint8Array>, res
   }
 }
 
+async function replaceInstallDir(dir: string, stagedDir: string, log?: InstallAtomPackDeps['log']): Promise<void> {
+  const existing = (await stat(dir).catch(() => null)) !== null;
+  if (!existing) {
+    await rename(stagedDir, dir);
+    return;
+  }
+
+  const backupDir = await mkdtemp(join(dirname(dir), `.${basename(dir)}-backup-`));
+  await rm(backupDir, { recursive: true, force: true });
+  await rename(dir, backupDir);
+  try {
+    await rename(stagedDir, dir);
+  } catch (error) {
+    await rename(backupDir, dir);
+    throw error;
+  }
+  await rm(backupDir, { recursive: true, force: true }).catch((error: unknown) => {
+    log?.(
+      'warn',
+      `failed to remove Atom Pack update backup: ${error instanceof Error ? error.message : String(error)}`
+    );
+  });
+}
+
 export async function installAtomPack(spec: string, deps: InstallAtomPackDeps): Promise<InstallOutcome> {
   const source = parseAtomPackSource(spec);
   const staged = await deps.fetch(source);
@@ -170,8 +194,10 @@ export async function installAtomPack(spec: string, deps: InstallAtomPackDeps): 
 
   // Contract-shape compatibility.
   const sdkVersion = deps.sdkVersion ?? SDK_VERSION;
-  if (manifest.sdkVersion !== sdkVersion) {
-    throw new InstallError(`"${manifest.name}" needs SDK ${manifest.sdkVersion}, host has ${sdkVersion}`);
+  try {
+    assertAtomPackSdkCompatibility(manifest.name, manifest.sdkVersion, sdkVersion);
+  } catch (error) {
+    throw new InstallError(error instanceof Error ? error.message : String(error));
   }
   assertAtomPackMonadCompatibility(manifest.name, manifest.monadVersion);
 
@@ -201,28 +227,35 @@ export async function installAtomPack(spec: string, deps: InstallAtomPackDeps): 
   const entry = manifest.entry ?? 'dist/atom-pack.js';
   const sourceId = sourceIdentity(source);
   const dir = await resolveInstallDir(deps.atomPacksDir, manifest.name, sourceId);
-  await rm(dir, { recursive: true, force: true });
-  await mkdir(join(dir, dirname(entry)), { recursive: true });
-  await Bun.write(join(dir, entry), staged.bundle);
-  await Bun.write(join(dir, 'atom-pack.json'), `${JSON.stringify(manifest, null, 2)}\n`);
-  if (staged.files) await writeStagedFiles(dir, staged.files, new Set(['atom-pack.json', entry]));
-  await Bun.write(
-    join(dir, '.install.json'),
-    `${JSON.stringify(
-      {
-        source: spec,
-        sourceId,
-        sourceKind: source.kind,
-        commit: source.kind === 'github' ? revision : undefined,
-        revision,
-        integrity: manifest.integrity,
-        grantedAtoms: manifest.atoms,
-        installedAt: (deps.now ?? (() => new Date().toISOString()))()
-      },
-      null,
-      2
-    )}\n`
-  );
+  await mkdir(deps.atomPacksDir, { recursive: true });
+  const stagedDir = await mkdtemp(join(deps.atomPacksDir, `.${basename(dir)}-install-`));
+  try {
+    await mkdir(join(stagedDir, dirname(entry)), { recursive: true });
+    await Bun.write(join(stagedDir, entry), staged.bundle);
+    await Bun.write(join(stagedDir, 'atom-pack.json'), `${JSON.stringify(manifest, null, 2)}\n`);
+    if (staged.files) await writeStagedFiles(stagedDir, staged.files, new Set(['atom-pack.json', entry]));
+    await Bun.write(
+      join(stagedDir, '.install.json'),
+      `${JSON.stringify(
+        {
+          source: spec,
+          sourceId,
+          sourceKind: source.kind,
+          commit: source.kind === 'github' ? revision : undefined,
+          revision,
+          integrity: manifest.integrity,
+          grantedAtoms: manifest.atoms,
+          installedAt: (deps.now ?? (() => new Date().toISOString()))()
+        },
+        null,
+        2
+      )}\n`
+    );
+    await replaceInstallDir(dir, stagedDir, deps.log);
+  } catch (error) {
+    await rm(stagedDir, { recursive: true, force: true });
+    throw error;
+  }
 
   // The operable identity is the install dir (folder) name — may be suffixed when a same-named pack
   // from another source already exists. manifest.name remains the display label.

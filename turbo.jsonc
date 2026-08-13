@@ -135,6 +135,7 @@
     "start:dev": {
       "dependsOn": ["generate"],
       "persistent": true,
+      "interruptible": true,
       "cache": false
     },
     "devtools": {

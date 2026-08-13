@@ -19,7 +19,7 @@
 // Tests that need specific channel adapters, providers, or commands use explicit package subpaths
 // instead of reaching through the source tree.
 
-import { defineAtomPack, SDK_VERSION } from '@monad/sdk-atom';
+import { defineAtomPack, SDK_COMPATIBILITY_RANGE } from '@monad/sdk-atom';
 
 import { builtinAgentAdapters } from './agent-adapters/index.ts';
 import { discordChannelAtom } from './channels/discord.ts';
@@ -50,7 +50,7 @@ export default defineAtomPack({
   manifest: {
     name: 'monad-builtins',
     version: '1.0.0',
-    sdkVersion: SDK_VERSION,
+    sdkVersion: SDK_COMPATIBILITY_RANGE,
     atoms: ['channel', 'command', 'provider', 'workplace-experience', 'agent-adapter'],
     description: 'First-party atoms bundled with Monad',
     author: 'Monad'

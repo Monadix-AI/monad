@@ -6,7 +6,7 @@
 // To ship: bundle to a single file and drop `<name>/{atom-pack.json, dist/atom-pack.js}` into
 // ~/.monad/atoms/   →   bun build ./atom-pack.ts --target=bun --outfile dist/atom-pack.js
 
-import { defineAtomPack, defineChannel, defineCommand, defineProvider } from '@monad/sdk-atom';
+import { defineAtomPack, defineChannel, defineCommand, defineProvider, SDK_COMPATIBILITY_RANGE } from '@monad/sdk-atom';
 import { z } from 'zod';
 
 const CAPS = {
@@ -90,7 +90,7 @@ export default defineAtomPack({
   manifest: {
     name: 'multi-demo',
     version: '1.0.0',
-    sdkVersion: '0',
+    sdkVersion: SDK_COMPATIBILITY_RANGE,
     atoms: ['channel', 'command', 'provider', 'message-type'],
     description: 'Reference Atom Pack with multiple Atoms: channel + command + provider + message-type'
   },

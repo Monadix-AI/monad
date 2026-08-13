@@ -18,9 +18,22 @@ import {
   WORKPLACE_EXPERIENCE_UPDATE_EVENT
 } from '@monad/sdk-experience';
 
-import { defineAtomPack, defineChannel, loadManifestAtomPack, UndeclaredAtomError } from '../../src/index.ts';
+import sdkPackage from '../../package.json' with { type: 'json' };
+import {
+  defineAtomPack,
+  defineChannel,
+  loadManifestAtomPack,
+  SDK_COMPATIBILITY_RANGE,
+  SDK_VERSION,
+  UndeclaredAtomError
+} from '../../src/index.ts';
 
-const SDK_VERSION = '0';
+test('SDK metadata derives from the package version', () => {
+  expect({ range: SDK_COMPATIBILITY_RANGE, version: SDK_VERSION }).toEqual({
+    range: `^${sdkPackage.version}`,
+    version: sdkPackage.version
+  });
+});
 
 test('workplace experience permissions are generic and parsed from the manifest', () => {
   const parsed = parseAtomPackManifest({

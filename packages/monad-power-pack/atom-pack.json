@@ -1,7 +1,7 @@
 {
   "name": "monad-power-pack",
   "version": "0.1.5",
-  "sdkVersion": "0",
+  "sdkVersion": "^0.1.5",
   "atoms": [
     "sandbox",
     "workplace-experience"
