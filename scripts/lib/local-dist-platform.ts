@@ -11,10 +11,31 @@ export interface LocalInstallPlan {
   command: string[];
 }
 
+export interface LocalDeployRuntime {
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+}
+
 export type DistInstallerKind = 'powershell' | 'shell';
 
 export function distInstallerKind(target: string): DistInstallerKind {
   return releaseTargetFromDistTarget(target).os === 'windows' ? 'powershell' : 'shell';
+}
+
+export function localDeployRuntime(env: NodeJS.ProcessEnv, cwd: string): LocalDeployRuntime {
+  const isolatedEnv: NodeJS.ProcessEnv = { ...env, NODE_ENV: 'production' };
+  for (const key of [
+    'MONAD_HOME',
+    'MONAD_HOST',
+    'MONAD_HTTP_PORT',
+    'MONAD_KV_UI_PORT',
+    'MONAD_PORT',
+    'MONAD_TOKEN',
+    'MONAD_URL'
+  ]) {
+    delete isolatedEnv[key];
+  }
+  return { cwd, env: isolatedEnv };
 }
 
 export function localDistTarget(

@@ -6,7 +6,7 @@ import { basename, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import rootPackage from '../package.json' with { type: 'json' };
-import { distInstallerKind, localDistTarget, localInstallPlan } from './lib/local-dist-platform.ts';
+import { distInstallerKind, localDeployRuntime, localDistTarget, localInstallPlan } from './lib/local-dist-platform.ts';
 
 const root = resolve(import.meta.dir, '..');
 const artifactsDir = join(root, 'target', 'distrib');
@@ -26,9 +26,9 @@ if (!dist) throw new Error('dist 0.32.0 is unavailable; run this command through
 const version = rootPackage.version;
 const target = values.target ?? hostDistTarget();
 await run([dist, 'build', '--allow-dirty', `--target=${target}`, `--tag=v${version}`, '--force-tag'], {
-  MONAD_DIST_VERSION: version
+  env: { ...process.env, MONAD_DIST_VERSION: version }
 });
-await run(['bun', join(root, 'scripts', 'enhance-dist-installers.ts'), `--installer=${distInstallerKind(target)}`], {});
+await run(['bun', join(root, 'scripts', 'enhance-dist-installers.ts'), `--installer=${distInstallerKind(target)}`]);
 
 if (values['build-only']) {
   process.stdout.write(`[deploy-local-dist] built ${target} under ${artifactsDir}\n`);
@@ -36,6 +36,7 @@ if (values['build-only']) {
 }
 
 const installDir = Bun.env.MONAD_INSTALL_DIR ?? join(homedir(), '.monad', 'bin');
+const installedRuntime = localDeployRuntime(process.env, homedir());
 const {
   binary: installedBinary,
   command: installerCommand,
@@ -56,21 +57,23 @@ const server = Bun.serve({
 
 try {
   if (await Bun.file(installedBinary).exists()) {
-    await run([installedBinary, 'stop'], {}, true);
+    await run([installedBinary, 'stop'], installedRuntime);
   }
 
-  const installerEnv = {
+  const installerEnv: NodeJS.ProcessEnv = {
+    ...installedRuntime.env,
     MONAD_DOWNLOAD_URL: `http://127.0.0.1:${server.port}`,
-    MONAD_INSTALL_DIR: installDir
+    MONAD_INSTALL_DIR: installDir,
+    MONAD_PRINT_QUIET: '1'
   };
-  await run(installerCommand, installerEnv);
+  await run(installerCommand, { cwd: installedRuntime.cwd, env: installerEnv });
 } finally {
   server.stop(true);
 }
 
 await access(installedBinary);
 
-if (!values['no-start']) await run([installedBinary, 'up'], {});
+if (!values['no-start']) await run([installedBinary, 'restart'], installedRuntime);
 process.stdout.write(`[deploy-local-dist] installed Monad ${version} in ${installDir}\n`);
 
 function hostDistTarget(): string {
@@ -82,14 +85,15 @@ function hostDistTarget(): string {
   return localDistTarget(process.platform, process.arch);
 }
 
-async function run(command: string[], extraEnv: Record<string, string>, allowFailure = false): Promise<void> {
+async function run(command: string[], options: { cwd?: string; env?: NodeJS.ProcessEnv } = {}): Promise<void> {
   process.stdout.write(`[deploy-local-dist] ${command.join(' ')}\n`);
   const child = Bun.spawn(command, {
-    env: { ...process.env, ...extraEnv },
+    cwd: options.cwd ?? root,
+    env: options.env ?? process.env,
     stderr: 'inherit',
     stdin: 'inherit',
     stdout: 'inherit'
   });
   const code = await child.exited;
-  if (!allowFailure && code !== 0) throw new Error(`${command[0]} exited with code ${code}`);
+  if (code !== 0) throw new Error(`${command[0]} exited with code ${code}`);
 }

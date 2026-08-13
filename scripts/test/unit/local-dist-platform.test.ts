@@ -1,7 +1,12 @@
 import { describe, expect, test } from 'bun:test';
 import { posix, win32 } from 'node:path';
 
-import { distInstallerKind, localDistTarget, localInstallPlan } from '../../lib/local-dist-platform.ts';
+import {
+  distInstallerKind,
+  localDeployRuntime,
+  localDistTarget,
+  localInstallPlan
+} from '../../lib/local-dist-platform.ts';
 
 describe('local dist platform', () => {
   test.each([
@@ -25,6 +30,25 @@ describe('local dist platform', () => {
       distInstallerKind('x86_64-unknown-linux-gnu'),
       distInstallerKind('aarch64-pc-windows-msvc')
     ]).toEqual(['shell', 'shell', 'powershell']);
+  });
+
+  test('isolates installed daemon lifecycle from worktree routing', () => {
+    expect(
+      localDeployRuntime(
+        {
+          KEEP: 'value',
+          MONAD_HOME: '/workspace/.dev/.monad',
+          MONAD_HOST: '127.0.0.2',
+          MONAD_HTTP_PORT: '53523',
+          MONAD_KV_UI_PORT: '6923',
+          MONAD_PORT: '52523',
+          MONAD_TOKEN: 'dev-token',
+          MONAD_URL: 'http://127.0.0.1:52523',
+          NODE_ENV: 'development'
+        },
+        '/user'
+      )
+    ).toEqual({ cwd: '/user', env: { KEEP: 'value', NODE_ENV: 'production' } });
   });
 
   test('uses the shell installer and extensionless binary on Unix', () => {
