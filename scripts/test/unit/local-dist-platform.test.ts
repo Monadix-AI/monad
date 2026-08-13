@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { posix, win32 } from 'node:path';
 
-import { localDistTarget, localInstallPlan } from '../../lib/local-dist-platform.ts';
+import { distInstallerKind, localDistTarget, localInstallPlan } from '../../lib/local-dist-platform.ts';
 
 describe('local dist platform', () => {
   test.each([
@@ -17,6 +17,14 @@ describe('local dist platform', () => {
 
   test('rejects architectures that have no release artifact', () => {
     expect(() => localDistTarget('linux', 'ia32')).toThrow('unsupported local build architecture: ia32');
+  });
+
+  test('selects the installer emitted by a single-target dist build', () => {
+    expect([
+      distInstallerKind('aarch64-apple-darwin'),
+      distInstallerKind('x86_64-unknown-linux-gnu'),
+      distInstallerKind('aarch64-pc-windows-msvc')
+    ]).toEqual(['shell', 'shell', 'powershell']);
   });
 
   test('uses the shell installer and extensionless binary on Unix', () => {

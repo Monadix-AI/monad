@@ -6,7 +6,7 @@ import { basename, join, resolve } from 'node:path';
 import { parseArgs } from 'node:util';
 
 import rootPackage from '../package.json' with { type: 'json' };
-import { localDistTarget, localInstallPlan } from './lib/local-dist-platform.ts';
+import { distInstallerKind, localDistTarget, localInstallPlan } from './lib/local-dist-platform.ts';
 
 const root = resolve(import.meta.dir, '..');
 const artifactsDir = join(root, 'target', 'distrib');
@@ -28,7 +28,7 @@ const target = values.target ?? hostDistTarget();
 await run([dist, 'build', '--allow-dirty', `--target=${target}`, `--tag=v${version}`, '--force-tag'], {
   MONAD_DIST_VERSION: version
 });
-await run(['bun', join(root, 'scripts', 'enhance-dist-installers.ts')], {});
+await run(['bun', join(root, 'scripts', 'enhance-dist-installers.ts'), `--installer=${distInstallerKind(target)}`], {});
 
 if (values['build-only']) {
   process.stdout.write(`[deploy-local-dist] built ${target} under ${artifactsDir}\n`);

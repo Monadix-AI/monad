@@ -1,6 +1,6 @@
 import { posix, win32 } from 'node:path';
 
-import { type DistTarget, distTargetFromReleaseTarget } from './release-target.ts';
+import { type DistTarget, distTargetFromReleaseTarget, releaseTargetFromDistTarget } from './release-target.ts';
 
 type LocalPlatform = 'darwin' | 'linux' | 'win32';
 type LocalArch = 'arm64' | 'x64';
@@ -9,6 +9,12 @@ export interface LocalInstallPlan {
   binary: string;
   installer: string;
   command: string[];
+}
+
+export type DistInstallerKind = 'powershell' | 'shell';
+
+export function distInstallerKind(target: string): DistInstallerKind {
+  return releaseTargetFromDistTarget(target).os === 'windows' ? 'powershell' : 'shell';
 }
 
 export function localDistTarget(

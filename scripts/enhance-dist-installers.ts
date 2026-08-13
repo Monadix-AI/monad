@@ -11,9 +11,10 @@ import { isPublicReleaseAsset } from './lib/public-release-assets.ts';
 
 const { values } = parseArgs({
   args: Bun.argv.slice(2),
-  options: { dir: { type: 'string' } },
+  options: { dir: { type: 'string' }, installer: { type: 'string', default: 'all' } },
   strict: true
 });
+const installer = parseInstaller(values.installer);
 const root = resolve(import.meta.dir, '..');
 const artifactsDir = resolve(values.dir ?? join(root, 'target', 'distrib'));
 
@@ -23,11 +24,25 @@ const generatedShell = join(artifactsDir, 'monad-installer.sh');
 const generatedPowerShell = join(artifactsDir, 'monad-installer.ps1');
 const shellInstaller = join(artifactsDir, 'install.sh');
 const powerShellInstaller = join(artifactsDir, 'install.ps1');
-await enhanceShell(generatedShell, artifactSizes);
-await enhancePowerShell(generatedPowerShell, artifactSizes, archiveSha256s);
-await Promise.all([rm(shellInstaller, { force: true }), rm(powerShellInstaller, { force: true })]);
-await Promise.all([copyFile(generatedShell, shellInstaller), copyFile(generatedPowerShell, powerShellInstaller)]);
-process.stdout.write(`[enhance-dist-installers] wrote install.sh/install.ps1 in ${artifactsDir}\n`);
+const written: string[] = [];
+if (installer === 'all' || installer === 'shell') {
+  await enhanceShell(generatedShell, artifactSizes);
+  await rm(shellInstaller, { force: true });
+  await copyFile(generatedShell, shellInstaller);
+  written.push('install.sh');
+}
+if (installer === 'all' || installer === 'powershell') {
+  await enhancePowerShell(generatedPowerShell, artifactSizes, archiveSha256s);
+  await rm(powerShellInstaller, { force: true });
+  await copyFile(generatedPowerShell, powerShellInstaller);
+  written.push('install.ps1');
+}
+process.stdout.write(`[enhance-dist-installers] wrote ${written.join('/')} in ${artifactsDir}\n`);
+
+function parseInstaller(value: string): 'all' | 'powershell' | 'shell' {
+  if (value === 'all' || value === 'powershell' || value === 'shell') return value;
+  throw new Error(`unsupported installer: ${value}`);
+}
 
 async function collectArtifactSizes(dir: string): Promise<Map<string, number>> {
   const sizes = new Map<string, number>();
