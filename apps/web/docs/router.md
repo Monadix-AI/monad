@@ -49,7 +49,7 @@ providers; feature components should not create parallel router or history state
 ## Code splitting and performance
 
 Use dynamic `import()` and `React.lazy` for heavy routes or panels that are not needed
-for the initial shell. Vite's `advancedChunks` configuration already groups Monad
+for the initial shell. Vite's `codeSplitting` configuration already groups Monad
 domains and major vendor families; add a new manual group only after measuring a
 bundle regression.
 
