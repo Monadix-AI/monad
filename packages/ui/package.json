@@ -67,7 +67,7 @@
   "private": true,
   "scripts": {
     "build-storybook": "storybook build",
-    "storybook": "storybook dev -p \"$(bun --env-file=../../.env.local -e 'console.log(process.env.UI_STORYBOOK_PORT ?? 6007)')\" --no-open",
+    "storybook": "storybook dev -p \"$(bun --env-file=../../.env.local -e 'console.log(process.env.UI_STORYBOOK_PORT ?? 6007)')\"",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
   },

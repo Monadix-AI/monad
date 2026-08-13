@@ -129,6 +129,7 @@
       ]
     },
     "//#dev:open-storybooks": {
+      "inputs": ["package.json"],
       "persistent": true,
       "cache": false
     },
