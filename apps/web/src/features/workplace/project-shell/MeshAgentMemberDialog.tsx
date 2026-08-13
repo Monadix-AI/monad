@@ -136,7 +136,7 @@ export function MeshAgentMemberDialog({
             </div>
           </div>
         </DialogHeader>
-        <DialogBody className="cli-dialog-dense">
+        <DialogBody className="cli-dialog-dense cli-dialog-dense--rail">
           <p className="cli-dialog-dense__hint">{t('web.workplace.managedMeshAgentAutomationHint')}</p>
           <label className="cli-dialog-dense__row">
             <span className="cli-dialog-dense__row-label">{t('web.workplace.instanceName')}</span>

@@ -113,6 +113,44 @@
   padding: 2px 0 0;
 }
 
+.cli-dialog-dense--rail {
+  gap: 0;
+  padding-block: 8px;
+}
+
+.cli-dialog-dense--rail .cli-dialog-dense__hint {
+  padding: 8px 0 14px;
+  margin: 0 0 6px;
+  line-height: 1.55;
+  border-bottom: 1px solid color-mix(in oklab, var(--link) 28%, var(--border));
+}
+
+.cli-dialog-dense--rail .cli-dialog-dense__row {
+  grid-template-columns: 132px minmax(0, 1fr);
+  gap: 14px;
+  padding-block: 10px;
+  border-bottom-color: transparent;
+}
+
+.cli-dialog-dense--rail .cli-dialog-dense__row-label {
+  font-weight: 500;
+}
+
+.cli-dialog-dense--rail .cli-dialog-dense__advanced {
+  padding-top: 10px;
+}
+
+.cli-dialog-dense--rail .cli-dialog-dense__advanced .cli-dialog-dense__row {
+  border-bottom: 0;
+}
+
+@media (max-width: 560px) {
+  .cli-dialog-dense--rail .cli-dialog-dense__row {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+}
+
 .cli-dialog-dense__save {
   min-height: 34px;
   padding: 7px 11px;
