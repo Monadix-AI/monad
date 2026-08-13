@@ -65,7 +65,7 @@ export function sidebarItemContainerClass({
 // Hover-revealed icon action buttons inside sidebar rows. Touch devices keep them visible.
 export function sidebarIconButtonClass({ active }: { active?: boolean } = {}): string {
   return cn(
-    'sidebar-item-action pointer-events-auto flex size-6 shrink-0 items-center justify-center rounded-(--radius-md) text-muted-foreground opacity-0 transition hover:bg-sidebar-accent hover:text-foreground [@media_(hover:none),_(pointer:coarse)]:opacity-100',
+    'sidebar-item-action pointer-events-auto flex size-6 shrink-0 items-center justify-center rounded-(--radius-md) text-muted-foreground opacity-0 transition-[color,opacity] hover:text-foreground [@media_(hover:none),_(pointer:coarse)]:opacity-100',
     active && 'text-foreground'
   );
 }
