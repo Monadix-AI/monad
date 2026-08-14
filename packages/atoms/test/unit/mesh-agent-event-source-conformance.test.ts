@@ -352,13 +352,18 @@ test('Claude event source reconciles interleaved live blocks with the authoritat
     },
     {
       type: 'assistant',
-      uuid: 'assistant-1',
+      uuid: 'assistant-thinking',
       message: {
         id: messageId,
-        content: [
-          { type: 'thinking', thinking: 'Need context.', signature: 'signed' },
-          { type: 'text', text: 'Final answer.' }
-        ]
+        content: [{ type: 'thinking', thinking: 'Need context.', signature: 'signed' }]
+      }
+    },
+    {
+      type: 'assistant',
+      uuid: 'assistant-text',
+      message: {
+        id: messageId,
+        content: [{ type: 'text', text: 'Final answer.' }]
       }
     },
     { type: 'result', uuid: 'result-1', result: 'Final answer.', is_error: false }

@@ -27,12 +27,15 @@ function finalPartIndex(event: MeshAgentObservationEvent): number | undefined {
   return Number.isInteger(index) ? index : undefined;
 }
 
-function blockType(event: Record<string, unknown> | undefined): ClaudeBlockType | undefined {
-  const block = recordValue(event?.content_block);
-  if (block?.type === 'thinking') return 'thinking';
-  if (block?.type === 'text') return 'text';
-  if (block?.type === 'tool_use') return 'tool';
+function contentPartType(part: Record<string, unknown> | undefined): ClaudeBlockType | undefined {
+  if (part?.type === 'thinking' || part?.type === 'reasoning') return 'thinking';
+  if (part?.type === 'text') return 'text';
+  if (part?.type === 'tool_use') return 'tool';
   return undefined;
+}
+
+function blockType(event: Record<string, unknown> | undefined): ClaudeBlockType | undefined {
+  return contentPartType(recordValue(event?.content_block));
 }
 
 function deltaType(event: Record<string, unknown> | undefined): ClaudeBlockType | undefined {
@@ -52,6 +55,8 @@ function finalBlockKey(event: MeshAgentObservationEvent): string | undefined {
   const part = partIndex === undefined ? undefined : recordValue(content[partIndex]);
   const toolUseId = part?.type === 'tool_use' ? textValue(part.id) : undefined;
   if (toolUseId) return `tool:${toolUseId}`;
+  const singletonType = content.length === 1 ? contentPartType(part) : undefined;
+  if (messageId && singletonType) return `${messageId}:latest:${singletonType}`;
   return messageId && partIndex !== undefined ? `${messageId}:${partIndex}` : undefined;
 }
 
@@ -103,6 +108,8 @@ export function reconcileClaudeStreamEvents(events: MeshAgentObservationEvent[])
           blocks.set(key, state);
           if (toolUseId) blocks.set(`tool:${toolUseId}`, state);
         }
+        const state = blocks.get(key);
+        if (state) blocks.set(`${activeMessageId}:latest:${type}`, state);
       }
       continue;
     }
@@ -172,7 +179,9 @@ export function reconcileClaudeStreamEvents(events: MeshAgentObservationEvent[])
           }
         } else {
           const eventIndex = reconciled.push(event) - 1;
-          blocks.set(key, { eventIndex });
+          const state = { eventIndex };
+          blocks.set(key, state);
+          blocks.set(`${activeMessageId}:latest:${nativeType}`, state);
         }
         if (nativeType === 'thinking') activeThinkingKey = key;
       } else {
