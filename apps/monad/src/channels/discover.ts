@@ -32,12 +32,12 @@ import type {
 } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 
-import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
-import { basename, dirname, isAbsolute, join, relative } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { readdir, readFile } from 'node:fs/promises';
+import { isAbsolute, join, relative } from 'node:path';
 import { parseAtomPackManifest } from '@monad/protocol';
 
 import { assertAtomPackMonadCompatibility, assertAtomPackSdkCompatibility } from '#/atoms/compat.ts';
+import { loadAtomPackEntry } from '#/atoms/entry-loader.ts';
 import { type AtomPackInstallRecord, atomPackInstallRecordSchema } from '#/atoms/install/index.ts';
 import {
   type AtomPackExperienceReview,
@@ -49,31 +49,6 @@ import { loadChannelAtomPacks } from '#/channels/atom-pack-host.ts';
 export interface DiscoverChannelsResult {
   factories: Map<ChannelType, ChannelAdapterFactory>;
   errors: { atom: string; error: string }[];
-}
-
-function isManifestAtomPack(v: unknown): v is ManifestAtomPack {
-  return (
-    typeof v === 'object' &&
-    v !== null &&
-    'manifest' in v &&
-    typeof (v as ManifestAtomPack).register === 'function' &&
-    Array.isArray((v as ManifestAtomPack).manifest?.atoms)
-  );
-}
-
-async function materializeVersionedEntry(entryPath: string, bytes: Buffer, integrity: string): Promise<string> {
-  const entryDir = dirname(entryPath);
-  const prefix = `.${basename(entryPath)}.`;
-  const filename = `${prefix}${integrity.slice('sha256-'.length)}.js`;
-  const versionedPath = join(entryDir, filename);
-  const entries = await readdir(entryDir, { withFileTypes: true });
-  await Promise.all(
-    entries
-      .filter((entry) => entry.isFile() && entry.name.startsWith(prefix) && entry.name !== filename)
-      .map((entry) => rm(join(entryDir, entry.name), { force: true }))
-  );
-  await writeFile(versionedPath, bytes, { mode: 0o600 });
-  return versionedPath;
 }
 
 export async function discoverChannelAdapters(
@@ -134,14 +109,15 @@ export async function discoverChannelAdapters(
   // audited + consented to at install (the install pipeline writes it from the consented manifest).
   // The bundle's own embedded `manifest.atoms` is NEVER trusted for gating: a bundle can self-declare
   // any set, so trusting it would let an installed pack register atoms the user never consented to.
-  const granted = new Map<ManifestAtomPack, readonly AtomKind[]>();
-  const grantedPermissions = new Map<ManifestAtomPack, readonly WorkplaceExperiencePermission[]>();
-  // Accepting a pack's atom kinds is not the same as accepting it to run an in-process experience;
-  // that decision is derived per pack from its recorded install evidence.
-  const experienceTrust = new Map<ManifestAtomPack, AtomPackTrustDecision>();
-  // The pack's stable identity = its folder name (unique even when two packs share a manifest name),
-  // used for qualified names / pins / conflict reporting — consistent with listAtomPacks's operable id.
-  const packFolder = new Map<ManifestAtomPack, string>();
+  const metadata = new Map<
+    ManifestAtomPack,
+    {
+      grantedAtoms: readonly AtomKind[];
+      permissions: readonly WorkplaceExperiencePermission[];
+      trust: AtomPackTrustDecision;
+      folder: string;
+    }
+  >();
   // Stable, filesystem-independent load order so cross-pack first-wins conflict resolution is
   // reproducible across machines (readdir order is not guaranteed). Identity is the folder name.
   const dirs = entries.filter((e) => e.isDirectory()).sort((a, b) => (a.name < b.name ? -1 : a.name > b.name ? 1 : 0));
@@ -176,20 +152,7 @@ export async function discoverChannelAdapters(
       if (isAbsolute(rel) || rel.startsWith('..')) {
         throw new Error(`entry "${entryRel}" escapes the Atom Pack directory`);
       }
-      // Re-verify the bundle against the integrity hash recorded at install time before importing it
-      // (the import runs the pack's code in-process). Bun normalizes query and fragment suffixes on
-      // file imports, so a content-addressed sibling path gives each updated bundle a new module identity.
-      const bytes = await readFile(entryPath);
-      const bundleIntegrity = `sha256-${new Bun.CryptoHasher('sha256').update(bytes).digest('hex')}`;
-      if (recordedIntegrity && bundleIntegrity !== recordedIntegrity) {
-        throw new Error(
-          `integrity mismatch — bundle changed since install (${bundleIntegrity} ≠ ${recordedIntegrity})`
-        );
-      }
-      const versionedEntryPath = await materializeVersionedEntry(entryPath, bytes, bundleIntegrity);
-      const mod = (await import(pathToFileURL(versionedEntryPath).href)) as Record<string, unknown>;
-      const atomPack = mod.default;
-      if (!isManifestAtomPack(atomPack)) throw new Error('entry must default-export a defineAtomPack() result');
+      const atomPack = await loadAtomPackEntry(entryPath, recordedIntegrity);
       // Defense in depth: the bundle must not self-declare atoms beyond the consented set. A superset
       // signals the published bundle drifted from the audited manifest — refuse the whole pack rather
       // than silently load the consented subset. (Gating below also denies, but rejecting upfront is
@@ -201,13 +164,16 @@ export async function discoverChannelAdapters(
           `bundle declares atoms [${atomPack.manifest.atoms.join(', ')}] beyond consented [${grantedAtoms.join(', ')}] (extra: ${overreach.join(', ')}); refusing — reinstall to re-consent`
         );
       }
-      granted.set(atomPack, grantedAtoms);
-      grantedPermissions.set(atomPack, manifest.permissions ?? []);
-      experienceTrust.set(
-        atomPack,
-        resolveAtomPackExperienceTrust({ atomPackId: e.name, record: installRecord, review: sinks.experienceReview })
-      );
-      packFolder.set(atomPack, e.name);
+      metadata.set(atomPack, {
+        grantedAtoms,
+        permissions: manifest.permissions ?? [],
+        trust: resolveAtomPackExperienceTrust({
+          atomPackId: e.name,
+          record: installRecord,
+          review: sinks.experienceReview
+        }),
+        folder: e.name
+      });
       atomPacks.push(atomPack);
     } catch (err) {
       errors.push({ atom: e.name, error: err instanceof Error ? err.message : String(err) });
@@ -229,12 +195,12 @@ export async function discoverChannelAdapters(
     reservedProviderTypes: sinks.reservedProviderTypes,
     channelPins: sinks.channelPins,
     onCollision: sinks.onCollision,
-    grantedAtomsFor: (atomPack) => granted.get(atomPack),
-    grantedPermissionsFor: (atomPack) => grantedPermissions.get(atomPack),
-    experienceTrustFor: (atomPack) => experienceTrust.get(atomPack),
+    grantedAtomsFor: (atomPack) => metadata.get(atomPack)?.grantedAtoms,
+    grantedPermissionsFor: (atomPack) => metadata.get(atomPack)?.permissions,
+    experienceTrustFor: (atomPack) => metadata.get(atomPack)?.trust,
     log: sinks.log,
     onPackLoaded: sinks.onPackLoaded,
-    packIdFor: (atomPack) => packFolder.get(atomPack),
+    packIdFor: (atomPack) => metadata.get(atomPack)?.folder,
     onError: (atomPack, error) =>
       errors.push({ atom: atomPack, error: error instanceof Error ? error.message : String(error) })
   });
