@@ -32,8 +32,8 @@ import type {
 } from '@monad/sdk-atom';
 import type { AtomConflict } from '#/atoms/resolve.ts';
 
-import { readdir, readFile } from 'node:fs/promises';
-import { isAbsolute, join, relative } from 'node:path';
+import { readdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { basename, dirname, isAbsolute, join, relative } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { parseAtomPackManifest } from '@monad/protocol';
 
@@ -59,6 +59,21 @@ function isManifestAtomPack(v: unknown): v is ManifestAtomPack {
     typeof (v as ManifestAtomPack).register === 'function' &&
     Array.isArray((v as ManifestAtomPack).manifest?.atoms)
   );
+}
+
+async function materializeVersionedEntry(entryPath: string, bytes: Buffer, integrity: string): Promise<string> {
+  const entryDir = dirname(entryPath);
+  const prefix = `.${basename(entryPath)}.`;
+  const filename = `${prefix}${integrity.slice('sha256-'.length)}.js`;
+  const versionedPath = join(entryDir, filename);
+  const entries = await readdir(entryDir, { withFileTypes: true });
+  await Promise.all(
+    entries
+      .filter((entry) => entry.isFile() && entry.name.startsWith(prefix) && entry.name !== filename)
+      .map((entry) => rm(join(entryDir, entry.name), { force: true }))
+  );
+  await writeFile(versionedPath, bytes, { mode: 0o600 });
+  return versionedPath;
 }
 
 export async function discoverChannelAdapters(
@@ -162,17 +177,17 @@ export async function discoverChannelAdapters(
         throw new Error(`entry "${entryRel}" escapes the Atom Pack directory`);
       }
       // Re-verify the bundle against the integrity hash recorded at install time before importing it
-      // (the import runs the pack's code in-process). Install-time verification is a TOCTOU window:
-      // anything that rewrites dist/atom-pack.js afterwards would otherwise get persistent code
-      // execution on the next daemon start. No recorded hash (drop-in / publisher without one) → skip.
-      if (recordedIntegrity) {
-        const bytes = await readFile(entryPath);
-        const got = `sha256-${new Bun.CryptoHasher('sha256').update(bytes).digest('hex')}`;
-        if (got !== recordedIntegrity) {
-          throw new Error(`integrity mismatch — bundle changed since install (${got} ≠ ${recordedIntegrity})`);
-        }
+      // (the import runs the pack's code in-process). Bun normalizes query and fragment suffixes on
+      // file imports, so a content-addressed sibling path gives each updated bundle a new module identity.
+      const bytes = await readFile(entryPath);
+      const bundleIntegrity = `sha256-${new Bun.CryptoHasher('sha256').update(bytes).digest('hex')}`;
+      if (recordedIntegrity && bundleIntegrity !== recordedIntegrity) {
+        throw new Error(
+          `integrity mismatch — bundle changed since install (${bundleIntegrity} ≠ ${recordedIntegrity})`
+        );
       }
-      const mod = (await import(pathToFileURL(entryPath).href)) as Record<string, unknown>;
+      const versionedEntryPath = await materializeVersionedEntry(entryPath, bytes, bundleIntegrity);
+      const mod = (await import(pathToFileURL(versionedEntryPath).href)) as Record<string, unknown>;
       const atomPack = mod.default;
       if (!isManifestAtomPack(atomPack)) throw new Error('entry must default-export a defineAtomPack() result');
       // Defense in depth: the bundle must not self-declare atoms beyond the consented set. A superset

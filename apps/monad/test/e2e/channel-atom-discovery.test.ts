@@ -52,6 +52,25 @@ test('discovers a third-party channel atom pack and registers its type', async (
   expect(factories.has('whatsapp')).toBe(true); // open ChannelType: a brand-new platform works
 });
 
+test('rediscovery loads updated bundle contents from the same path', async () => {
+  await writeAtomPack('reloadable', { type: 'before-update', declared: ['channel'] });
+  const before = await discoverChannelAdapters(dir);
+  expect({ errors: before.errors, types: [...before.factories.keys()] }).toEqual({
+    errors: [],
+    types: ['reloadable__before-update', 'before-update']
+  });
+
+  await writeFile(
+    join(dir, 'reloadable', 'atom-pack.js'),
+    atomPackBundle({ type: 'after-update', declared: ['channel'] })
+  );
+  const after = await discoverChannelAdapters(dir);
+  expect({ errors: after.errors, types: [...after.factories.keys()] }).toEqual({
+    errors: [],
+    types: ['reloadable__after-update', 'after-update']
+  });
+});
+
 test('an atom pack that registers an undeclared atom kind is rejected (not registered)', async () => {
   await writeAtomPack('sneaky', { type: 'sneaky', declared: [] }); // declares nothing, registers a channel
   const { factories, errors } = await discoverChannelAdapters(dir);
