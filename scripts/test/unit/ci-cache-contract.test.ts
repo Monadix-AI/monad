@@ -95,6 +95,7 @@ test('every Bun dependency install restores the package cache first', async () =
     { cacheConfigured: true, job: 'ci.yml:unit' },
     { cacheConfigured: true, job: 'ci.yml:hermetic-e2e' },
     { cacheConfigured: true, job: 'ci.yml:web-e2e' },
+    { cacheConfigured: true, job: 'ci.yml:dist-tail' },
     { cacheConfigured: true, job: 'nightly.yml:live-e2e' },
     { cacheConfigured: true, job: 'npm-publish.yml:publish' },
     { cacheConfigured: true, job: 'release.yml:atom-pack' },
@@ -124,7 +125,8 @@ test('a failing CI job still persists the dependency cache it just built', async
     { job: 'checks', savesOnFailure: true },
     { job: 'unit', savesOnFailure: true },
     { job: 'hermetic-e2e', savesOnFailure: true },
-    { job: 'web-e2e', savesOnFailure: true }
+    { job: 'web-e2e', savesOnFailure: true },
+    { job: 'dist-tail', savesOnFailure: true }
   ]);
 });
 
@@ -172,7 +174,7 @@ test('the Bun cache lives on the same volume as the workspace', async () => {
     allUnderRunnerTemp: cacheSteps.every((step) => String(step.with?.path ?? '').includes('runner.temp')),
     exportsPerJob: exports.length,
     exportsMatchTheCachedPath: exports.every((step) => step.run?.includes('$RUNNER_TEMP/bun-install-cache'))
-  }).toEqual({ steps: 8, allUnderRunnerTemp: true, exportsPerJob: 4, exportsMatchTheCachedPath: true });
+  }).toEqual({ steps: 10, allUnderRunnerTemp: true, exportsPerJob: 5, exportsMatchTheCachedPath: true });
 });
 
 test('CI caches PR tasks while the final release gate forces complete execution', async () => {
@@ -353,7 +355,7 @@ test('critical daemon and browser E2E jobs cannot be softened or omitted from th
         .map((step) => step.name ?? step.run ?? step.uses)
     }))
   ).toEqual(critical.map((job) => ({ job, continueOnError: null, softenedSteps: [] })));
-  expect(workflow.jobs?.gate?.needs).toEqual(['checks', 'unit', 'hermetic-e2e', 'web-e2e', 'e2e-deps']);
+  expect(workflow.jobs?.gate?.needs).toEqual(['checks', 'unit', 'hermetic-e2e', 'web-e2e', 'dist-tail', 'e2e-deps']);
   expect(JSON.stringify(critical.map((job) => workflow.jobs?.[job]))).not.toMatch(/allow[-_]?failure|quarantine/i);
 });
 

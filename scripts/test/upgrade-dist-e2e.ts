@@ -11,10 +11,22 @@ const { values } = parseArgs({
     channel: { type: 'string', default: 'stable' },
     'new-dir': { type: 'string' },
     'old-dir': { type: 'string' },
+    scenario: { type: 'string', multiple: true },
     tag: { type: 'string' }
   },
   strict: true
 });
+
+const SCENARIOS = ['cli', 'web'] as const;
+type Scenario = (typeof SCENARIOS)[number];
+
+const requestedScenarios: Scenario[] = (values.scenario ?? []).map((name) => {
+  if (!SCENARIOS.includes(name as Scenario)) {
+    throw new Error(`unknown --scenario ${name}; expected one of ${SCENARIOS.join(', ')}`);
+  }
+  return name as Scenario;
+});
+const selectedScenarios = requestedScenarios.length > 0 ? requestedScenarios : [...SCENARIOS];
 
 if (!values['old-dir'] || !values['new-dir'] || !values.tag) {
   throw new Error('usage: upgrade-dist-e2e.ts --old-dir <dir> --new-dir <dir> --tag <tag> [--channel stable]');
@@ -49,14 +61,30 @@ const artifactServer = Bun.serve({
   }
 });
 
+// Run every selected scenario before returning failure so one broken upgrade path cannot hide another.
+const failures: Array<{ error: unknown; scenario: Scenario }> = [];
 try {
-  await runScenario('cli');
-  await runScenario('web');
-  process.stdout.write(`[upgrade-dist-e2e] CLI and Web upgraded and restarted on ${targetVersion}\n`);
+  for (const scenario of selectedScenarios) {
+    try {
+      await runScenario(scenario);
+    } catch (error) {
+      failures.push({ error, scenario });
+      process.stderr.write(`[upgrade-dist-e2e] ${scenario} scenario failed\n${String(error)}\n`);
+    }
+  }
 } finally {
   artifactServer.stop(true);
   rmSync(root, { recursive: true, force: true });
 }
+
+if (failures.length > 0) {
+  const names = failures.map(({ scenario }) => scenario).join(', ');
+  process.stderr.write(`[upgrade-dist-e2e] failed scenarios: ${names}\n`);
+  process.exit(1);
+}
+process.stdout.write(
+  `[upgrade-dist-e2e] ${selectedScenarios.join(' and ')} upgraded and restarted on ${targetVersion}\n`
+);
 
 async function runScenario(kind: 'cli' | 'web'): Promise<void> {
   const scenarioRoot = join(root, kind);

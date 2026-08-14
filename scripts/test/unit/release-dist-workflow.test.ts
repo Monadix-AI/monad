@@ -1,4 +1,6 @@
 import { expect, test } from 'bun:test';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
 interface Step {
@@ -11,8 +13,11 @@ interface Step {
 }
 
 interface Job {
+  env?: Record<string, string>;
+  if?: string;
   needs?: string[];
   permissions?: Record<string, string>;
+  'runs-on'?: string;
   strategy?: { matrix?: { include?: Array<Record<string, string>> } };
   steps?: Step[];
   'timeout-minutes'?: number;
@@ -30,8 +35,22 @@ const atomPackRelease = Bun.YAML.parse(
 ) as {
   jobs?: Record<string, Job>;
 };
+const nightly = Bun.YAML.parse(await Bun.file(join(root, '.github/workflows/nightly.yml')).text()) as {
+  jobs?: Record<string, Job>;
+};
+const ci = Bun.YAML.parse(await Bun.file(join(root, '.github/workflows/ci.yml')).text()) as {
+  jobs?: Record<string, Job>;
+};
+const releaseEnv =
+  (
+    Bun.YAML.parse(await Bun.file(join(root, '.github/workflows/release.yml')).text()) as {
+      env?: Record<string, string>;
+    }
+  ).env ?? {};
 const jobs = workflow.jobs ?? {};
 const namedStep = (job: string, name: string) => jobs[job]?.steps?.find((step) => step.name === name);
+const namedCiStep = (job: string, name: string) => ci.jobs?.[job]?.steps?.find((step) => step.name === name);
+const namedNightlyStep = (job: string, name: string) => nightly.jobs?.[job]?.steps?.find((step) => step.name === name);
 
 test('release workflow builds, exercises, attests, and publishes dist installers', async () => {
   const build = namedStep('build', 'Build target archive')?.run;
@@ -65,7 +84,32 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(llvmMingw?.if).toBe("matrix.target == 'aarch64-pc-windows-msvc'");
   expect(llvmMingw?.run).toContain('aarch64-w64-mingw32-clang');
   expect(llvmMingw?.run).toContain('sha256sum --check');
-  expect(installMatrix).toContainEqual({ os: 'windows-arm64', runner: 'windows-11-arm' });
+  // behavior-ok: moving the ARM smoke off the release path preserves nightly compatibility coverage
+  expect({
+    releaseInstallers: installMatrix,
+    releaseArmJob: jobs['install-test-arm64'] ?? null,
+    nightlyArmJob: {
+      distVersion: nightly.jobs?.['installer-arm64']?.env?.MONAD_DIST_VERSION,
+      needs: nightly.jobs?.['installer-arm64']?.needs,
+      runsOn: nightly.jobs?.['installer-arm64']?.['runs-on'],
+      verifiesChecksum: namedNightlyStep('installer-arm64', 'Test PowerShell installer')?.run?.includes(
+        'Checksum verified'
+      )
+    }
+  }).toEqual({
+    releaseInstallers: [
+      { os: 'linux', runner: 'ubuntu-latest' },
+      { os: 'macos', runner: 'macos-14' },
+      { os: 'windows', runner: 'windows-latest' }
+    ],
+    releaseArmJob: null,
+    nightlyArmJob: {
+      distVersion: '$'.concat('{{ needs.check.outputs.tag }}'),
+      needs: ['check', 'release-assets'],
+      runsOn: 'windows-11-arm',
+      verifiesChecksum: true
+    }
+  });
   expect(jobs['install-test']?.['timeout-minutes']).toBe(10);
   expect(distWorkspace).toContain('"aarch64-pc-windows-msvc"');
   expect(distWorkspace).toContain('install-updater = false');
@@ -120,6 +164,119 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(releasePlease.jobs?.['release-assets']?.permissions).toMatchObject({
     attestations: 'write',
     'id-token': 'write'
+  });
+});
+
+test('publishing establishes its repository and asset contract before mutating the release', () => {
+  const steps = jobs.publish?.steps ?? [];
+  const checkout = steps.find((step) => step.uses?.startsWith('actions/checkout@'));
+  const order = [
+    'Stage public release assets',
+    'Attest release assets',
+    'Generate complete release changelog',
+    'Upload release assets',
+    'Verify GitHub release asset digests',
+    'Publish release'
+  ].map((name) => steps.findIndex((step) => step.name === name));
+
+  // behavior-ok: parsing the publish job verifies its repository checkout and fail-closed release mutation order
+  expect({
+    checkout: {
+      fetchDepth: checkout?.with?.['fetch-depth'],
+      persistsCredentials: checkout?.with?.['persist-credentials'],
+      ref: checkout?.with?.ref
+    },
+    failClosedUpload: namedStep('publish', 'Upload release assets')?.with?.fail_on_unmatched_files,
+    orderedBeforePublication: order.every(
+      (index, position) => index >= 0 && (position === 0 || (order[position - 1] ?? -1) < index)
+    )
+  }).toEqual({
+    checkout: {
+      fetchDepth: 0,
+      persistsCredentials: false,
+      ref: '$'.concat('{{ env.RELEASE_REF }}')
+    },
+    failClosedUpload: true,
+    orderedBeforePublication: true
+  });
+});
+
+test('every caller of release.yml grants the permissions its publish job declares', () => {
+  const declared = jobs.publish?.permissions ?? {};
+  const callers = {
+    nightly: nightly.jobs?.['release-assets']?.permissions ?? {},
+    'release-please': releasePlease.jobs?.['release-assets']?.permissions ?? {}
+  };
+
+  // A called workflow cannot escalate past its caller's grant; GitHub rejects a shortfall before scheduling jobs.
+  expect(
+    Object.fromEntries(
+      Object.entries(callers).map(([caller, granted]) => [
+        caller,
+        Object.keys(declared).filter((scope) => granted[scope] !== declared[scope])
+      ])
+    )
+  ).toEqual({ nightly: [], 'release-please': [] });
+});
+
+test('the installer and upgrade path is gated before main, not only during a release', () => {
+  const distTail = ci.jobs?.['dist-tail'];
+  const gateStep = ci.jobs?.gate?.steps?.find((step) => step.name === 'Verify required jobs');
+
+  // The explicit input covers pull requests and merge queues while release.yml supplies real artifact coverage.
+  expect({
+    skipsOnlyReleaseValidation: distTail?.if,
+    exercisesUpgrade: namedCiStep('dist-tail', 'Upgrade an active daemon through CLI and Web')?.run?.includes(
+      'scripts/test/upgrade-dist-e2e.ts'
+    ),
+    exercisesInstaller: namedCiStep('dist-tail', 'Test shell installer')?.run?.includes('Checksum verified'),
+    requiredByGate: gateStep?.run?.includes('test "$DIST_TAIL_RESULT" = success'),
+    distVersionMatchesRelease: distTail?.env?.DIST_VERSION === releaseEnv.DIST_VERSION
+  }).toEqual({
+    // Covers pull_request and merge_group alike; gating on either alone would be dead code today or
+    // a silently dropped gate once a merge queue is enabled.
+    skipsOnlyReleaseValidation: '$'.concat('{{ !inputs.release_validation }}'),
+    exercisesUpgrade: true,
+    exercisesInstaller: true,
+    requiredByGate: true,
+    distVersionMatchesRelease: true
+  });
+});
+
+test('a failing upgrade scenario does not hide the scenarios after it', async () => {
+  const script = join(root, 'scripts/test/upgrade-dist-e2e.ts');
+  const dir = mkdtempSync(join(tmpdir(), 'monad-upgrade-args-'));
+
+  try {
+    // Both scenarios are selected, and the CLI one fails immediately because the artifact
+    // directories are empty. Short-circuiting would name only `cli`; reporting all names both.
+    const proc = Bun.spawn(['bun', script, '--old-dir', dir, '--new-dir', dir, '--tag', 'v0.0.2'], {
+      stderr: 'pipe',
+      stdout: 'pipe'
+    });
+    const stderr = await new Response(proc.stderr).text();
+    const exitCode = await proc.exited;
+
+    expect({
+      exitCode,
+      reportsEveryFailedScenario: /failed scenarios: .*cli.*web|failed scenarios: .*web.*cli/.test(stderr)
+    }).toEqual({ exitCode: 1, reportsEveryFailedScenario: true });
+  } finally {
+    rmSync(dir, { force: true, recursive: true });
+  }
+});
+
+test('an unknown upgrade scenario is rejected rather than silently skipped', async () => {
+  const script = join(root, 'scripts/test/upgrade-dist-e2e.ts');
+  const proc = Bun.spawn(['bun', script, '--old-dir', '.', '--new-dir', '.', '--tag', 'v0.0.2', '--scenario', 'tui'], {
+    stderr: 'pipe',
+    stdout: 'pipe'
+  });
+  const stderr = await new Response(proc.stderr).text();
+
+  expect({ exitCode: await proc.exited, namesTheBadValue: stderr.includes('unknown --scenario tui') }).toEqual({
+    exitCode: 1,
+    namesTheBadValue: true
   });
 });
 

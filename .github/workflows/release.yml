@@ -53,12 +53,14 @@ jobs:
       full: true
       force: true
       sha: ${{ inputs.sha || inputs.tag }}
+      release_validation: true
     secrets: inherit
 
   atom-pack:
     name: build monad power pack
     needs: ci-gate
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -90,6 +92,7 @@ jobs:
     name: dist build (${{ matrix.target }})
     needs: ci-gate
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 30
     strategy:
       fail-fast: false
       matrix:
@@ -164,6 +167,7 @@ jobs:
     name: generate dist installers
     needs: build
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -209,8 +213,6 @@ jobs:
             runner: macos-14
           - os: windows
             runner: windows-latest
-          - os: windows-arm64
-            runner: windows-11-arm
     steps:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
@@ -267,6 +269,7 @@ jobs:
     name: dist CLI and Web upgrade e2e
     needs: installers
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -323,6 +326,7 @@ jobs:
       contents: write
       id-token: write
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
