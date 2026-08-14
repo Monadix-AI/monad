@@ -1360,8 +1360,12 @@ for (const kind of TRANSPORTS) {
       expect(
         ((await readByClaude.json()) as { messages: Array<{ fromAgent: string; peer: string; text: string }> }).messages
       ).toMatchObject([{ fromAgent: 'pmem_codex', peer: 'pmem_claude', text: 'private handoff' }]);
-      const recordedMessages = handlers.store.listMessages(sessionId);
-      expect(recordedMessages).toEqual([]);
+      expect(
+        handlers.store
+          .listMessages(sessionId)
+          .map(({ text, type }) => ({ text, type }))
+          .filter(({ type }) => type === 'mesh_agent_direct_message')
+      ).toEqual([{ text: 'codex sent claude a DM.', type: 'mesh_agent_direct_message' }]);
     });
 
     test('agent-to-agent send records the event while the recipient runtime is offline', async () => {
@@ -1402,15 +1406,23 @@ for (const kind of TRANSPORTS) {
       );
       expect(ask.status).toBe(200);
 
+      const directRequest = {
+        requestId: 'queued-private-handoff',
+        to: 'pmem_claude',
+        text: 'queued private handoff'
+      };
       const sent = await t.fetch(
         '/v1/internal/native-agent/agent/send',
-        directSendJson(
-          { to: 'pmem_claude', text: 'queued private handoff' },
-          bindingHeaders(sessionId, 'mesh_codex0000000', 'codex')
-        )
+        directSendJson(directRequest, bindingHeaders(sessionId, 'mesh_codex0000000', 'codex'))
       );
       expect(sent.status).toBe(200);
       const sentMessage = ((await sent.json()) as { message: { id: string } }).message;
+      const replayed = await t.fetch(
+        '/v1/internal/native-agent/agent/send',
+        directSendJson(directRequest, bindingHeaders(sessionId, 'mesh_codex0000000', 'codex'))
+      );
+      expect(replayed.status).toBe(200);
+      expect(((await replayed.json()) as { message: { id: string } }).message.id).toBe(sentMessage.id);
 
       const read = await t.fetch(
         '/v1/internal/native-agent/agent/read',
@@ -1427,8 +1439,11 @@ for (const kind of TRANSPORTS) {
         source: { kind: 'direct', directMessageId: sentMessage.id }
       });
       expect(
-        handlers.store.listMessages(sessionId).some((message) => message.type === 'mesh_agent_direct_message')
-      ).toBe(false);
+        handlers.store
+          .listMessages(sessionId)
+          .map(({ text, type }) => ({ text, type }))
+          .filter(({ type }) => type === 'mesh_agent_direct_message')
+      ).toEqual([{ text: 'codex sent claude a DM.', type: 'mesh_agent_direct_message' }]);
     });
 
     test('direct message to a canonical binding-only member resolves as a member and routes to it', async () => {

@@ -14,6 +14,7 @@ import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
 import { NativeAgentDirectMessageIdempotencyConflictError } from '#/store/db/native-agent-messages.ts';
+import { writeNativeAgentDirectMessageReceipt } from './direct-message-receipt.ts';
 
 function directSendFingerprint(body: NativeAgentSendRequest, binding: NativeAgentRuntimeBinding): string {
   return createHash('sha256')
@@ -86,12 +87,18 @@ export function createNativeAgentDirectApi(
       }
       if (inserted.replayed) {
         store.deleteMessageAttachments(attachments.map((ref) => ref.id));
-        return { ok: true, direct: true, message: inserted.message };
       }
       // Only a member peer drives runtime delivery/receipt. A private label is ledger-only: no delivery, no
       // member .find, no attribution inference — a miss here is fail-closed (zero outbound), by design.
       if (target.kind === 'project_member') {
-        await handlers.session.notifyManagedMeshAgentDirectMessage({ message: inserted.message, noticeText });
+        await writeNativeAgentDirectMessageReceipt({
+          message: inserted.message,
+          store,
+          messageIngress: handlers._messageIngress
+        });
+        if (!inserted.replayed) {
+          await handlers.session.notifyManagedMeshAgentDirectMessage({ message: inserted.message, noticeText });
+        }
       }
       return { ok: true, direct: true, message: inserted.message };
     },

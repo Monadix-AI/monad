@@ -31,7 +31,6 @@ import {
 } from '#/handlers/session/handlers/messaging-notices.ts';
 import { makeEvent } from '#/services/event-bus.ts';
 import { enabledInvitableMeshAgentConfigs } from '#/services/mesh-agent/invitable-agents.ts';
-import { writeNativeAgentDirectMessageReceipt } from '#/services/native-agent/direct-message-receipt.ts';
 import { claimNativeAgentDeliveryBatch } from '#/services/native-agent/ingress-batch.ts';
 import { nativeAgentMemberDeliveryCoordinatorFor } from '#/services/native-agent/member-delivery-coordinator.ts';
 
@@ -65,21 +64,13 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     deps: { store, log, meshAgentHost, bus },
     managedAgentSessions,
     makeEmit,
-    persistAndRetire,
-    messageIngress
+    persistAndRetire
   } = ctx;
 
   const { managedMeshSessionsForMember, startManagedMeshAgentRuntimeWithRecovery } = createManagedMeshAgentRuntime(ctx);
   const memberDeliveryCoordinator = nativeAgentMemberDeliveryCoordinatorFor(store);
   const { emitManagedMeshAgentThinking, completeManagedMeshAgentThinking, retireManagedMeshAgentThinking } =
     createManagedMeshAgentMessages(ctx);
-  async function writeBatchDirectReceipts(batch: ReturnType<typeof claimNativeAgentDeliveryBatch>): Promise<void> {
-    for (const item of batch?.items ?? []) {
-      if (item.source !== 'direct') continue;
-      const message = store.getNativeAgentDirectMessage(item.directMessageId);
-      if (message) await writeNativeAgentDirectMessageReceipt({ message, store, messageIngress });
-    }
-  }
   const pendingProjectDeliveries = new Map<
     string,
     {
@@ -294,7 +285,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                   throw error;
                 }
                 batch?.accept();
-                await writeBatchDirectReceipts(batch);
                 store.markMeshAgentInboxDelivered(existing.id, deliveredSeq);
                 if (deliveredSeq > 0) store.markMeshAgentInboxVisible(existing.id, deliveredSeq);
               },
@@ -415,7 +405,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                 }
               });
               batch?.accept();
-              await writeBatchDirectReceipts(batch);
               if (activeDeliveryId) {
                 store.bindNativeAgentIngressDelivery(
                   activeDeliveryId,
@@ -580,17 +569,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
       });
       const isGated = () =>
         Boolean(session.projectId && store.getNativeAgentMemberGate(session.id, member.projectMemberId));
-      const writeReceipts = async () => {
-        const directIds = batch?.items
-          .filter((item) => item.source === 'direct')
-          .map((item) => item.directMessageId) ?? [message.id];
-        for (const directMessageId of directIds) {
-          const directMessage = store.getNativeAgentDirectMessage(directMessageId);
-          if (directMessage) {
-            await writeNativeAgentDirectMessageReceipt({ message: directMessage, store, messageIngress });
-          }
-        }
-      };
       if (existing) {
         const admission = await memberDeliveryCoordinator.admitTurn({
           sessionId: session.id,
@@ -618,7 +596,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
               existing.id,
               existing.providerSessionRef
             );
-            await writeReceipts();
           },
           onSettled: () => {
             managedAgentSessions?.settleTurn({
@@ -688,7 +665,6 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
             nativeSession.id,
             nativeSession.providerSessionRef
           );
-          await writeReceipts();
         },
         onSettled: () => {
           managedAgentSessions?.settleTurn({
