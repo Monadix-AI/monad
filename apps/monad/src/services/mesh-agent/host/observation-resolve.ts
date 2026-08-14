@@ -54,6 +54,26 @@ interface ConvenienceProjectionAdvance {
   previousEvents: AgentObservationEvent[];
 }
 
+class ConvenienceProjectionRowError extends Error {
+  constructor(
+    readonly row: LiveRawRow,
+    cause: unknown
+  ) {
+    super(cause instanceof Error ? cause.message : String(cause), { cause });
+    this.name = 'ConvenienceProjectionRowError';
+  }
+}
+
+function serializeProjectionError(error: unknown, depth = 0): Record<string, unknown> {
+  if (!(error instanceof Error)) return { value: String(error) };
+  return {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    ...(depth < 2 && error.cause !== undefined ? { cause: serializeProjectionError(error.cause, depth + 1) } : {})
+  };
+}
+
 /** Resolves a session from the ephemeral live store or the adapter's earlier-event source. */
 export class MeshAgentObservationResolver {
   private readonly convenienceProjections = new WeakMap<LiveMeshSession, RetainedConvenienceProjection>();
@@ -131,7 +151,13 @@ export class MeshAgentObservationResolver {
     rows: LiveRawRow[]
   ) {
     let page = { events: [] } as ReturnType<typeof projector.advance>;
-    for (const row of rows) page = projector.advance(row.payload, row.observedAt);
+    for (const row of rows) {
+      try {
+        page = projector.advance(row.payload, row.observedAt);
+      } catch (error) {
+        throw new ConvenienceProjectionRowError(row, error);
+      }
+    }
     return page;
   }
 
@@ -219,20 +245,52 @@ export class MeshAgentObservationResolver {
         reason: row ? 'provider events unavailable' : 'MeshAgent session not found'
       };
     }
+    const retainedProjection = this.convenienceProjections.get(live);
+    const projectionPhase =
+      !retainedProjection ||
+      retainedProjection.epoch !== live.observationEpoch ||
+      retainedProjection.providerSessionRef !== live.providerSessionRef
+        ? 'rebuild'
+        : 'incremental';
     let projection: ConvenienceProjectionAdvance;
     try {
       projection = this.advanceConvenienceProjection(live, id);
     } catch (error) {
+      const failedRow = error instanceof ConvenienceProjectionRowError ? error.row : undefined;
       this.ctx.log.error(
         {
           event: 'mesh.convenience_projection_failed',
+          sessionId: live.transcriptTargetId,
           meshSessionId: id,
+          agentName: live.agentName,
+          runtimeRole: live.runtimeRole,
           provider: live.provider,
+          adapterProvider: live.adapter.provider,
           observationEpoch: live.observationEpoch,
           providerSessionRef: live.providerSessionRef,
           afterSeq: afterSeq ?? 0,
           revision: live.outputSeq,
-          err: error instanceof Error ? { message: error.message, stack: error.stack } : String(error)
+          projectionPhase,
+          projectorMode: live.adapter.events.createLiveProjector ? 'incremental' : 'snapshot',
+          hasObservationRuntime: Boolean(live.adapter.observationRuntime),
+          retainedProjection: retainedProjection
+            ? {
+                epoch: retainedProjection.epoch,
+                providerSessionRef: retainedProjection.providerSessionRef,
+                seq: retainedProjection.seq,
+                eventCount: retainedProjection.events.length
+              }
+            : null,
+          failingRawRow: failedRow
+            ? {
+                seq: failedRow.seq,
+                stream: failedRow.stream,
+                observedAt: failedRow.observedAt,
+                payloadBytes: Buffer.byteLength(failedRow.payload),
+                payloadSha256: new Bun.CryptoHasher('sha256').update(failedRow.payload).digest('hex')
+              }
+            : null,
+          err: serializeProjectionError(error)
         },
         'native cli convenience observation projection failed'
       );

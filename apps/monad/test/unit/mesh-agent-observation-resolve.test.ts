@@ -21,7 +21,10 @@ function resolverWithRows(
   const errors: Array<{ context: Record<string, unknown>; message: string }> = [];
   const live = {
     id: 'mesh_observe',
+    transcriptTargetId: 'ses_observe',
+    agentName: 'observer',
     provider: 'codex',
+    runtimeRole: 'member',
     adapter,
     observationEpoch: 'oep_observe',
     liveRawStore: {
@@ -306,17 +309,31 @@ test('a convenience projection failure omits its patch without affecting raw del
     raw: resolver.observeRaw('mesh_observe'),
     convenience: resolver.observeConvenience('mesh_observe'),
     errors: errors.map(({ context, message }) => {
-      const projectionError = context.err as { message?: string; stack?: string } | undefined;
+      const projectionError = context.err as
+        | { name?: string; message?: string; stack?: string; cause?: { message?: string; stack?: string } }
+        | undefined;
       return {
         event: context.event,
+        sessionId: context.sessionId,
         meshSessionId: context.meshSessionId,
+        agentName: context.agentName,
+        runtimeRole: context.runtimeRole,
         provider: context.provider,
+        adapterProvider: context.adapterProvider,
         observationEpoch: context.observationEpoch,
         providerSessionRef: context.providerSessionRef,
         afterSeq: context.afterSeq,
         revision: context.revision,
+        projectionPhase: context.projectionPhase,
+        projectorMode: context.projectorMode,
+        hasObservationRuntime: context.hasObservationRuntime,
+        retainedProjection: context.retainedProjection,
+        failingRawRow: context.failingRawRow,
+        errorName: projectionError?.name,
         err: projectionError?.message,
-        stackIncludesMessage: projectionError?.stack?.includes('broken projector'),
+        stackIncludesRowError: projectionError?.stack?.includes('ConvenienceProjectionRowError'),
+        cause: projectionError?.cause?.message,
+        causeStackIncludesMessage: projectionError?.cause?.stack?.includes('broken projector'),
         message
       };
     })
@@ -352,14 +369,32 @@ test('a convenience projection failure omits its patch without affecting raw del
     errors: [
       {
         event: 'mesh.convenience_projection_failed',
+        sessionId: 'ses_observe',
         meshSessionId: 'mesh_observe',
+        agentName: 'observer',
+        runtimeRole: 'member',
         provider: 'codex',
+        adapterProvider: 'codex',
         observationEpoch: 'oep_observe',
         providerSessionRef: 'provider-session',
         afterSeq: 0,
         revision: 1,
+        projectionPhase: 'rebuild',
+        projectorMode: 'incremental',
+        hasObservationRuntime: false,
+        retainedProjection: null,
+        failingRawRow: {
+          seq: 1,
+          stream: 'stdout',
+          observedAt: '2026-07-18T01:00:01.000Z',
+          payloadBytes: 4,
+          payloadSha256: '2c8b08da5ce60398e1f19af0e5dccc744df274b826abe585eaba68c525434806'
+        },
+        errorName: 'ConvenienceProjectionRowError',
         err: 'broken projector',
-        stackIncludesMessage: true,
+        stackIncludesRowError: true,
+        cause: 'broken projector',
+        causeStackIncludesMessage: true,
         message: 'native cli convenience observation projection failed'
       }
     ]
