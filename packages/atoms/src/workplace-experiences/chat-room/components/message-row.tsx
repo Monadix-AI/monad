@@ -1,4 +1,4 @@
-import type { ChannelIcon } from '@monad/protocol';
+import type { ChannelIcon, MeshAgentSystemEvent } from '@monad/protocol';
 import type { WorkplaceExperienceAgentIdentity, WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experience';
 import type { ChannelOriginDetail, ChannelOriginLabels } from '@monad/ui';
 import type { ComponentType } from 'react';
@@ -37,6 +37,7 @@ import { SystemMessageRow, TIME_STYLE } from './system-message-row.tsx';
 export type MessageRowLabels = {
   directMessageContent?: string;
   directMessageSent?: (from: string, to: string) => string;
+  meshAgentSystemEvent?: (event: MeshAgentSystemEvent) => string;
   systemMessage?: string;
   systemMessageDetails?: string;
   observe?: string;

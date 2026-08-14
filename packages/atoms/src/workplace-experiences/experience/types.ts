@@ -1,6 +1,7 @@
 import type {
   ApprovalScope,
   ChannelIcon,
+  MeshAgentSystemEvent,
   MessageAttachmentRef,
   MessageOrigin,
   NativeAgentDeliveryId,
@@ -85,6 +86,7 @@ export interface Message {
   systemTone?: 'error';
   systemDetail?: string;
   systemPresentation?: 'detail-tooltip';
+  systemEvent?: MeshAgentSystemEvent;
   systemRaw?: unknown;
   systemActions?: Array<{ actionId: string; inlineText?: string; payload?: unknown }>;
   directMessage?: {

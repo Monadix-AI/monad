@@ -30,9 +30,12 @@ export function SystemMessageRow({
     ? resolveAgentIdentity?.({ id: msg.agentChip.id, name: msg.agentChip.name })
     : undefined;
   const developer = msg.kind === 'developer' || msg.developerOnly === true;
-  const directMessageText = msg.directMessage
-    ? (labels?.directMessageSent?.(msg.directMessage.fromAgentName, msg.directMessage.toAgentName) ?? msg.text)
-    : msg.text;
+  const directMessageText =
+    (msg.directMessage
+      ? (labels?.directMessageSent?.(msg.directMessage.fromAgentName, msg.directMessage.toAgentName) ?? msg.text)
+      : msg.systemEvent
+        ? labels?.meshAgentSystemEvent?.(msg.systemEvent)
+        : msg.text) ?? '';
   const detailTooltip =
     msg.systemPresentation === 'detail-tooltip' ? (
       <span
@@ -102,7 +105,9 @@ export function SystemMessageRow({
                 ...msg.agentChip,
                 av: actorIdentity?.av,
                 avatarUrl: actorIdentity?.avatarUrl ?? msg.agentChip.avatarUrl,
-                name: actorIdentity?.name ?? msg.agentChip.name
+                name:
+                  actorIdentity?.name ??
+                  (msg.agentChip.name === msg.agentChip.id ? (msg.agentChip.tag ?? '') : msg.agentChip.name)
               }}
               avatarSize={22}
               badge={actorIdentity?.providerIcon ? <AgentProviderBadge icon={actorIdentity.providerIcon} /> : undefined}
@@ -189,7 +194,7 @@ export function SystemMessageRow({
                     ...agent,
                     av: identity?.av,
                     avatarUrl: identity?.avatarUrl ?? agent.avatarUrl,
-                    name: identity?.name ?? agent.name
+                    name: identity?.name ?? (agent.name === agent.id ? (agent.tag ?? '') : agent.name)
                   }}
                   bordered={false}
                   key={agent.id}

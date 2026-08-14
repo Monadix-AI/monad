@@ -1481,6 +1481,12 @@ test('typed idle suspension uses the configured project member identity', () => 
       tag: 'Codex',
       time: '',
       text: 'fell asleep.',
+      systemEvent: {
+        agentId: 'pmem_codex_reviewer',
+        agentName: 'Reviewer',
+        type: 'idle_suspended',
+        payload: { meshSessionId: 'mesh_codexreviewer', idleTimeoutMs: 300_000 }
+      },
       agentChip: {
         id: 'pmem_codex_reviewer',
         name: 'Review Lead',
@@ -1539,6 +1545,12 @@ test('typed idle resumption keeps the configured project member identity', () =>
       tag: 'Codex',
       time: '',
       text: 'woke up.',
+      systemEvent: {
+        agentId: 'pmem_codex_reviewer',
+        agentName: 'Reviewer',
+        type: 'idle_resumed',
+        payload: { meshSessionId: 'mesh_codexreviewer' }
+      },
       agentChip: {
         id: 'pmem_codex_reviewer',
         name: 'Review Lead',
@@ -1585,6 +1597,12 @@ test('typed lifecycle event falls back to its actor name and generated identity'
       tag: 'CLI',
       time: '',
       text: 'fell asleep.',
+      systemEvent: {
+        agentId: 'pmem_codex_unconfigured',
+        agentName: 'Monad',
+        type: 'idle_suspended',
+        payload: { meshSessionId: 'mesh_codexunknown', idleTimeoutMs: 300_000 }
+      },
       agentChip: {
         id: 'pmem_codex_unconfigured',
         name: 'Monad',

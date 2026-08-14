@@ -1,8 +1,13 @@
 import type { MeshSessionView, Session, WorkplaceProject } from '@monad/protocol';
+import type { ComponentProps, ComponentType } from 'react';
 
 import { expect, test } from 'bun:test';
+import { createElement } from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 import { projectExperienceAction } from '../../src/features/shell/sidebar/project-session-experience-actions.ts';
+import { ProjectTreeRow } from '../../src/features/shell/sidebar/workspace-project-rows.tsx';
+import { WorkspaceSidebarProvider } from '../../src/features/shell/sidebar/workspace-sidebar-context.tsx';
 import { buildWorkspaceProjects } from '../../src/lib/workspace-sessions.ts';
 
 test('project experience action switches the selected project mode', () => {
@@ -115,6 +120,71 @@ test('workspace project list summarizes live runtime and unread native cli messa
       unreadCount: 3
     }
   ]);
+});
+
+test('project sidebar rows announce running while any member runtime is active', () => {
+  const renderProject = (hasRunningAgent: boolean) => {
+    const item = {
+      hasRunningAgent,
+      id: 'prj_ACTIVE000000',
+      name: 'active',
+      sessions: [],
+      unreadCount: 0
+    };
+    const value = {
+      actions: {
+        archiveChatSession: () => undefined,
+        archiveProjectSession: () => undefined,
+        createChatSession: () => undefined,
+        createProject: () => undefined,
+        createProjectSession: () => undefined,
+        deleteChatSession: () => undefined,
+        deleteProject: () => undefined,
+        deleteProjectSession: () => undefined,
+        openInbox: () => undefined,
+        openProject: () => undefined,
+        openProjectSession: () => undefined,
+        openProjectSettings: () => undefined,
+        openSearch: () => undefined,
+        openSession: () => undefined,
+        renameProject: () => undefined,
+        renameSession: () => undefined,
+        toggleSessionPinned: () => undefined
+      },
+      meta: {
+        projectExperiences: [],
+        t: (key: string) => key
+      },
+      state: {
+        activeChatSessionId: null,
+        activeProjectId: null,
+        activeProjectSessionId: null,
+        chatSessions: [],
+        projectOrderRevision: 0,
+        projects: [item]
+      }
+    } as ComponentProps<typeof WorkspaceSidebarProvider>['value'];
+    const Provider = WorkspaceSidebarProvider as ComponentType<{
+      value: ComponentProps<typeof WorkspaceSidebarProvider>['value'];
+    }>;
+    return renderToStaticMarkup(
+      createElement(
+        Provider,
+        { value },
+        createElement(ProjectTreeRow, {
+          expanded: false,
+          onDelete: () => undefined,
+          onToggleProjectExpanded: () => undefined,
+          project: item
+        })
+      )
+    );
+  };
+
+  expect({
+    idle: renderProject(false).includes('web.sidebar.generating'),
+    running: renderProject(true).match(/web\.sidebar\.generating/g)?.length ?? 0
+  }).toEqual({ idle: false, running: 1 });
 });
 
 test('workspace project list keeps unread messages from stopped native cli sessions without showing runtime active', () => {

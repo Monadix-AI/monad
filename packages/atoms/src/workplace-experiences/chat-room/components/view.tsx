@@ -263,6 +263,23 @@ export function ChatRoomExperienceView({ runtime }: { runtime: ChatRoomExperienc
             goToMessage: (label: string) => t('web.chat.goToMessage', { message: label }),
             jumpLatest: t('web.workplace.jumpLatest'),
             messageOutline: t('web.chat.messageOutline'),
+            meshAgentSystemEvent: (event) => {
+              if (event.type === 'idle_suspended') return t('web.meshAgent.lifecycle.idleSuspended');
+              if (event.type === 'idle_resumed') return t('web.meshAgent.lifecycle.idleResumed');
+              if (event.type === 'resume_failed') {
+                return t('web.meshAgent.lifecycle.resumeFailed', {
+                  provider: event.payload.provider,
+                  ref: event.payload.providerSessionRef
+                });
+              }
+              if (event.type === 'connection_required') {
+                return t('web.meshAgent.lifecycleDisplay.connectionRequired');
+              }
+              const exitCode = event.payload.exitCode === null ? '' : ` (${event.payload.exitCode})`;
+              if (event.type === 'failed') return t('web.meshAgent.lifecycleDisplay.failed', { exitCode });
+              if (event.type === 'stopped') return t('web.meshAgent.lifecycleDisplay.stopped');
+              return t('web.meshAgent.lifecycleDisplay.exited', { exitCode });
+            },
             observe: t('web.workplace.observe'),
             reply: t('web.chat.reply'),
             replyUnavailable: t('web.chat.replyUnavailable'),

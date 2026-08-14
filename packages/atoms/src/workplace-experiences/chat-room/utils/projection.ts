@@ -672,6 +672,7 @@ export function buildProjectMessages({
           kind: 'system',
           time: '',
           text: item.text,
+          systemEvent: item.event,
           ...(item.level === 'error' ? { systemTone: 'error' as const } : {}),
           orderKey: item.seq
         });

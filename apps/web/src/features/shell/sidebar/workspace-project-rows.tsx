@@ -110,6 +110,7 @@ export function ProjectTreeRow({
       menuLabel={t('web.sidebar.itemMenu')}
       onOpen={toggleProjectExpanded}
       onRename={renameProject}
+      status={project.hasRunningAgent ? <SessionStatusMarker generationState="running" /> : undefined}
       trailingActions={
         <SidebarIconActionButton
           icon={ChatAdd01Icon}

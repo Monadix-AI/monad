@@ -54,6 +54,14 @@ function renderMessageRow(props: ComponentProps<typeof MessageRow>): ReactElemen
   return (MessageRow as unknown as { type: (rowProps: ComponentProps<typeof MessageRow>) => ReactElement }).type(props);
 }
 
+function visibleText(node: ReactElement): string {
+  return renderToStaticMarkup(node)
+    .replace(/<[^>]+>/g, ' ')
+    .replace(/&amp;/g, '&')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
 test('the inline sign-in action runs the existing host action with its projected payload', () => {
   let received: unknown;
   const action: WorkplaceExperienceHostAction = {
@@ -96,6 +104,32 @@ test('the lifecycle actor avatar opens the projected agent', () => {
   actorButton.props.onClick();
 
   expect(openedAgentId).toBe('pmem_claude-code_f2654d392ff2');
+});
+
+test('system messages hide internal agent ids while retaining their readable event text', () => {
+  const card = SystemMessageRow({
+    labels: {
+      meshAgentSystemEvent: (event) => (event.type === 'stopped' ? 'stopped.' : 'unexpected event')
+    },
+    msg: {
+      ...loginMessage,
+      id: 'mesh-agent-stopped:pmem_claude-code_f2654d392ff2',
+      text: 'pmem_claude-code_f2654d392ff2 stopped.',
+      agentChip: {
+        id: 'pmem_claude-code_f2654d392ff2',
+        name: 'pmem_claude-code_f2654d392ff2',
+        tag: 'Claude'
+      },
+      systemEvent: {
+        agentId: 'pmem_claude-code_f2654d392ff2',
+        agentName: 'pmem_claude-code_f2654d392ff2',
+        type: 'stopped',
+        payload: { meshSessionId: 'mesh_1234567890ab', exitCode: null }
+      }
+    }
+  });
+
+  expect(visibleText(card)).toBe('CL Claude stopped.');
 });
 
 test('reply actions flow below the message card and align with its content', () => {
