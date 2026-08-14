@@ -4,6 +4,7 @@ import { MentionText } from '@monad/ui/components/MentionText';
 import { workplaceExperienceLocale, workplaceExperienceT } from '../../../i18n.ts';
 import { MarkdownWithMentions } from '../message-row.tsx';
 import { TIME_STYLE } from '../system-message-row.tsx';
+import { useObservationDisclosure } from './disclosure.tsx';
 
 export type ObservationMessageCardProps = {
   messageRole: 'agent' | 'reasoning' | 'user';
@@ -86,6 +87,7 @@ export function ObservationMessageCard({
   const reasoningTitle = observationReasoningTitle(reasoningState?.summary);
   const reasoningTokenCount = observationReasoningTokenCount(reasoningState?.summary);
   const reasoningContent = observationReasoningContent(reasoningState?.summary, reasoningState?.text ?? '');
+  const [reasoningOpen, setReasoningOpen] = useObservationDisclosure('reasoning');
   const hasReasoningContent = observationReasoningHasContent(
     reasoningState?.summary,
     reasoningState?.text ?? '',
@@ -97,6 +99,8 @@ export function ObservationMessageCard({
       defaultOpen={false}
       duration={reasoningState.durationMs === undefined ? undefined : Math.ceil(reasoningState.durationMs / 1000)}
       isStreaming={reasoningState.streaming}
+      onOpenChange={setReasoningOpen}
+      open={reasoningOpen}
     >
       <ReasoningTrigger
         className="min-h-6 min-w-0 overflow-hidden px-0 py-0 font-ui text-muted-foreground text-sm leading-5 disabled:pointer-events-none"

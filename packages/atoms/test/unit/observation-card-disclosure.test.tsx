@@ -1,4 +1,7 @@
+import type { AgentObservationEvent } from '@monad/protocol';
 import type { ReactElement } from 'react';
+import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
+import type { ObservationTimelineRow } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 
 import { expect, test } from 'bun:test';
 import { fireEvent, render } from '@testing-library/react';
@@ -9,6 +12,7 @@ import {
   ObservationDisclosureScope
 } from '../../src/workplace-experiences/chat-room/components/observation/disclosure.tsx';
 import { MonadMcpLongText } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-long-text.tsx';
+import { ObservationTimelineRowView } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 import { setupDomTestEnvironment } from '../dom-test-env.ts';
 
 setupDomTestEnvironment();
@@ -24,6 +28,53 @@ function tree(store: ReturnType<typeof createObservationDisclosureStore>, scope:
           text={longText}
         />
       </ObservationDisclosureScope>
+    </ObservationDisclosureProvider>
+  );
+}
+
+function observationEntry(
+  kind: 'assistant-message' | 'reasoning',
+  text: string
+): ObservationTimelineRow['entries'][number] {
+  const rawEvent = { id: 'raw-reasoning-response', type: 'provider-message' };
+  const event: AgentObservationEvent = {
+    id: `event-${kind}`,
+    kind,
+    provenance: { contractEvents: [{ provenance: { rawEvents: [rawEvent] } }] },
+    streaming: true,
+    text
+  };
+  const card: AgentObservationCard = {
+    id: `card-${kind}`,
+    kind: kind === 'reasoning' ? 'reasoning' : 'message',
+    payload: { event },
+    provenance: event.provenance,
+    streaming: true
+  };
+  return {
+    card,
+    contractEvents: event.provenance.contractEvents,
+    id: card.id,
+    kind: 'public'
+  };
+}
+
+function reasoningTree(
+  store: ReturnType<typeof createObservationDisclosureStore>,
+  reasoningText: string,
+  responseText?: string
+): ReactElement {
+  const reasoning = observationEntry('reasoning', reasoningText);
+  const response = responseText ? observationEntry('assistant-message', responseText) : undefined;
+  return (
+    <ObservationDisclosureProvider store={store}>
+      <ObservationTimelineRowView
+        provider="codex"
+        row={{
+          id: response ? `${reasoning.id}:${response.id}` : reasoning.id,
+          entries: response ? [reasoning, response] : [reasoning]
+        }}
+      />
     </ObservationDisclosureProvider>
   );
 }
@@ -50,4 +101,25 @@ test('expanding one row leaves another row collapsed', async () => {
   const neighbourExpanded = otherRow.getByRole('button').getAttribute('aria-expanded') === 'true';
 
   expect(neighbourExpanded).toBe(false);
+});
+
+test('expanded reasoning remains open when streaming adds content and pairs the response', () => {
+  const store = createObservationDisclosureStore();
+  const mounted = render(reasoningTree(store, 'First reasoning update'));
+  fireEvent.click(mounted.getByRole('button'));
+  mounted.unmount();
+
+  const remounted = render(
+    reasoningTree(store, 'First reasoning update and another one', 'The response has started streaming')
+  );
+
+  expect({
+    expanded: remounted.getByRole('button').getAttribute('aria-expanded'),
+    reasoning: remounted.getByText('First reasoning update and another one').textContent,
+    response: remounted.getByText('The response has started streaming').textContent
+  }).toEqual({
+    expanded: 'true',
+    reasoning: 'First reasoning update and another one',
+    response: 'The response has started streaming'
+  });
 });

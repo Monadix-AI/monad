@@ -704,19 +704,21 @@ function ObservationTimelineRowViewImpl({
     const responseEvent = cardEvent(second.card);
     if (reasoningEvent && responseEvent) {
       return (
-        <ObservationMessageCard
-          messageRole="agent"
-          reasoning={{
-            durationMs: reasoningEvent.durationMs,
-            hasContent: reasoningEvent.hasContent,
-            summary: reasoningSummary(first, reasoningEvent),
-            streaming: first.card.streaming,
-            text: reasoningEvent.text ?? ''
-          }}
-          streaming={second.card.streaming}
-          text={responseEvent.text ?? ''}
-          timestamp={second.timestamp}
-        />
+        <ObservationDisclosureScope id={first.id}>
+          <ObservationMessageCard
+            messageRole="agent"
+            reasoning={{
+              durationMs: reasoningEvent.durationMs,
+              hasContent: reasoningEvent.hasContent,
+              summary: reasoningSummary(first, reasoningEvent),
+              streaming: first.card.streaming,
+              text: reasoningEvent.text ?? ''
+            }}
+            streaming={second.card.streaming}
+            text={responseEvent.text ?? ''}
+            timestamp={second.timestamp}
+          />
+        </ObservationDisclosureScope>
       );
     }
   }
