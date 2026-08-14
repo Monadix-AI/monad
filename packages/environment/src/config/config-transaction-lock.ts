@@ -121,10 +121,27 @@ export async function removeConfigTransactionSemaphoreForTests(homePath: string)
   const canonicalHome = await realpath(homePath);
   const identity = configTransactionLockIdentity(canonicalHome);
   if (identity.kind !== 'system-v-semaphore') return;
+  const { ptr, read } = await import('bun:ffi');
   const library = await openUnixNativeLockLibrary();
   try {
     const semaphoreId = library.semget(identity.key, 1, 0o600);
-    if (semaphoreId >= 0) library.semctl(semaphoreId, 0, 0);
+    if (semaphoreId < 0) return;
+    const acquire = semaphoreOperations([
+      { operation: 0, flags: IPC_NOWAIT },
+      { operation: 1, flags: IPC_NOWAIT | SEM_UNDO }
+    ]);
+    const deadline = performance.now() + 5_000;
+    while (library.semop(semaphoreId, ptr(acquire), 2) !== 0) {
+      const errno = readUnixErrno(library, read.i32);
+      if (removedSemaphoreErrnos().includes(errno)) return;
+      if (errno !== busyErrno() && errno !== 4) throw unixLockError('acquire', errno);
+      if (performance.now() >= deadline) throw lockTimeout(5_000);
+      await Bun.sleep(Math.min(10, Math.max(1, deadline - performance.now())));
+    }
+    if (library.semctl(semaphoreId, 0, 0) !== 0) {
+      const errno = readUnixErrno(library, read.i32);
+      if (!removedSemaphoreErrnos().includes(errno)) throw unixLockError('release', errno);
+    }
   } finally {
     try {
       library.close();
@@ -276,6 +293,10 @@ function resolveLibc(): string {
 
 function busyErrno(): number {
   return process.platform === 'darwin' ? 35 : 11;
+}
+
+function removedSemaphoreErrnos(): readonly number[] {
+  return process.platform === 'darwin' ? [22, 82] : [22, 43];
 }
 
 function unixLockError(operation: 'open' | 'acquire' | 'release', errno: number): Error {
