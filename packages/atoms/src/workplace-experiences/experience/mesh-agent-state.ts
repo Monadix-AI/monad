@@ -146,6 +146,12 @@ function sessionAgentName(state: MeshAgentExperienceState, meshSessionId: string
 
 export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): MeshAgentLifecycleNotice[] {
   const t = workplaceExperienceT();
+  const latestConnectionRequiredEventIds = new Map<string, EventId>();
+  for (const event of state.events) {
+    if (event.type !== 'mesh.connection_required') continue;
+    const payload = parseEventPayload('mesh.connection_required', event.payload);
+    latestConnectionRequiredEventIds.set(payload.agentName, event.id);
+  }
   // `connection_required` is the durable provider-level failure. Once the auth probe confirms that
   // the same runtime needs a login, `login_required` becomes the actionable chat card and the generic
   // reconnect notice would only duplicate it (and can expose an internal ProjectMember id as text).
@@ -219,6 +225,7 @@ export function meshAgentLifecycleNotices(state: MeshAgentExperienceState): Mesh
     }
     if (event.type === 'mesh.connection_required') {
       const payload = parseEventPayload('mesh.connection_required', event.payload);
+      if (latestConnectionRequiredEventIds.get(payload.agentName) !== event.id) return [];
       if (
         payload.meshSessionId
           ? loginRequiredMeshSessionIds.has(payload.meshSessionId)

@@ -360,9 +360,9 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
               const preflight = await meshAgentHost.preflight(templateAgentName);
               if (preflight.state !== 'ready') {
                 batch?.release();
-                if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+                if (preflight.state === 'not_authenticated') {
                   emitConnectionRequired(member, preflight.reason);
-                  if (preflight.state === 'not_authenticated') retryPending(member);
+                  retryPending(member);
                 }
                 return;
               }
@@ -631,9 +631,9 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
           const preflight = await meshAgentHost.preflight(templateAgentName);
           if (preflight.state !== 'ready') {
             batch?.release();
-            if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+            if (preflight.state === 'not_authenticated') {
               emitConnectionRequired(preflight.reason);
-              if (preflight.state === 'not_authenticated') retryPending();
+              retryPending();
             }
             return;
           }

@@ -65,7 +65,7 @@ export function createManagedMeshAgentJoin(ctx: SessionContext) {
       const resumeFrom = resumeCandidate?.providerSessionRef;
       const preflight = await meshAgentHost.preflight(templateAgentName);
       if (preflight.state !== 'ready') {
-        if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+        if (preflight.state === 'not_authenticated') {
           emitLifecycle(session.id, 'mesh.connection_required', {
             agentName: runtimeAgentName,
             authAgentName: templateAgentName,

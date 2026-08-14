@@ -341,6 +341,49 @@ test('projects canonical lifecycle events into localized experience notices', ()
   ]);
 });
 
+test('coalesces repeated reconnect events per agent to the latest notice', () => {
+  const state = foldMeshAgentExperienceState({
+    sessions: {},
+    loginRequirements: {},
+    approvals: {},
+    events: [
+      event(1, 'mesh.connection_required', {
+        agentName: 'codex',
+        provider: 'codex',
+        reason: 'first probe',
+        reconnectIn: 'studio'
+      }),
+      event(2, 'mesh.connection_required', {
+        agentName: 'claude-code',
+        provider: 'claude-code',
+        reason: 'claude probe',
+        reconnectIn: 'studio'
+      }),
+      event(3, 'mesh.connection_required', {
+        agentName: 'codex',
+        provider: 'codex',
+        reason: 'second probe',
+        reconnectIn: 'studio'
+      })
+    ],
+    snapshotReceived: true,
+    stale: false
+  });
+
+  expect(meshAgentLifecycleNotices(state).map(({ id, agentName, text }) => ({ id, agentName, text }))).toEqual([
+    {
+      id: 'mesh-agent-connection-required:claude-code:evt_000000000002',
+      agentName: 'claude-code',
+      text: 'claude-code needs to reconnect in Studio.'
+    },
+    {
+      id: 'mesh-agent-connection-required:codex:evt_000000000003',
+      agentName: 'codex',
+      text: 'codex needs to reconnect in Studio.'
+    }
+  ]);
+});
+
 test('omits a generic failed notice when the runtime snapshot carries the specific error', () => {
   const failedSession: MeshAgentStateSession = {
     ...session,

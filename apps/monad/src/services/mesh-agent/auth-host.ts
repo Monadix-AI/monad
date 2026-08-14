@@ -134,6 +134,27 @@ export class MeshAgentAuthHost {
     return buildMeshAgentSpawnEnv(this.deps.resolveAgentEnv, adapter, launchEnv);
   }
 
+  private reportPreflight(
+    result: MeshAgentStartPreflight,
+    details?: { authState?: MeshAgentAuthState; error?: unknown }
+  ): MeshAgentStartPreflight {
+    const record = {
+      event: 'mesh.preflight_result',
+      agentName: result.agentName,
+      provider: result.provider,
+      preflightState: result.state,
+      checkedAt: result.checkedAt,
+      ...('action' in result ? { action: result.action } : {}),
+      ...('reason' in result ? { reason: result.reason } : {}),
+      ...(details?.authState ? { authState: details.authState } : {}),
+      ...(details?.error ? { err: details.error } : {})
+    };
+    if (result.state === 'ready') this.log.debug(record, 'MeshAgent preflight ready');
+    else if (result.state === 'unknown') this.log.warn(record, 'MeshAgent preflight inconclusive');
+    else this.log.info(record, 'MeshAgent preflight blocked');
+    return result;
+  }
+
   private async runProbe(
     agent: MeshAgentView,
     adapter: MeshAgentProviderAdapter,
@@ -515,45 +536,60 @@ export class MeshAgentAuthHost {
     try {
       const auth = await this.authStatus(agentName);
       if (auth.state === 'authenticated') {
-        return { state: 'ready', agentName: agent.name, provider: agent.provider, checkedAt: auth.checkedAt };
+        return this.reportPreflight(
+          { state: 'ready', agentName: agent.name, provider: agent.provider, checkedAt: auth.checkedAt },
+          { authState: auth.state }
+        );
       }
       if (auth.state === 'unauthenticated') {
-        return {
-          state: 'not_authenticated',
+        return this.reportPreflight(
+          {
+            state: 'not_authenticated',
+            agentName: agent.name,
+            provider: agent.provider,
+            checkedAt: auth.checkedAt,
+            action: 'reconnect_in_studio',
+            reason: `Reconnect ${agent.name} in Studio before using it in this project.`
+          },
+          { authState: auth.state }
+        );
+      }
+      return this.reportPreflight(
+        {
+          state: 'unknown',
           agentName: agent.name,
           provider: agent.provider,
           checkedAt: auth.checkedAt,
-          action: 'reconnect_in_studio',
-          reason: `Reconnect ${agent.name} in Studio before using it in this project.`
-        };
-      }
-      return {
-        state: 'unknown',
-        agentName: agent.name,
-        provider: agent.provider,
-        checkedAt: auth.checkedAt,
-        action: 'manual_check_in_studio',
-        reason: `Check ${agent.name} connection in Studio before using it in this project.`
-      };
+          action: 'manual_check_in_studio',
+          reason: `Check ${agent.name} connection in Studio before using it in this project.`
+        },
+        { authState: auth.state }
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
       if (/Executable not found|ENOENT/i.test(message)) {
-        return {
-          state: 'unavailable',
+        return this.reportPreflight(
+          {
+            state: 'unavailable',
+            agentName: agent.name,
+            provider: agent.provider,
+            checkedAt,
+            reason: message
+          },
+          { error }
+        );
+      }
+      return this.reportPreflight(
+        {
+          state: 'unknown',
           agentName: agent.name,
           provider: agent.provider,
           checkedAt,
-          reason: message
-        };
-      }
-      return {
-        state: 'unknown',
-        agentName: agent.name,
-        provider: agent.provider,
-        checkedAt,
-        action: 'manual_check_in_studio',
-        reason: `Check ${agent.name} connection in Studio before using it in this project.`
-      };
+          action: 'manual_check_in_studio',
+          reason: `Check ${agent.name} connection in Studio before using it in this project.`
+        },
+        { error }
+      );
     }
   }
 

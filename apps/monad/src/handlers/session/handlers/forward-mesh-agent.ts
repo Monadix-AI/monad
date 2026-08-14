@@ -140,7 +140,7 @@ export function createForwardMeshAgentHandler(
         const reason = preflight.reason;
         const round: Event[] = [];
         const emit = makeEmit(round);
-        if (preflight.state === 'not_authenticated' || preflight.state === 'unknown') {
+        if (preflight.state === 'not_authenticated') {
           emit(
             makeEvent(sessionId as SessionId, 'mesh.connection_required', {
               agentName,

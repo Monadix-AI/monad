@@ -82,3 +82,50 @@ test('session-only member starts in the project shared workspace when the sessio
     workingPaths: [join(monadHome, 'workplace', 'prj_join00000000', 'shared')]
   });
 });
+
+test('inconclusive provider preflight does not tell the member to reconnect', async () => {
+  const emitted: string[] = [];
+  let startCalls = 0;
+  const ctx = {
+    deps: {
+      store: {},
+      paths: { home: tmpdir() },
+      meshAgentHost: {
+        list: () => ({ sessions: [] }),
+        preflight: async () => ({
+          state: 'unknown' as const,
+          agentName: 'codex',
+          provider: 'codex',
+          checkedAt: new Date(0).toISOString(),
+          action: 'manual_check_in_studio' as const,
+          reason: 'Check codex connection in Studio before using it in this project.'
+        }),
+        start: async () => {
+          startCalls += 1;
+          throw new Error('unexpected runtime start');
+        }
+      }
+    },
+    emitLifecycle: (_sessionId: string, type: string) => emitted.push(type),
+    messageIngress: {}
+  } as unknown as SessionContext;
+  const session = {
+    id: 'ses_joinunknown00',
+    projectId: 'prj_joinunknown00',
+    cwd: tmpdir()
+  } as unknown as Session;
+  const member: ManagedMeshAgentProjectMember = {
+    spec: { name: 'codex', provider: 'codex' } as MeshAgentConfig,
+    projectMemberId: 'pmem_joinunknown',
+    runtimeAgentName: 'pmem_joinunknown',
+    templateAgentName: 'codex',
+    displayName: 'Codex',
+    configuredDisplayName: 'Codex',
+    settings: { managedProjectAgent: true }
+  };
+
+  const result = await createManagedMeshAgentJoin(ctx).spawnManagedSessionMember(session, member);
+
+  // behavior-ok: an inconclusive auth probe stops the join without claiming reconnect is required
+  expect({ emitted, result, startCalls }).toEqual({ emitted: [], result: { started: false }, startCalls: 0 });
+});
