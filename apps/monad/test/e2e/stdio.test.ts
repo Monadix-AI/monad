@@ -16,7 +16,7 @@ interface JsonRpcResponse {
   error?: { code: number; message: string };
 }
 
-function spawnStdioHelper() {
+async function spawnStdioHelper() {
   const proc = Bun.spawn(['bun', helper], {
     stdin: 'pipe',
     stdout: 'pipe',
@@ -56,10 +56,13 @@ function spawnStdioHelper() {
     reader.releaseLock();
   }
 
+  const ready = JSON.parse(await readLine()) as { ready?: unknown };
+  if (ready.ready !== true) throw new Error('stdio helper did not become ready');
+
   return { call, close };
 }
 
-const stdio = spawnStdioHelper();
+const stdio = await spawnStdioHelper();
 
 afterAll(() => stdio.close());
 

@@ -12,4 +12,6 @@ setLogStderr(true);
 const { startStdioTransport } = await import('#/transports/stdio.ts');
 const { buildHandlers, mockModel } = await import('../helpers.ts');
 
-await startStdioTransport(buildHandlers(mockModel()));
+const handlers = buildHandlers(mockModel());
+process.stdout.write(`${JSON.stringify({ ready: true })}\n`);
+await startStdioTransport(handlers);
