@@ -139,6 +139,33 @@ test('Codex fileChange projects exact files and diff totals from app-server prov
   });
 });
 
+test('Codex fileChange settles a started item when its completed result arrives', () => {
+  const file = {
+    path: 'src/client-logic.ts',
+    kind: { type: 'add' },
+    diff: 'export const ready = true;\n'
+  };
+  const view = codexFileChangeView([
+    {
+      method: 'item/started',
+      params: { item: { type: 'fileChange', changes: [file], status: 'inProgress' } }
+    },
+    {
+      method: 'item/completed',
+      params: { item: { type: 'fileChange', changes: [file], status: 'completed' } }
+    }
+  ]);
+  if (!view) throw new Error('Expected completed Codex file change view');
+
+  expect({
+    status: view.status,
+    title: visibleText(renderToStaticMarkup(<FileChangeToolHeader view={view} />))
+  }).toEqual({
+    status: 'completed',
+    title: 'tool call Created client-logic.ts'
+  });
+});
+
 test('Codex add fileChange treats body content as additions with natural new-file line numbers', () => {
   const view = codexFileChangeView([
     {

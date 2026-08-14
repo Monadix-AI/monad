@@ -3,6 +3,7 @@ import type { ObservationVisualRole, OrbState } from '@monad/ui';
 
 import {
   ArrowDown01Icon,
+  CheckListIcon,
   FileCodeIcon,
   FileEditIcon,
   LinkSquare01Icon,
@@ -38,7 +39,7 @@ export function ObservationCardShell({
   );
 }
 
-type ObservationToolKind = 'command' | 'file' | 'file-change' | 'mcp' | 'tool';
+type ObservationToolKind = 'command' | 'file' | 'file-change' | 'mcp' | 'plan' | 'tool';
 export type ObservationToolStatus = 'error' | 'running' | 'success';
 
 export function observationElapsedSeconds(startedAt: number, now: number): number {
@@ -92,8 +93,10 @@ export function ObservationToolCardShell({
   error = false,
   header,
   kind,
+  runningIcon = 'orb',
   runningOrbState = 'solving',
   status,
+  titleIcon,
   timestamp
 }: {
   children: React.ReactNode;
@@ -101,8 +104,10 @@ export function ObservationToolCardShell({
   error?: boolean;
   header: React.ReactNode;
   kind: ObservationToolKind;
+  runningIcon?: 'kind' | 'orb';
   runningOrbState?: OrbState;
   status?: ObservationToolStatus;
+  titleIcon?: IconSvgElement;
   timestamp?: string;
 }): React.ReactElement {
   const resolvedStatus = error ? 'error' : status;
@@ -126,7 +131,7 @@ export function ObservationToolCardShell({
       ref={cardRef}
     >
       <summary className="group/tool-trigger flex min-h-6 w-full min-w-0 cursor-pointer list-none items-center gap-2 rounded-md px-0 py-0 text-left font-ui text-muted-foreground text-sm leading-5 transition-colors hover:text-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/35 [&::-webkit-details-marker]:hidden">
-        {resolvedStatus === 'running' ? (
+        {resolvedStatus === 'running' && runningIcon === 'orb' ? (
           <ThinkingOrb
             aria-hidden="true"
             className="shrink-0"
@@ -140,7 +145,7 @@ export function ObservationToolCardShell({
           <HugeiconsIcon
             aria-hidden="true"
             className="shrink-0 text-muted-foreground/80 transition-colors group-hover/tool-trigger:text-foreground"
-            icon={observationToolIcon(kind)}
+            icon={titleIcon ?? observationToolIcon(kind)}
             size={16}
           />
         )}
@@ -170,6 +175,7 @@ function observationToolIcon(kind: ObservationToolKind): IconSvgElement {
   if (kind === 'file-change') return FileEditIcon;
   if (kind === 'file') return FileCodeIcon;
   if (kind === 'mcp') return LinkSquare01Icon;
+  if (kind === 'plan') return CheckListIcon;
   return Wrench01Icon;
 }
 

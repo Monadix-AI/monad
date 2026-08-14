@@ -1,6 +1,8 @@
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { siModelcontextprotocol } from 'simple-icons';
 
+import { ObservationToolCardShell } from '../../src/workplace-experiences/chat-room/components/observation/card-shell.tsx';
 import {
   createObservationDisclosureStore,
   ObservationDisclosureProvider,
@@ -59,11 +61,60 @@ function cardTitle(payload: Record<string, unknown>, expanded = false): string {
   return plainText(markup.slice(markup.indexOf('<summary'), markup.indexOf('</summary>')));
 }
 
+function titleMarkup(payload: Record<string, unknown>): string {
+  const { markup } = renderCard(payload);
+  return markup.slice(markup.indexOf('<summary'), markup.indexOf('</summary>'));
+}
+
+function genericMcpTitleMarkup(): string {
+  const store = createObservationDisclosureStore();
+  const markup = renderToStaticMarkup(
+    <ObservationDisclosureProvider store={store}>
+      <ObservationDisclosureScope id="generic-mcp">
+        <ObservationToolCardShell
+          header="Monad MCP"
+          kind="mcp"
+          status="success"
+        >
+          <span>complete</span>
+        </ObservationToolCardShell>
+      </ObservationDisclosureScope>
+    </ObservationDisclosureProvider>
+  );
+  return markup.slice(markup.indexOf('<summary'), markup.indexOf('</summary>'));
+}
+
 test('the collapsed Codex startup card reports boot progress in a closed disclosure', () => {
   const collapsed = renderCard(bootPayload);
   expect({ expanded: collapsed.expanded, title: cardTitle(bootPayload) }).toEqual({
     expanded: false,
     title: 'Starting MCP servers (3/5): codex_apps 0s'
+  });
+});
+
+test('running and settled MCP startup titles keep the same MCP icon', () => {
+  const genericMcp = genericMcpTitleMarkup();
+  const running = titleMarkup(bootPayload);
+  const settled = titleMarkup({
+    ...bootPayload,
+    active: undefined,
+    pending: 0,
+    ready: 4
+  });
+  const icon = (markup: string) => markup.match(/<svg[^>]*>[\s\S]*?<\/svg>/)?.[0];
+
+  expect({
+    genericMcpUsesOfficialIcon: genericMcp.includes(`d="${siModelcontextprotocol.path}"`),
+    officialMcpIcon: running.includes(`d="${siModelcontextprotocol.path}"`),
+    runningHasOrb: running.includes('data-slot="observation-tool-orb"'),
+    sameIcon: icon(running) === icon(settled),
+    settledHasOrb: settled.includes('data-slot="observation-tool-orb"')
+  }).toEqual({
+    genericMcpUsesOfficialIcon: false,
+    officialMcpIcon: true,
+    runningHasOrb: false,
+    sameIcon: true,
+    settledHasOrb: false
   });
 });
 

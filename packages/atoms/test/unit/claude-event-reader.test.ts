@@ -136,6 +136,55 @@ test('Claude SDK history contains only provider-returned messages', async () => 
   });
 });
 
+test('Claude SDK history preserves structured file patches in output and pages', async () => {
+  const toolUseResult = {
+    filePath: '/workspace/src/index.ts',
+    structuredPatch: [
+      {
+        oldStart: 32,
+        oldLines: 1,
+        newStart: 32,
+        newLines: 1,
+        lines: ['-const state = false;', '+const state = true;']
+      }
+    ]
+  };
+  const message = {
+    type: 'user',
+    uuid: 'message-tool-result',
+    session_id: 'claude-session',
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: 'toolu_Edit', content: 'Completed.' }]
+    },
+    parent_tool_use_id: null,
+    tool_use_result: toolUseResult
+  } as unknown as SessionMessage;
+  const getSessionMessages = (async () => [message]) as never;
+  const outputReader = createClaudeSdkHistoryOutputReader({ getSessionMessages });
+  const pageReader = createClaudeSdkEventPageReader({ getSessionMessages });
+  const context = { providerSessionRef: 'claude-session', workingPath: '/tmp/project' };
+
+  const output = await outputReader(context);
+  const page = await pageReader({
+    ...context,
+    request: { limit: 20, sortDirection: 'desc', itemsView: 'full' }
+  });
+
+  const expected = {
+    type: 'user',
+    uuid: 'message-tool-result',
+    session_id: 'claude-session',
+    message: message.message,
+    parent_tool_use_id: null,
+    tool_use_result: toolUseResult
+  };
+  expect({ output: output ? JSON.parse(output) : null, page }).toEqual({
+    output: expected,
+    page: { items: [expected] }
+  });
+});
+
 test('Claude SDK fixture history preserves native order through Monad page slicing', async () => {
   const fixture = multiTurnObservationFixtureSchema.parse(
     await Bun.file(

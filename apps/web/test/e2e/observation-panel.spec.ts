@@ -146,17 +146,10 @@ test('Claude Read cards separate tab-delimited provider line numbers from highli
   const codeBlock = fileCard.locator('[data-generated-line-numbers]');
   await expect(codeBlock).toHaveAttribute('data-generated-line-numbers', 'false');
   await expect(codeBlock).toHaveAttribute('data-provider-line-numbers', 'true');
-  const firstLine = await codeBlock
-    .locator('code > span')
-    .first()
-    .evaluate((line) => ({
-      gutter: line.querySelector('[data-slot="code-block-line-number"]')?.textContent,
-      source: [...line.children]
-        .filter((child) => child.getAttribute('data-slot') !== 'code-block-line-number')
-        .map((child) => child.textContent)
-        .join('')
-    }));
-  expect(firstLine).toEqual({ gutter: '11', source: 'export const observationLine1 = 1;' });
+  const firstGutter = codeBlock.locator('[data-slot="code-block-line-number"]').first();
+  const firstSource = firstGutter.locator('xpath=following-sibling::span[1]');
+  await expect(firstGutter).toHaveText('11');
+  await expect(firstSource).toHaveText('export const observationLine1 = 1;');
   await expect(codeBlock).not.toContainText('Provider metadata outside the file body.');
 });
 

@@ -59,53 +59,39 @@ const TokenSpan = ({ token }: { token: ThemedToken }) => (
   </span>
 );
 
-// Line number styles using CSS counters
-const LINE_NUMBER_CLASSES = cn(
-  'block',
-  'before:content-[counter(line)]',
-  'before:inline-block',
-  'before:[counter-increment:line]',
-  'before:w-[3ch]',
-  'before:mr-3',
-  'before:text-right',
-  'before:text-muted-foreground/50',
-  'before:font-code',
-  'before:tabular-nums',
-  'before:select-none'
-);
-const EXPLICIT_LINE_NUMBER_CLASSES =
-  'mr-3 inline-block w-[3ch] select-none text-right font-code tabular-nums text-muted-foreground/50';
-
 // Line rendering component
 const LineSpan = ({
   keyedLine,
   lineNumber,
-  showLineNumbers
+  providerLineNumber
 }: {
   keyedLine: KeyedLine;
   lineNumber?: number;
-  showLineNumbers: boolean;
-}) => (
-  <span className={showLineNumbers ? LINE_NUMBER_CLASSES : 'block'}>
-    {lineNumber === undefined ? null : (
-      <span
-        aria-hidden="true"
-        className={EXPLICIT_LINE_NUMBER_CLASSES}
-        data-slot="code-block-line-number"
-      >
-        {lineNumber}
-      </span>
-    )}
-    {keyedLine.tokens.length === 0
-      ? '\n'
+  providerLineNumber: boolean;
+}) => {
+  const content =
+    keyedLine.tokens.length === 0
+      ? ' '
       : keyedLine.tokens.map(({ token, key }) => (
           <TokenSpan
             key={key}
             token={token}
           />
-        ))}
-  </span>
-);
+        ));
+  if (lineNumber === undefined) return <span className="block whitespace-pre">{content}</span>;
+  return (
+    <>
+      <span
+        aria-hidden="true"
+        className="sticky left-0 z-10 box-content w-[var(--code-block-line-number-width)] select-none bg-background pr-5 text-right font-code text-muted-foreground/50 tabular-nums"
+        data-slot={providerLineNumber ? 'code-block-line-number' : undefined}
+      >
+        {lineNumber}
+      </span>
+      <span className="whitespace-pre">{content}</span>
+    </>
+  );
+};
 
 // Types
 type CodeBlockProps = HTMLAttributes<HTMLDivElement> & {
@@ -252,20 +238,32 @@ const CodeBlockBody = memo(
     );
 
     const keyedLines = useMemo(() => addKeysToTokens(tokenized.tokens), [tokenized.tokens]);
+    const hasLineNumbers = showLineNumbers || lineNumbers !== undefined;
+    const lineNumberWidth = useMemo(() => {
+      const largestLineNumber =
+        lineNumbers?.reduce((largest, current) => Math.max(largest, Math.abs(current)), 0) ?? keyedLines.length;
+      return `${String(Math.max(largestLineNumber, 1)).length}ch`;
+    }, [keyedLines.length, lineNumbers]);
 
     return (
       <pre
-        className={cn('m-0 p-4 text-sm dark:bg-(--shiki-dark-bg)! dark:text-(--shiki-dark)!', className)}
+        className={cn('m-0 px-2 py-2.5 text-sm dark:bg-(--shiki-dark-bg)! dark:text-(--shiki-dark)!', className)}
         data-selectable="true"
         style={preStyle}
       >
-        <code className={cn('font-code text-sm', showLineNumbers && '[counter-increment:line_0] [counter-reset:line]')}>
+        <code
+          className={cn(
+            'font-code text-sm',
+            hasLineNumbers && 'grid w-max min-w-full grid-cols-[max-content_minmax(max-content,1fr)]'
+          )}
+          style={{ '--code-block-line-number-width': lineNumberWidth } as CSSProperties}
+        >
           {keyedLines.map((keyedLine, index) => (
             <LineSpan
               key={keyedLine.key}
               keyedLine={keyedLine}
-              lineNumber={lineNumbers?.[index]}
-              showLineNumbers={showLineNumbers}
+              lineNumber={lineNumbers?.[index] ?? (showLineNumbers ? index + 1 : undefined)}
+              providerLineNumber={lineNumbers?.[index] !== undefined}
             />
           ))}
         </code>

@@ -16,7 +16,11 @@ import {
 } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 
-function claudeFileToolPipeline(tool: 'Write' | 'Edit' | 'MultiEdit', input: Record<string, unknown>) {
+function claudeFileToolPipeline(
+  tool: 'Write' | 'Edit' | 'MultiEdit',
+  input: Record<string, unknown>,
+  toolUseResult?: Record<string, unknown>
+) {
   const adapter = builtinAgentAdapters.find((candidate) => candidate.provider === 'claude-code');
   if (!adapter) throw new Error('Missing Claude Code adapter');
   const output = [
@@ -32,7 +36,8 @@ function claudeFileToolPipeline(tool: 'Write' | 'Edit' | 'MultiEdit', input: Rec
       message: {
         role: 'user',
         content: [{ type: 'tool_result', tool_use_id: `toolu_${tool}`, content: 'Completed.' }]
-      }
+      },
+      ...(toolUseResult ? { tool_use_result: toolUseResult } : {})
     }
   ];
   const events = meshAgentNeutralStreamItems({
@@ -65,6 +70,44 @@ test('file changes normalize Codex and Claude running statuses before choosing t
     'running',
     'running'
   ]);
+});
+
+test('Claude Edit uses the provider structured patch to preserve real file line numbers', () => {
+  const projected = claudeFileToolPipeline(
+    'Edit',
+    {
+      file_path: '/workspace/src/existing.ts',
+      old_string: 'const state = false;',
+      new_string: 'const state = true;'
+    },
+    {
+      filePath: '/workspace/src/existing.ts',
+      structuredPatch: [
+        {
+          oldStart: 32,
+          oldLines: 1,
+          newStart: 32,
+          newLines: 1,
+          lines: ['-const state = false;', '+const state = true;']
+        }
+      ]
+    }
+  );
+
+  expect(projected.view).toEqual({
+    additions: 1,
+    deletions: 1,
+    files: [
+      {
+        additions: 1,
+        deletions: 1,
+        diff: '@@ -32,1 +32,1 @@\n-const state = false;\n+const state = true;',
+        kind: 'update',
+        path: '/workspace/src/existing.ts'
+      }
+    ],
+    status: 'completed'
+  });
 });
 
 test('Claude Write renders through the shared file-edit card', () => {

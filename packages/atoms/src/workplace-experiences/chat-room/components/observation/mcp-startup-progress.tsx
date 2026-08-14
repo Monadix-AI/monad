@@ -1,7 +1,14 @@
+import type { IconSvgElement } from '@hugeicons/react';
+
 import { ObservationMeta } from '@monad/ui';
+import { siModelcontextprotocol } from 'simple-icons';
 
 import { workplaceExperienceT } from '../../../i18n.ts';
 import { ObservationToolCardShell, type ObservationToolStatus, ObservationToolStatusIndicator } from './card-shell.tsx';
+
+const ModelContextProtocolIcon: IconSvgElement = [
+  ['path', { d: siModelcontextprotocol.path, fill: 'currentColor', key: 'mcp' }]
+];
 
 export type McpStartupUpdate = {
   name: string;
@@ -107,8 +114,10 @@ export function McpStartupProgressCard({
         />
       }
       kind="mcp"
+      runningIcon="kind"
       status={status}
       timestamp={timestamp}
+      titleIcon={ModelContextProtocolIcon}
     >
       <div className="divide-y divide-border/70">
         {view.servers.map((server) => {

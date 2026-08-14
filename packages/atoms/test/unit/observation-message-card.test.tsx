@@ -9,6 +9,7 @@ import { FilePreviewContext } from '../../src/workplace-experiences/chat-room/co
 import {
   ObservationMessageCard,
   observationReasoningContent,
+  observationReasoningHasContent,
   observationReasoningTitle
 } from '../../src/workplace-experiences/chat-room/components/observation/message-card.tsx';
 import {
@@ -242,6 +243,26 @@ test('completed observation reasoning puts its only summary in the title without
     duration: markup.includes('Thought for 3 seconds'),
     summary: markup.includes('Checking the event projection')
   }).toEqual({ body: false, disabled: true, duration: true, summary: true });
+});
+
+test('completed observation reasoning does not disclose content that repeats its only summary', () => {
+  const summary = '**Planning timeline card rendering test**';
+  const text = 'Planning timeline card rendering test';
+  const markup = renderToStaticMarkup(
+    <ObservationMessageCard
+      messageRole="reasoning"
+      reasoning={{ durationMs: 4000, hasContent: true, streaming: false, summary, text }}
+      streaming={false}
+      text={text}
+    />
+  );
+
+  expect({
+    chevron: markup.includes('data-slot="disclosure-chevron"'),
+    disabled: markup.includes('disabled=""'),
+    renderedSummaries: markup.match(/Planning timeline card rendering test/g)?.length,
+    resolvedContent: observationReasoningHasContent(summary, text, true)
+  }).toEqual({ chevron: false, disabled: true, renderedSummaries: 1, resolvedContent: false });
 });
 
 test('multi-part reasoning keeps summaries out of the title and exposes the complete expandable content', () => {

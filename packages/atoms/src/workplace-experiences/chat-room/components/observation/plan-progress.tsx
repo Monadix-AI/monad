@@ -71,7 +71,7 @@ export function PlanProgressCard({
           title={summary}
         />
       }
-      kind="tool"
+      kind="plan"
       status={view.completed >= view.total ? 'success' : undefined}
       timestamp={timestamp}
     >

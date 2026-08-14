@@ -101,7 +101,7 @@ function fileChangeSingleFileTitle(title: string, name: string, path: string): R
 
 export function codexFileChangeView(contractEvents: readonly unknown[]): CodexFileChangeView | null {
   const rawEvents = observationContractRawEvents(contractEvents);
-  const fileChangeItem = rawEvents.map(fileChangeItemFromRaw).find((candidate) => candidate !== undefined);
+  const fileChangeItem = rawEvents.map(fileChangeItemFromRaw).findLast((candidate) => candidate !== undefined);
   if (!fileChangeItem) return null;
   const files = Array.isArray(fileChangeItem.changes)
     ? fileChangeItem.changes.flatMap((change) => {
@@ -145,7 +145,8 @@ export function claudeFileChangeView(
   const input = recordValue(call.tool?.input);
   const path = stringValue(input?.file_path, input?.filePath);
   if (!input || !path) return null;
-  const diff = claudeFileToolDiff(toolName, input);
+  const structuredDiff = claudeStructuredPatchDiff(result);
+  const diff = structuredDiff ?? claudeFileToolDiff(toolName, input);
   const stats = diffStats(diff);
   return {
     additions: stats.additions,
@@ -157,11 +158,44 @@ export function claudeFileChangeView(
         ...(diff ? { diff } : {}),
         kind: toolName === 'Write' ? 'write' : 'update',
         path,
-        ...(toolName === 'Write' ? {} : { positionUnknown: true })
+        ...(toolName === 'Write' || structuredDiff ? {} : { positionUnknown: true })
       }
     ],
     status: result?.tool?.status ?? call.tool?.status ?? (result ? 'completed' : 'running')
   };
+}
+
+function claudeStructuredPatchDiff(result: AgentObservationEvent | undefined): string | undefined {
+  if (!result) return undefined;
+  const toolResult = observationContractRawEvents(result.provenance.contractEvents)
+    .map((rawEvent) => {
+      const record = recordValue(rawEvent);
+      return recordValue(record?.tool_use_result ?? record?.toolUseResult);
+    })
+    .findLast((candidate) => candidate !== undefined);
+  const patches = toolResult?.structuredPatch ?? toolResult?.structured_patch;
+  if (!Array.isArray(patches) || patches.length === 0) return undefined;
+  const hunks = patches.map(structuredPatchHunk);
+  return hunks.every((hunk) => hunk !== undefined) ? hunks.join('\n') : undefined;
+}
+
+function structuredPatchHunk(value: unknown): string | undefined {
+  const patch = recordValue(value);
+  const oldStart = integerValue(patch?.oldStart, patch?.old_start);
+  const oldLines = integerValue(patch?.oldLines, patch?.old_lines);
+  const newStart = integerValue(patch?.newStart, patch?.new_start);
+  const newLines = integerValue(patch?.newLines, patch?.new_lines);
+  if (
+    !patch ||
+    oldStart === undefined ||
+    oldLines === undefined ||
+    newStart === undefined ||
+    newLines === undefined ||
+    !Array.isArray(patch.lines) ||
+    !patch.lines.every((line): line is string => typeof line === 'string')
+  )
+    return undefined;
+  return [`@@ -${oldStart},${oldLines} +${newStart},${newLines} @@`, ...patch.lines].join('\n');
 }
 
 export function CodexFileChangeCard({ view }: { view: CodexFileChangeView }): React.ReactElement {
@@ -379,4 +413,8 @@ function stringValue(...values: unknown[]): string | undefined {
 
 function rawStringValue(...values: unknown[]): string | undefined {
   return values.find((value): value is string => typeof value === 'string');
+}
+
+function integerValue(...values: unknown[]): number | undefined {
+  return values.find((value): value is number => typeof value === 'number' && Number.isInteger(value) && value >= 0);
 }

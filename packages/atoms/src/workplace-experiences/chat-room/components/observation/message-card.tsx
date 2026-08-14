@@ -50,6 +50,27 @@ export function observationReasoningContent(summary: string | undefined, text: s
     : text;
 }
 
+function normalizedReasoningText(text: string): string {
+  const trimmed = text.trim();
+  const emphasized = /^(\*\*|__)([\s\S]*?)\1$/.exec(trimmed);
+  return (emphasized?.[2] ?? trimmed).trim();
+}
+
+export function observationReasoningHasContent(
+  summary: string | undefined,
+  text: string,
+  hasContent: boolean | undefined
+): boolean {
+  const summaries = observationReasoningSummaries(summary);
+  if (summaries.length > 1 && observationReasoningTokenCount(summary) === undefined) return true;
+  if (hasContent === false) return false;
+
+  const content = normalizedReasoningText(observationReasoningContent(summary, text));
+  if (!content || /^thinking(?:…|\.\.\.)$/i.test(content)) return false;
+  if (summaries.length !== 1) return true;
+  return content !== normalizedReasoningText(summaries[0] ?? '');
+}
+
 export function ObservationMessageCard({
   messageRole,
   reasoning,
@@ -65,9 +86,11 @@ export function ObservationMessageCard({
   const reasoningTitle = observationReasoningTitle(reasoningState?.summary);
   const reasoningTokenCount = observationReasoningTokenCount(reasoningState?.summary);
   const reasoningContent = observationReasoningContent(reasoningState?.summary, reasoningState?.text ?? '');
-  const reasoningSummaryCount = observationReasoningSummaries(reasoningState?.summary).length;
-  const hasSummaryContent = reasoningSummaryCount > 1 && reasoningTokenCount === undefined;
-  const hasReasoningContent = hasSummaryContent || (reasoningState?.hasContent ?? !!reasoningContent.trim());
+  const hasReasoningContent = observationReasoningHasContent(
+    reasoningState?.summary,
+    reasoningState?.text ?? '',
+    reasoningState?.hasContent
+  );
   const reasoningBody = reasoningState ? (
     <Reasoning
       className={messageRole === 'reasoning' ? 'mb-0 w-full' : 'mb-2 w-full'}

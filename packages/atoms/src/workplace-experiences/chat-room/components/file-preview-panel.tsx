@@ -237,20 +237,23 @@ function FilePreviewContent({
         data-selectable="true"
         style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
       >
-        <code ref={contentRef}>
+        <code
+          className="grid w-max min-w-full grid-cols-[max-content_minmax(max-content,1fr)]"
+          ref={contentRef}
+        >
           {lines.map((line, index) => {
             const lineNumber = index + 1;
             const focused = lineNumber === focusLine;
             return (
               <span
-                className="grid w-max min-w-full grid-cols-[3.5rem_minmax(max-content,1fr)]"
+                className="contents"
                 data-focus-line={focused ? 'true' : undefined}
                 data-preview-line={lineNumber}
                 key={`${lineNumber}:${line}`}
               >
                 <span
                   aria-hidden="true"
-                  className="select-none border-border/50 border-r bg-muted/30 pr-3 text-right text-muted-foreground/55"
+                  className="sticky left-0 z-10 min-w-[calc(2ch+1rem)] select-none border-border/50 border-r bg-muted pr-3 pl-2 text-right text-muted-foreground/55 tabular-nums"
                 >
                   {lineNumber}
                 </span>

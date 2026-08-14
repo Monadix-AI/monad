@@ -291,13 +291,19 @@ function claudeTranscriptFallback(context: MeshAgentProviderEventContext): strin
 }
 
 function claudeSdkMessageToJsonLine(message: SessionMessage): string {
-  return JSON.stringify({
+  return JSON.stringify(claudeSdkMessageRecord(message));
+}
+
+function claudeSdkMessageRecord(message: SessionMessage): Record<string, unknown> {
+  const providerMessage = message as SessionMessage & { tool_use_result?: unknown };
+  return {
     type: message.type,
     uuid: message.uuid,
     session_id: message.session_id,
     message: message.message,
-    parent_tool_use_id: message.parent_tool_use_id
-  });
+    parent_tool_use_id: message.parent_tool_use_id,
+    ...(providerMessage.tool_use_result === undefined ? {} : { tool_use_result: providerMessage.tool_use_result })
+  };
 }
 
 function claudeSdkMessagesOutput(messages: SessionMessage[]): string | null {
@@ -328,13 +334,7 @@ export function createClaudeSdkEventPageReader(deps: ClaudeSdkHistoryDeps) {
         offset,
         includeSystemMessages: true
       });
-      const items: unknown[] = messages.map((message) => ({
-        type: message.type,
-        uuid: message.uuid,
-        session_id: message.session_id,
-        message: message.message,
-        parent_tool_use_id: message.parent_tool_use_id
-      }));
+      const items: unknown[] = messages.map(claudeSdkMessageRecord);
       if (items.length === 0) return null;
       return {
         items,

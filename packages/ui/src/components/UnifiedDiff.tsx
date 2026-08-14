@@ -57,6 +57,10 @@ export function UnifiedDiff({
   const highlighted = useHighlightedCode(syntaxCode, language);
   const additions = added ?? rows.filter((row) => row.kind === 'addition').length;
   const deletions = removed ?? rows.filter((row) => row.kind === 'deletion').length;
+  const lineNumberWidth = useMemo(() => {
+    const widestLineNumber = rows.reduce((widest, row) => Math.max(widest, row.oldLine ?? 0, row.newLine ?? 0), 0);
+    return `${String(widestLineNumber).length}ch`;
+  }, [rows]);
 
   return (
     <div
@@ -84,7 +88,10 @@ export function UnifiedDiff({
           data-selectable="true"
           style={{ backgroundColor: highlighted.background, color: highlighted.foreground }}
         >
-          <code className="block w-max min-w-full">
+          <code
+            className="block w-max min-w-full"
+            style={{ '--diff-line-number-width': lineNumberWidth } as CSSProperties}
+          >
             {rows.map((row, index) => (
               <DiffLine
                 highlightedLine={highlighted.lines[index]}
@@ -113,7 +120,7 @@ function DiffLine({
   return (
     <span
       className={cn(
-        'grid min-w-full grid-cols-[3.25rem_1.5rem_minmax(max-content,1fr)]',
+        'grid min-w-full',
         row.kind === 'addition' && 'bg-emerald-500/10',
         row.kind === 'deletion' && 'bg-red-500/10',
         row.kind === 'hunk' && 'bg-info/5 text-info',
@@ -122,26 +129,39 @@ function DiffLine({
       data-kind={row.kind}
       data-new-line={row.newLine ?? undefined}
       data-old-line={row.oldLine ?? undefined}
+      style={{
+        gridTemplateColumns: showLineNumbers
+          ? 'calc(var(--diff-line-number-width) + 1.75rem) minmax(max-content, 1fr)'
+          : '1rem minmax(max-content, 1fr)'
+      }}
     >
       <span
         aria-hidden="true"
-        className={cn(
-          'select-none pr-3 text-right text-muted-foreground/60',
-          row.kind === 'addition' && 'text-emerald-700/75 dark:text-emerald-300/75',
-          row.kind === 'deletion' && 'text-red-700/75 dark:text-red-300/75'
-        )}
+        className="sticky left-0 z-10 grid select-none bg-background"
+        style={{
+          gridTemplateColumns: showLineNumbers ? 'calc(var(--diff-line-number-width) + 0.75rem) 1rem' : '1rem'
+        }}
       >
-        {showLineNumbers ? (row.newLine ?? row.oldLine ?? ' ') : ' '}
-      </span>
-      <span
-        aria-hidden="true"
-        className={cn(
-          'select-none text-center text-muted-foreground/45',
-          row.kind === 'addition' && 'text-emerald-700 dark:text-emerald-300',
-          row.kind === 'deletion' && 'text-red-700 dark:text-red-300'
-        )}
-      >
-        {row.marker}
+        {showLineNumbers ? (
+          <span
+            className={cn(
+              'pr-2 text-right text-muted-foreground/60',
+              row.kind === 'addition' && 'text-emerald-700/75 dark:text-emerald-300/75',
+              row.kind === 'deletion' && 'text-red-700/75 dark:text-red-300/75'
+            )}
+          >
+            {row.newLine ?? row.oldLine ?? ' '}
+          </span>
+        ) : null}
+        <span
+          className={cn(
+            'text-center text-muted-foreground/45',
+            row.kind === 'addition' && 'text-emerald-700 dark:text-emerald-300',
+            row.kind === 'deletion' && 'text-red-700 dark:text-red-300'
+          )}
+        >
+          {row.marker}
+        </span>
       </span>
       <span className="whitespace-pre pr-3">
         {showSyntax ? (
