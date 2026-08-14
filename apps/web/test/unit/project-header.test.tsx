@@ -117,3 +117,40 @@ test('project session header renames the active session inline', async () => {
 
   expect(renameSession.mock.calls).toEqual([['ses_100000000000', 'Project title']]);
 });
+
+test('project session header replaces its loading skeleton with resolved data', () => {
+  const store = createMonadStore({ client: {} as MonadClient });
+  const header = (projectHeaderLoading: boolean) => (
+    <Provider store={store}>
+      <ProjectHeader
+        onAddMember={() => {}}
+        project={
+          {
+            activeSessionId: projectHeaderLoading ? null : 'ses_100000000000',
+            projectHeaderLoading,
+            projectId: 'prj_100000000000',
+            projects: projectHeaderLoading ? [] : [{ id: 'prj_100000000000', name: 'Monad', active: true }],
+            projectSessions: projectHeaderLoading ? [] : [{ id: 'ses_100000000000', title: 'Header work' }],
+            renameSession: () => {},
+            sessionMembers: [],
+            source: { meshAgentState: undefined },
+            workdir: { path: undefined }
+          } as never
+        }
+      />
+    </Provider>
+  );
+  const view = render(header(true));
+
+  expect({ busy: screen.getByRole('banner').getAttribute('aria-busy'), text: document.body.textContent }).toEqual({
+    busy: 'true',
+    text: ''
+  });
+
+  view.rerender(header(false));
+
+  expect({
+    busy: screen.getByRole('banner').getAttribute('aria-busy'),
+    breadcrumb: screen.getByRole('navigation', { name: 'Project and session' }).textContent
+  }).toEqual({ busy: null, breadcrumb: 'Monad/Header work' });
+});

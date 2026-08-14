@@ -232,6 +232,7 @@ export function useProject(
     meshStateSubscribed: activeSessionId !== null,
     meshStateSnapshotReceived: meshAgentState?.snapshotReceived
   });
+  const projectHeaderLoading = projectsLoading || (activeProjectId !== null && projectSessionsQuery.isLoading);
 
   const loadOlder = transcript.loadOlder;
   const loadNewer = transcript.loadNewer;
@@ -266,6 +267,7 @@ export function useProject(
       activeProjectId,
       activeSessionId,
       projectSessions,
+      projectHeaderLoading,
       ready: chatExperienceReady,
       // live collections
       projects,
@@ -328,6 +330,7 @@ export function useProject(
       activeSessionId,
       chatExperienceReady,
       projectSessions,
+      projectHeaderLoading,
       switchSession,
       closeSession,
       renameSession,

@@ -17,7 +17,8 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuSeparator,
-  DropdownMenuTrigger
+  DropdownMenuTrigger,
+  Skeleton
 } from '@monad/ui';
 import { AgentIdentity, AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
 
@@ -28,6 +29,25 @@ import { PanelShellBreadcrumbHeader } from '#/components/ui/panel-shell';
 import { SessionHeaderTitle } from '#/features/session/SessionHeader';
 import { meshWorkspaceStatusView } from '../mesh-workspace-status';
 import { fileManagerLabel, terminalLabel, workdirLabel } from './project-header-utils';
+
+function ProjectHeaderSkeleton(): React.ReactElement {
+  return (
+    <header
+      aria-busy="true"
+      className="panel-shell-header [.app-main-sidebar-collapsed_&]:!pl-[8.5rem] flex h-[52px] items-center gap-3 border-b bg-muted/20 px-4"
+    >
+      <div className="flex min-w-0 flex-1 items-center gap-1.5">
+        <Skeleton className="h-4 w-24 rounded" />
+        <Skeleton className="h-4 w-36 rounded" />
+      </div>
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        <Skeleton className="h-7 w-10 rounded-md" />
+        <Skeleton className="h-7 w-24 rounded-md" />
+        <Skeleton className="h-7 w-28 rounded-md" />
+      </div>
+    </header>
+  );
+}
 
 function SessionMemberRoster({ room }: { room: ProjectController }): React.ReactElement {
   const t = useT();
@@ -214,6 +234,7 @@ export function ProjectHeader({
   const git = workspaceMeta?.git;
   const meshStatus = meshWorkspaceStatusView(room.source.meshAgentState);
   const activeSession = room.projectSessions.find((session) => session.id === room.activeSessionId);
+  if (room.projectHeaderLoading) return <ProjectHeaderSkeleton />;
   return (
     <PanelShellBreadcrumbHeader
       actions={
@@ -267,7 +288,7 @@ export function ProjectHeader({
       }
       ariaLabel={t('web.workplace.projectSessionBreadcrumb')}
       crumbs={[
-        { id: room.projectId, label: activeProject?.name ?? room.projectId },
+        ...(activeProject ? [{ id: room.projectId, label: activeProject.name }] : []),
         ...(activeSession
           ? [
               {
