@@ -26,7 +26,7 @@ export {
 /** The heavy-sandbox atom pack: declares the `sandbox` atom kind and contributes the docker + e2b
  *  launchers. An enabled pack registers these into the launcher registry (source 'atom'); the daemon
  *  selects one only when config.sandbox.backend names it. */
-export const monadPowerPack = defineAtomPack({
+const monadPowerPack = defineAtomPack({
   manifest: parseAtomPackManifest(manifestJson),
   sandboxes: [dockerLauncher, e2bLauncher],
   workplaceExperiences: [kanbanWorkplaceExperience],

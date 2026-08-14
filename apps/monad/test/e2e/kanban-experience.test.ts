@@ -2,7 +2,7 @@ import type { ProjectId } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 import { createDefaultConfig } from '@monad/environment';
-import { monadPowerPack } from '@monad/monad-power-pack';
+import monadPowerPack from '@monad/monad-power-pack';
 import { newId } from '@monad/protocol';
 import { loadManifestAtomPack } from '@monad/sdk-atom';
 

@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 import builtinAtomPack from '@monad/atoms';
-import { monadPowerPack } from '@monad/monad-power-pack';
+import monadPowerPack from '@monad/monad-power-pack';
 
 import { describeAtomPack } from '#/atoms/describe.ts';
 

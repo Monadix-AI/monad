@@ -10,7 +10,7 @@ import { parseAtomPackManifest } from '@monad/protocol';
 import { loadManifestAtomPack } from '@monad/sdk-atom';
 
 import manifestJson from '../../atom-pack.json' with { type: 'json' };
-import defaultAtomPack, { monadPowerPack } from '../../src/index.ts';
+import monadPowerPack from '../../src/index.ts';
 
 test('the runtime pack uses atom-pack.json as its exact manifest contract', () => {
   expect(monadPowerPack.manifest).toEqual(parseAtomPackManifest(manifestJson));
@@ -21,7 +21,7 @@ test('the default runtime entry registers the real pack through the gated loader
   const experiences: WorkplaceExperienceDefinition[] = [];
   const apis: WorkplaceExperienceApi[] = [];
   const workers: ExperienceWorker[] = [];
-  await loadManifestAtomPack(defaultAtomPack, {
+  await loadManifestAtomPack(monadPowerPack, {
     registerChannel: () => {},
     registerCommand: () => {},
     registerMessageType: () => {},

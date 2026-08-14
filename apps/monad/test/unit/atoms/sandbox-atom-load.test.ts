@@ -8,7 +8,7 @@ import type { SandboxLauncher, WorkplaceExperienceDefinition } from '@monad/sdk-
 
 import { afterEach, expect, test } from 'bun:test';
 import builtinAtomPack from '@monad/atoms';
-import { monadPowerPack } from '@monad/monad-power-pack';
+import monadPowerPack from '@monad/monad-power-pack';
 import { vmLauncher } from '@monad/sandbox-vm';
 import { defineAtomPack, defineLocalLauncher, SDK_VERSION } from '@monad/sdk-atom';
 
