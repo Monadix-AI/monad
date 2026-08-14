@@ -88,7 +88,8 @@ export function releaseDaemonSupervisorLauncherArgv(
   platform: NodeJS.Platform,
   execPath: string,
   logPath: string,
-  startupOutputPath: string
+  startupOutputPath: string,
+  supervisorErrorPath: string
 ): string[] {
   const supervisorPath = roleExecPath(execPath, 'restart', platform);
   if (platform === 'win32') {
@@ -96,7 +97,8 @@ export function releaseDaemonSupervisorLauncherArgv(
     const script =
       `$proc = Start-Process -FilePath ${literal(supervisorPath)} ` +
       `-ArgumentList @('daemon-supervisor', ${literal(`"${logPath}"`)}) ` +
-      `-RedirectStandardOutput ${literal(startupOutputPath)} -WindowStyle Hidden -PassThru; $proc.Id`;
+      `-RedirectStandardOutput ${literal(startupOutputPath)} ` +
+      `-RedirectStandardError ${literal(supervisorErrorPath)} -WindowStyle Hidden -PassThru; $proc.Id`;
     return [
       'powershell',
       '-NoProfile',
@@ -173,6 +175,7 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
   // supervisor is not tied to this short-lived CLI process.
   const logPath = join(getPaths().logs, 'daemon.log');
   const startupOutputPath = join(getPaths().logs, 'daemon-startup.log');
+  const supervisorErrorPath = join(getPaths().logs, 'daemon-supervisor-stderr.log');
   await mkdir(getPaths().logs, { recursive: true });
   // Size-cap daemon.log at this start boundary before the daemon opens a fresh append handle.
   rotateDaemonLog(logPath);
@@ -207,7 +210,8 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
     process.platform,
     process.execPath,
     logPath,
-    startupOutputPath
+    startupOutputPath,
+    supervisorErrorPath
   );
   const launcher = Bun.spawn(launcherArgv, {
     env: process.env,

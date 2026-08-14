@@ -9,7 +9,13 @@ import {
 
 test('release daemon supervisor launches outside the short-lived CLI process', () => {
   expect(
-    releaseDaemonSupervisorLauncherArgv('linux', '/opt/monad/bin/monad', '/tmp/daemon.log', '/tmp/startup.log')
+    releaseDaemonSupervisorLauncherArgv(
+      'linux',
+      '/opt/monad/bin/monad',
+      '/tmp/daemon.log',
+      '/tmp/startup.log',
+      '/tmp/supervisor-stderr.log'
+    )
   ).toEqual([
     'sh',
     '-c',
@@ -24,14 +30,16 @@ test('release daemon supervisor launches outside the short-lived CLI process', (
     'win32',
     "C:\\Monad O'Brien\\monad.exe",
     "C:\\Monad O'Brien\\daemon.log",
-    "C:\\Monad O'Brien\\startup.log"
+    "C:\\Monad O'Brien\\startup.log",
+    "C:\\Monad O'Brien\\supervisor-stderr.log"
   );
   expect(windows.slice(0, 5)).toEqual(['powershell', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand']);
   expect(windows).toHaveLength(6);
   expect(Buffer.from(windows[5] ?? '', 'base64').toString('utf16le')).toBe(
     "$proc = Start-Process -FilePath 'C:\\Monad O''Brien\\monad.exe' " +
       "-ArgumentList @('daemon-supervisor', '\"C:\\Monad O''Brien\\daemon.log\"') " +
-      "-RedirectStandardOutput 'C:\\Monad O''Brien\\startup.log' -WindowStyle Hidden -PassThru; $proc.Id"
+      "-RedirectStandardOutput 'C:\\Monad O''Brien\\startup.log' " +
+      "-RedirectStandardError 'C:\\Monad O''Brien\\supervisor-stderr.log' -WindowStyle Hidden -PassThru; $proc.Id"
   );
 });
 

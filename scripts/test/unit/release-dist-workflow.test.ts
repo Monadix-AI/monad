@@ -15,6 +15,7 @@ interface Job {
   permissions?: Record<string, string>;
   strategy?: { matrix?: { include?: Array<Record<string, string>> } };
   steps?: Step[];
+  'timeout-minutes'?: number;
 }
 
 const root = resolve(import.meta.dir, '../../..');
@@ -65,6 +66,7 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(llvmMingw?.run).toContain('aarch64-w64-mingw32-clang');
   expect(llvmMingw?.run).toContain('sha256sum --check');
   expect(installMatrix).toContainEqual({ os: 'windows-arm64', runner: 'windows-11-arm' });
+  expect(jobs['install-test']?.['timeout-minutes']).toBe(10);
   expect(distWorkspace).toContain('"aarch64-pc-windows-msvc"');
   expect(distWorkspace).toContain('install-updater = false');
   expect(distPackage).toContain('aarch64-pc-windows-msvc = [');
@@ -74,11 +76,13 @@ test('release workflow builds, exercises, attests, and publishes dist installers
   expect(upload?.with?.path).toContain('target/distrib/install.sh');
   expect(upload?.with?.path).toContain('target/distrib/install.ps1');
   expect(shellTest).toContain('script -qefc "sh artifacts/install.sh"');
+  expect(shellTest).toContain('MONAD_NO_OPEN=1');
   expect(shellTest).toContain('MONAD_FORCE_INTERACTIVE=1');
   expect(shellTest).toContain('Checksum verified');
   expect(shellTest).toContain('no checksums to verify');
   expect(shellTest).toContain('skipping sha256 checksum verification');
   expect(powerShellTest).toContain('MONAD_FORCE_INTERACTIVE');
+  expect(powerShellTest).toContain("MONAD_NO_OPEN = '1'");
   expect(powerShellTest).toContain('Checksum verified');
   expect(powerShellTest).toContain('no checksums to verify');
   expect(localDeploy).toContain('localInstallPlan(');

@@ -198,6 +198,7 @@ jobs:
     name: installer smoke test (${{ matrix.os }})
     needs: installers
     runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
     strategy:
       fail-fast: false
       matrix:
@@ -225,6 +226,7 @@ jobs:
           export MONAD_DOWNLOAD_URL=http://127.0.0.1:8123
           export MONAD_INSTALL_DIR="${RUNNER_TEMP}/monad-install"
           export MONAD_NO_MODIFY_PATH=1
+          export MONAD_NO_OPEN=1
           export MONAD_FORCE_INTERACTIVE=1
           if [[ "${RUNNER_OS}" == "macOS" ]]; then
             script -q "${RUNNER_TEMP}/install.log" sh artifacts/install.sh
@@ -250,6 +252,7 @@ jobs:
           $env:MONAD_DOWNLOAD_URL = 'http://127.0.0.1:8123'
           $env:MONAD_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'monad-install'
           $env:MONAD_NO_MODIFY_PATH = '1'
+          $env:MONAD_NO_OPEN = '1'
           $env:MONAD_FORCE_INTERACTIVE = '1'
           & artifacts/install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'install.log')
           Select-String -SimpleMatch '◆ MONAD' (Join-Path $env:RUNNER_TEMP 'install.log') | Out-Null
