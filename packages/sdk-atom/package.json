@@ -15,7 +15,6 @@
     "./agent-observation": "./src/agent-observation.ts",
     "./channel": "./src/channel.ts",
     "./command": "./src/command.ts",
-    "./connector": "./src/connector.ts",
     "./hook": "./src/hook.ts",
     "./locale": "./src/locale.ts",
     "./message-type": "./src/message-type.ts",
