@@ -4,6 +4,8 @@
   "exclude": [
     "src/experiences/kanban/client.tsx",
     "src/experiences/kanban/inspector.tsx",
-    "src/experiences/kanban/member-palette.tsx"
+    "src/experiences/kanban/member-palette.tsx",
+    "src/experiences/research-desk/client.tsx",
+    "src/experiences/research-desk/panes"
   ]
 }

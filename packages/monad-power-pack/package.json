@@ -5,6 +5,7 @@
     "@monad/protocol": "workspace:*",
     "@monad/sandbox": "workspace:*",
     "@monad/sdk-atom": "workspace:*",
+    "@monad/sdk-experience": "workspace:*",
     "@monad/ui": "workspace:*",
     "@xyflow/react": "^12.11.3",
     "e2b": "^2.39.0",
@@ -24,8 +25,9 @@
   "module": "src/index.ts",
   "private": true,
   "scripts": {
-    "build:atom-pack": "bun run build:atom-pack:kanban && bun build src/index.ts --outfile dist/atom-pack.js --target bun --format esm --production",
+    "build:atom-pack": "bun run build:atom-pack:kanban && bun run build:atom-pack:research-desk && bun build src/index.ts --outfile dist/atom-pack.js --target bun --format esm --production",
     "build:atom-pack:kanban": "bun build src/experiences/kanban/client.tsx --outfile dist/experiences/kanban.js --target browser --format esm --production",
+    "build:atom-pack:research-desk": "bun build src/experiences/research-desk/client.tsx --outfile dist/experiences/research-desk.js --target browser --format esm --production",
     "build:kanban": "bun build src/experiences/kanban/client.tsx --outfile src/experiences/kanban.js --target browser --format esm --production",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts bun run typecheck:raw",

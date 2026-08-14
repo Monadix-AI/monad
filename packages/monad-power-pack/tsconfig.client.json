@@ -13,6 +13,11 @@
     "src/experiences/kanban/client-styles.ts",
     "src/experiences/kanban/domain.ts",
     "src/experiences/kanban/inspector.tsx",
-    "src/experiences/kanban/member-palette.tsx"
+    "src/experiences/kanban/member-palette.tsx",
+    "src/experiences/research-desk/client.tsx",
+    "src/experiences/research-desk/client-logic.ts",
+    "src/experiences/research-desk/client-styles.ts",
+    "src/experiences/research-desk/domain/**/*.ts",
+    "src/experiences/research-desk/panes/**/*.tsx"
   ]
 }

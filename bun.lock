@@ -304,6 +304,7 @@
         "@monad/protocol": "workspace:*",
         "@monad/sandbox": "workspace:*",
         "@monad/sdk-atom": "workspace:*",
+        "@monad/sdk-experience": "workspace:*",
         "@monad/ui": "workspace:*",
         "@xyflow/react": "^12.11.3",
         "e2b": "^2.39.0",

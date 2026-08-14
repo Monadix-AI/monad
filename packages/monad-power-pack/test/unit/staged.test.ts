@@ -31,7 +31,7 @@ test('the default runtime entry registers the real pack through the gated loader
     registerExperienceWorker: (worker) => workers.push(worker)
   });
   expect(got.map((l) => l.kind).sort()).toEqual(['docker', 'e2b']);
-  expect(experiences.map((experience) => experience.id)).toEqual(['kanban']);
-  expect(apis.map((api) => api.experienceId)).toEqual(['kanban']);
-  expect(workers.map((worker) => worker.experienceId)).toEqual(['kanban']);
+  expect(experiences.map((experience) => experience.id)).toEqual(['kanban', 'research-desk']);
+  expect(apis.map((api) => api.experienceId)).toEqual(['kanban', 'research-desk']);
+  expect(workers.map((worker) => worker.experienceId)).toEqual(['kanban', 'research-desk']);
 });

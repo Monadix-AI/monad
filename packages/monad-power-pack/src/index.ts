@@ -13,6 +13,9 @@ import { __setE2bLoaderForTest, configureE2bApiKey, e2bLauncher } from './e2b.ts
 import { kanbanApi } from './experiences/kanban/api.ts';
 import { kanbanWorker } from './experiences/kanban/worker.ts';
 import { kanbanWorkplaceExperience } from './experiences/kanban.ts';
+import { researchDeskApi } from './experiences/research-desk/api.ts';
+import { researchDeskWorker } from './experiences/research-desk/worker.ts';
+import { researchDeskWorkplaceExperience } from './experiences/research-desk.ts';
 
 export {
   __setE2bLoaderForTest,
@@ -29,9 +32,9 @@ export {
 const monadPowerPack = defineAtomPack({
   manifest: parseAtomPackManifest(manifestJson),
   sandboxes: [dockerLauncher, e2bLauncher],
-  workplaceExperiences: [kanbanWorkplaceExperience],
-  workplaceExperienceApis: [kanbanApi],
-  experienceWorkers: [kanbanWorker]
+  workplaceExperiences: [kanbanWorkplaceExperience, researchDeskWorkplaceExperience],
+  workplaceExperienceApis: [kanbanApi, researchDeskApi],
+  experienceWorkers: [kanbanWorker, researchDeskWorker]
 });
 
 export default monadPowerPack;
