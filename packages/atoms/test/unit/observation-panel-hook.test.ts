@@ -13,6 +13,7 @@ import type {
 } from '../../src/workplace-experiences/chat-room/components/observation/use-observation-panel.ts';
 
 import { expect, test } from 'bun:test';
+import { observationCursorSchema } from '@monad/protocol';
 import { act, renderHook } from '@testing-library/react';
 
 import { useObservationPanel } from '../../src/workplace-experiences/chat-room/components/observation/use-observation-panel.ts';
@@ -257,4 +258,163 @@ test('observation hook preserves both planes through repeated activity and raw m
     rendered.unmount();
     await Promise.resolve();
   });
+});
+
+test('observation hook resumes activity from its last cursor after visiting raw mode', async () => {
+  const meshSessionId = 'mesh_observation_resume';
+  const snapshot = connected(meshSessionId, 'e1', 1);
+  const firstEvent = event('first', 'first activity');
+  const nextEvent = event('next', 'next activity');
+  const convenienceRequests: Array<{ afterCursor?: string; skip: boolean }> = [];
+  const hooks: ObservationPanelHooks = {
+    useConnection: () => ({ currentData: snapshot, refetch: () => {} }),
+    useRawStream: () => ({ currentData: { fatalError: false, frames: [], frameOffset: 0 } }),
+    useConvenienceStream: (request, options) => {
+      convenienceRequests.push({
+        ...(request.afterCursor ? { afterCursor: request.afterCursor } : {}),
+        skip: options.skip
+      });
+      const resumedFrames: MeshConvenienceFrame[] = [
+        {
+          kind: 'ready',
+          observationEpoch: 'e1',
+          cursor: observationCursorSchema.parse(request.afterCursor ?? 'live:e1:1')
+        },
+        {
+          kind: 'patch',
+          cursor: 'live:e1:2',
+          operations: [{ op: 'upsert', event: nextEvent }]
+        }
+      ];
+      return {
+        currentData: {
+          fatalError: false,
+          frameOffset: 0,
+          frames: request.afterCursor ? resumedFrames : frames('e1', firstEvent)
+        }
+      };
+    },
+    useRawEvents: () =>
+      [
+        () => ({
+          unwrap: async (): Promise<MeshRawEventPage> => ({ coverage: 'exact', records: [] })
+        })
+      ] as const,
+    useConvenienceEvents: () =>
+      [
+        () => ({
+          unwrap: async (): Promise<MeshConvenienceEventPage> => ({ frames: [] })
+        })
+      ] as const,
+    useSessionUsage: () => ({})
+  };
+  const rendered = renderHook(() =>
+    useObservationPanel({ meshSessionId, transcriptTargetId, agentName: meshSessionId, provider: 'codex', hooks })
+  );
+  await act(async () => {
+    await Promise.resolve();
+  });
+  expect(rendered.result.current.events.map((item) => item.text)).toEqual(['first activity']);
+
+  await act(async () => {
+    rendered.result.current.setMode('raw');
+    await Promise.resolve();
+  });
+  await act(async () => {
+    rendered.result.current.setMode('convenience');
+    await Promise.resolve();
+  });
+
+  expect({
+    events: rendered.result.current.events.map((item) => item.text),
+    resumed: convenienceRequests.some((request) => request.afterCursor === 'live:e1:1' && !request.skip)
+  }).toEqual({ events: ['first activity', 'next activity'], resumed: true });
+  rendered.unmount();
+});
+
+test('connected raw mode follows the latest window and loads earlier events only on request', async () => {
+  const meshSessionId = 'mesh_observation_raw_tail';
+  const snapshot: MeshConnectionSnapshot = {
+    state: 'connected',
+    meshSessionId,
+    provider: 'codex',
+    observationEpoch: 'e1',
+    eventsBefore: 'live:e1:81',
+    revision: 100
+  };
+  const rawRequests: Array<{ id: string; transcriptTargetId: SessionId; request: { before?: string; limit: number } }> =
+    [];
+  const latestFrame: MeshRawEvent = {
+    meshSessionId,
+    provider: 'codex',
+    observationEpoch: 'e1',
+    origin: 'live',
+    cursor: 'live:e1:100',
+    stream: 'stdout',
+    data: 'latest'
+  };
+  const hooks: ObservationPanelHooks = {
+    useConnection: () => ({ currentData: snapshot, refetch: () => {} }),
+    useRawStream: () => ({ currentData: { fatalError: false, frames: [latestFrame], frameOffset: 0 } }),
+    useConvenienceStream: () => ({ currentData: { fatalError: false, frames: [], frameOffset: 0 } }),
+    useRawEvents: () =>
+      [
+        (request) => ({
+          unwrap: async (): Promise<MeshRawEventPage> => {
+            rawRequests.push(request);
+            return {
+              coverage: 'exact',
+              records: [{ cursor: 'live:e1:80', data: 'earlier' }],
+              nextCursor: 'live:e1:61'
+            };
+          }
+        })
+      ] as const,
+    useConvenienceEvents: () =>
+      [
+        () => ({
+          unwrap: async (): Promise<MeshConvenienceEventPage> => ({ frames: [] })
+        })
+      ] as const,
+    useSessionUsage: () => ({})
+  };
+
+  const rendered = renderHook(() =>
+    useObservationPanel({
+      meshSessionId,
+      transcriptTargetId,
+      agentName: meshSessionId,
+      provider: 'codex',
+      hooks
+    })
+  );
+  await act(async () => {
+    rendered.result.current.setMode('raw');
+    await Promise.resolve();
+  });
+  expect({
+    canLoadOlderEvents: rendered.result.current.canLoadOlderEvents,
+    rawRequests,
+    rows: rendered.result.current.rawRows.map((row) => row.preview)
+  }).toEqual({ canLoadOlderEvents: true, rawRequests: [], rows: ['latest'] });
+
+  await act(async () => {
+    rendered.result.current.loadOlderEvents();
+    await Promise.resolve();
+  });
+  expect({
+    rawRequests,
+    rows: rendered.result.current.rawRows.map((row) => row.preview)
+  }).toEqual({
+    rawRequests: [
+      {
+        id: meshSessionId,
+        transcriptTargetId,
+        request: { before: 'live:e1:81', limit: 20 }
+      }
+    ],
+    rows: ['earlier', 'latest']
+  });
+
+  rendered.unmount();
 });

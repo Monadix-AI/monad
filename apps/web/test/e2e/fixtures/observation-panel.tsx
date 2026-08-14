@@ -314,6 +314,8 @@ function useFixtureConvenienceEvents() {
 function createFixtureRuntime(provider: FixtureProvider, meshSessionId: string, transcriptTargetId: SessionId) {
   const client = createMonadTreatyClient({ baseUrl: window.location.origin });
   const rawEvents = client.meshAgentRawEvents.bind(client);
+  let newestRawPagePromise: ReturnType<typeof rawEvents> | undefined;
+  let newestConveniencePagePromise: ReturnType<typeof client.meshAgentConvenienceEvents> | undefined;
   let convenienceRequestCount = 0;
   const adapter = builtinMeshAgentObservationAdapters.find((candidate) => candidate.provider === provider);
   if (!adapter?.observation) throw new Error(`missing fixture projector for ${provider}`);
@@ -323,11 +325,32 @@ function createFixtureRuntime(provider: FixtureProvider, meshSessionId: string, 
     meshSessionId: meshSessionIdSchema.parse(id),
     provider,
     observationEpoch: 'fixture-epoch',
-    eventsBefore: fixtureCursor(0),
+    eventsBefore: fixtureCursor(1),
     revision: 1
   });
-  client.streamMeshAgentConvenience = () => () => {};
-  client.streamMeshAgentRaw = () => () => {};
+  client.streamMeshAgentRaw = (id, targetId, onFrame) => {
+    let disposed = false;
+    newestRawPagePromise ??= rawEvents(id, targetId, { before: fixtureCursor(0), limit: 20 });
+    void newestRawPagePromise.then((page) => {
+      if (disposed) return;
+      for (const record of page.records) {
+        onFrame({
+          meshSessionId: meshSessionIdSchema.parse(id),
+          provider,
+          observationEpoch: 'fixture-epoch',
+          origin: 'live',
+          cursor: observationCursorSchema.parse(record.cursor ?? fixtureCursor(0)),
+          ...(record.providerIdentity ? { providerIdentity: record.providerIdentity } : {}),
+          stream: 'stdout',
+          data: typeof record.data === 'string' ? record.data : JSON.stringify(record.data),
+          ...(record.observedAt ? { observedAt: record.observedAt } : {})
+        });
+      }
+    });
+    return () => {
+      disposed = true;
+    };
+  };
   client.streamMeshAgentSessionUsage = () => () => {};
   client.meshAgentConvenienceEvents = async (id, targetId, request) => {
     const requestCursor = request.before ?? fixtureCursor(0);
@@ -357,6 +380,20 @@ function createFixtureRuntime(provider: FixtureProvider, meshSessionId: string, 
             ]
           : [],
       ...(page.nextCursor ? { nextCursor: observationCursorSchema.parse(page.nextCursor) } : {})
+    };
+  };
+  client.streamMeshAgentConvenience = (id, targetId, onFrame) => {
+    let disposed = false;
+    newestConveniencePagePromise ??= client.meshAgentConvenienceEvents(id, targetId, {
+      before: fixtureCursor(0),
+      limit: 20
+    });
+    void newestConveniencePagePromise.then((page) => {
+      if (disposed) return;
+      for (const frame of page.frames) onFrame(frame);
+    });
+    return () => {
+      disposed = true;
     };
   };
 

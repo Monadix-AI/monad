@@ -173,25 +173,37 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
     else dispatch(action.event);
   }, [controlEvent, meshSessionId, refetchConnection]);
 
+  const [rawRows, setRawRows] = useState<RawFrameRow[]>([]);
+  const [timeline, setTimeline] = useState<ObservationTimeline>(emptyObservationTimeline);
+  const [eventPages, setEventPages] = useState(initialObservationEventPageState);
   const rawActive = subscription.active && subscription.mode === 'raw';
   const convenienceActive = subscription.active && subscription.mode === 'convenience';
-
-  // Re-scoping is driven by `skip`, not the args: an epoch rotation runs connection.closed→opened, which
-  // flips `active` false→true, so the stream is disposed and re-subscribed (the client resumes each leg
-  // from its own last-event-id). `dataScopeKey` below drops the accumulated plane so no stale-epoch frame
-  // survives the gap.
-  const rawStream = hooks.useRawStream({ id: meshSessionId, transcriptTargetId }, { skip: !rawActive });
-  const convenienceStream = hooks.useConvenienceStream(
-    { id: meshSessionId, transcriptTargetId },
-    { skip: !convenienceActive }
+  const rawResumeCursor = rawRows.at(-1)?.cursor || undefined;
+  const convenienceResumeCursor = timeline.cursor ?? undefined;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each activation captures one resume cursor; live cursor updates must not recreate the RTK stream cache entry.
+  const rawStreamArg = useMemo(
+    () => ({ id: meshSessionId, transcriptTargetId, ...(rawResumeCursor ? { afterCursor: rawResumeCursor } : {}) }),
+    [meshSessionId, rawActive, subscription.epoch, transcriptTargetId]
   );
+  // biome-ignore lint/correctness/useExhaustiveDependencies: each activation captures one resume cursor; live cursor updates must not recreate the RTK stream cache entry.
+  const convenienceStreamArg = useMemo(
+    () => ({
+      id: meshSessionId,
+      transcriptTargetId,
+      ...(convenienceResumeCursor ? { afterCursor: convenienceResumeCursor } : {})
+    }),
+    [convenienceActive, meshSessionId, subscription.epoch, transcriptTargetId]
+  );
+
+  // Re-scoping is driven by `skip`: Last-Event-ID resumes one cache entry, while the captured `afterCursor`
+  // resumes a plane after mode switching created a new entry. `dataScopeKey` below still drops both planes
+  // on epoch/activity changes so no stale-epoch frame survives the gap.
+  const rawStream = hooks.useRawStream(rawStreamArg, { skip: !rawActive });
+  const convenienceStream = hooks.useConvenienceStream(convenienceStreamArg, { skip: !convenienceActive });
 
   const [rawEventsTrigger] = hooks.useRawEvents();
   const [convenienceEventsTrigger] = hooks.useConvenienceEvents();
 
-  const [rawRows, setRawRows] = useState<RawFrameRow[]>([]);
-  const [timeline, setTimeline] = useState<ObservationTimeline>(emptyObservationTimeline);
-  const [eventPages, setEventPages] = useState(initialObservationEventPageState);
   const eventPage = eventPages[subscription.mode];
   // Bumped whenever a page request settles. A bootstrap that arrived while another request was in
   // flight is refused, and nothing else would ever re-trigger it — the panel would then wait on a
@@ -262,6 +274,10 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
   // were evicted before this consumer reached them and never drops one still in the window.
   const rawFrames = rawStream.currentData?.frames ?? EMPTY_RAW_FRAMES;
   const rawFrameOffset = rawStream.currentData?.frameOffset ?? 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new RTK stream cache entry restarts frameOffset at zero.
+  useEffect(() => {
+    rawFrameCountRef.current = 0;
+  }, [rawStreamArg]);
   useEffect(() => {
     const consumed = rawFrameCountRef.current;
     const availableEnd = rawFrameOffset + rawFrames.length;
@@ -275,6 +291,10 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
 
   const convenienceFrames = convenienceStream.currentData?.frames ?? EMPTY_CONVENIENCE_FRAMES;
   const convenienceFrameOffset = convenienceStream.currentData?.frameOffset ?? 0;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: a new RTK stream cache entry restarts frameOffset at zero.
+  useEffect(() => {
+    convenienceFrameCountRef.current = 0;
+  }, [convenienceStreamArg]);
   useEffect(() => {
     const consumed = convenienceFrameCountRef.current;
     const availableEnd = convenienceFrameOffset + convenienceFrames.length;
@@ -288,15 +308,29 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
 
   const snapshotEventsBefore = snapshot?.state === 'connected' ? (snapshot.eventsBefore ?? null) : null;
   const eventsBefore = timeline.eventsBefore ?? snapshotEventsBefore;
+  // biome-ignore lint/correctness/useExhaustiveDependencies: dataScopeKey re-seeds cursors after the scope reset clears page state.
+  useEffect(() => {
+    if (!state.panelOpen || !state.connected) return;
+    setEventPages((current) => {
+      if (current.convenience.nextCursor === eventsBefore && current.raw.nextCursor === snapshotEventsBefore)
+        return current;
+      return {
+        convenience: { ...current.convenience, nextCursor: eventsBefore },
+        raw: { ...current.raw, nextCursor: snapshotEventsBefore }
+      };
+    });
+  }, [dataScopeKey, eventsBefore, snapshotEventsBefore, state.connected, state.panelOpen]);
   const eventBootstrap = useMemo(
     () =>
-      observationEventBootstrap({
-        panelOpen: state.panelOpen,
-        connectionKnown: snapshot !== undefined,
-        connected: state.connected,
-        eventsBefore
-      }),
-    [state.panelOpen, state.connected, snapshot, eventsBefore]
+      state.connected
+        ? null
+        : observationEventBootstrap({
+            panelOpen: state.panelOpen,
+            connectionKnown: snapshot !== undefined,
+            connected: false,
+            eventsBefore
+          }),
+    [state.connected, state.panelOpen, snapshot, eventsBefore]
   );
   const loadEventPage = useCallback(
     (

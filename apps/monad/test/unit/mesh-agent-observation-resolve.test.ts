@@ -84,7 +84,7 @@ test('live observation is rebuilt from the newest committed raw rows', () => {
       }
     ]
   });
-  expect(requests).toEqual([{ limit: 2_000, maxBytes: 262_144, sortDirection: 'asc' }]);
+  expect(requests).toEqual([{ limit: 2_000, maxBytes: 262_144, sortDirection: 'desc' }]);
 });
 
 test('live observation resumes with exact committed rows after the row cursor', () => {

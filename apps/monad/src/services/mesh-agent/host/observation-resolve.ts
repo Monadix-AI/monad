@@ -60,8 +60,9 @@ export class MeshAgentObservationResolver {
 
   constructor(private readonly ctx: MeshAgentObservationResolveContext) {}
 
-  /** The raw plane: exact accepted transport frames for the connected epoch, after `afterSeq`. Each
-   *  frame's `data` is the verbatim provider payload — no projection, merge, or dedupe. */
+  /** The raw plane: exact accepted transport frames for the connected epoch. A fresh observer receives
+   *  the newest committed window; a resumed observer receives rows after `afterSeq`. Each frame's `data`
+   *  is the verbatim provider payload — no projection, merge, or dedupe. */
   observeRaw(id: string, afterSeq?: number): MeshAgentRawObservationResult {
     const live = this.ctx.live.get(id);
     if (!live?.liveRawStore) {
@@ -71,12 +72,20 @@ export class MeshAgentObservationResolver {
         reason: row ? 'provider events unavailable' : 'MeshAgent session not found'
       };
     }
-    const page = live.liveRawStore.page({
-      ...(afterSeq !== undefined ? { after: afterSeq } : {}),
-      limit: LIVE_OBSERVATION_PAGE_ROWS,
-      maxBytes: MESH_AGENT_OUTPUT_SNAPSHOT_MAX,
-      sortDirection: 'asc'
-    });
+    const page = live.liveRawStore.page(
+      afterSeq === undefined
+        ? {
+            limit: LIVE_OBSERVATION_PAGE_ROWS,
+            maxBytes: MESH_AGENT_OUTPUT_SNAPSHOT_MAX,
+            sortDirection: 'desc'
+          }
+        : {
+            after: afterSeq,
+            limit: LIVE_OBSERVATION_PAGE_ROWS,
+            maxBytes: MESH_AGENT_OUTPUT_SNAPSHOT_MAX,
+            sortDirection: 'asc'
+          }
+    );
     return {
       state: 'live',
       observationEpoch: live.observationEpoch,
