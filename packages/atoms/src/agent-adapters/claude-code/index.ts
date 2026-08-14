@@ -3,8 +3,7 @@ import type {
   SDKMessage,
   SDKPermissionDenial,
   SDKSystemMessage,
-  SDKUserMessage,
-  SessionMessage
+  SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk';
 import type { MeshAgentView } from '@monad/protocol';
 import type {
@@ -12,9 +11,6 @@ import type {
   MeshAgentManagedRuntimeContext,
   MeshAgentOutputEvent,
   MeshAgentProviderAdapter,
-  MeshAgentProviderEventContext,
-  MeshAgentProviderEventPageContext,
-  MeshAgentProviderEventPageRequestContext,
   MeshAgentSessionRuntimeContext,
   SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
@@ -32,13 +28,15 @@ import {
   textFromContentParts
 } from '../adapter-shared.ts';
 import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
-import { readProviderEventFile } from '../event-files.ts';
-import { createOutputEventSource } from '../event-source.ts';
 import { agentAdapterIcons } from '../icons.ts';
 import { noopProviderSessionLifecycle } from '../provider-session-lifecycle.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
+import { claudeTranscriptFallback, createClaudeEventSource } from './event-pages.ts';
 import { archiveClaudeCodeSession, deleteClaudeCodeSession } from './lifecycle.ts';
+
+export { createClaudeSdkEventPageReader, createClaudeSdkHistoryOutputReader } from './event-pages.ts';
+
 import { CLAUDE_CODE_SUPPORTED_MODELS, listClaudeModelOptions } from './model-options.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
 import { ClaudeCodeSessionDriver } from './session-runtime.ts';
@@ -282,90 +280,6 @@ export function parseClaudeStreamJson(chunk: string): MeshAgentOutputEvent[] {
   return events;
 }
 
-function claudeTranscriptFallback(context: MeshAgentProviderEventContext): string | null {
-  return readProviderEventFile({
-    roots: [join(homedir(), '.claude', 'projects')],
-    providerSessionRef: context.providerSessionRef,
-    extensions: ['.jsonl']
-  });
-}
-
-function claudeSdkMessageToJsonLine(message: SessionMessage): string {
-  return JSON.stringify(claudeSdkMessageRecord(message));
-}
-
-function claudeSdkMessageRecord(message: SessionMessage): Record<string, unknown> {
-  const providerMessage = message as SessionMessage & { tool_use_result?: unknown };
-  return {
-    type: message.type,
-    uuid: message.uuid,
-    session_id: message.session_id,
-    message: message.message,
-    parent_tool_use_id: message.parent_tool_use_id,
-    ...(providerMessage.tool_use_result === undefined ? {} : { tool_use_result: providerMessage.tool_use_result })
-  };
-}
-
-function claudeSdkMessagesOutput(messages: SessionMessage[]): string | null {
-  const records = messages.map(claudeSdkMessageToJsonLine);
-  if (records.length === 0) return null;
-  return records.join('\n');
-}
-
-function claudeHistoryOffset(cursor: string | undefined): number {
-  if (!cursor) return 0;
-  const offset = Number.parseInt(cursor, 10);
-  return Number.isFinite(offset) && offset > 0 ? offset : 0;
-}
-
-interface ClaudeSdkHistoryDeps {
-  getSessionMessages: typeof getSessionMessages;
-}
-
-export function createClaudeSdkEventPageReader(deps: ClaudeSdkHistoryDeps) {
-  return async function readClaudeEventPage(
-    context: MeshAgentProviderEventPageRequestContext
-  ): Promise<MeshAgentProviderEventPageContext['page'] | null> {
-    try {
-      const offset = claudeHistoryOffset(context.request.before);
-      const messages = await deps.getSessionMessages(context.providerSessionRef, {
-        dir: context.workingPath,
-        limit: context.request.limit,
-        offset,
-        includeSystemMessages: true
-      });
-      const items: unknown[] = messages.map(claudeSdkMessageRecord);
-      if (items.length === 0) return null;
-      return {
-        items,
-        ...(messages.length >= context.request.limit ? { nextCursor: String(offset + messages.length) } : {})
-      };
-    } catch {
-      return null;
-    }
-  };
-}
-
-export function createClaudeSdkHistoryOutputReader(deps: ClaudeSdkHistoryDeps) {
-  return async function readClaudeSdkHistoryOutput(context: MeshAgentProviderEventContext): Promise<string | null> {
-    try {
-      const messages = await deps.getSessionMessages(context.providerSessionRef, {
-        dir: context.workingPath,
-        includeSystemMessages: true
-      });
-      return claudeSdkMessagesOutput(messages);
-    } catch {
-      return null;
-    }
-  };
-}
-
-const readClaudeSdkHistoryOutput = createClaudeSdkHistoryOutputReader({ getSessionMessages });
-
-async function readClaudeHistoryOutput(context: MeshAgentProviderEventContext): Promise<string | null> {
-  return (await readClaudeSdkHistoryOutput(context)) ?? claudeTranscriptFallback(context);
-}
-
 function createClaudeSessionRuntime(
   agent: MeshAgentView,
   context: MeshAgentSessionRuntimeContext
@@ -421,11 +335,7 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
   label: 'Claude Code',
   executionCapabilities: { autopilot: true, fastMode: true },
   observation: claudeCodeObservationProjection,
-  events: createOutputEventSource({
-    provider: 'claude-code',
-    projection: claudeCodeObservationProjection,
-    readOutput: readClaudeHistoryOutput
-  }),
+  events: createClaudeEventSource({ getSessionMessages, readFallbackOutput: claudeTranscriptFallback }),
   settings: () => [
     ...meshAgentAdapterSettings(),
     {
@@ -470,7 +380,7 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
       resolvedBinPath: claudeBin,
       capabilities: {
         auth: 'pty',
-        events: 'provider-owned',
+        events: 'paged',
         resume: 'pty',
         approval: 'provider-owned',
         settingsImport: true

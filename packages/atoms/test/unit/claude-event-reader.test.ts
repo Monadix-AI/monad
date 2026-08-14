@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'nod
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
+import { createClaudeEventSource } from '../../src/agent-adapters/claude-code/event-pages.ts';
 import {
   createClaudeSdkEventPageReader,
   createClaudeSdkHistoryOutputReader
@@ -185,7 +186,7 @@ test('Claude SDK history preserves structured file patches in output and pages',
   });
 });
 
-test('Claude SDK fixture history preserves native order through Monad page slicing', async () => {
+test('Claude SDK fixture history starts at the latest window and pages backward in chronological chunks', async () => {
   const fixture = multiTurnObservationFixtureSchema.parse(
     await Bun.file(
       new URL('../fixtures/mesh-agent-observation/claude-code-multi-turn.raw.json', import.meta.url)
@@ -236,17 +237,14 @@ test('Claude SDK fixture history preserves native order through Monad page slici
   } while (before);
 
   const expectedItems = messages.map((message) => ({
-    type: message.type,
-    uuid: message.uuid,
-    session_id: message.session_id,
-    message: message.message,
-    parent_tool_use_id: message.parent_tool_use_id
+    ...message
   }));
   const outputItems = output.split('\n').map((line) => JSON.parse(line));
   const pagedItems = pages.flatMap((page) => page.items);
+  const expectedPages = [messages.slice(55), messages.slice(35, 55), messages.slice(15, 35), messages.slice(0, 15)];
   expect({
     outputUnchanged: JSON.stringify(outputItems) === JSON.stringify(expectedItems),
-    pagesUnchanged: JSON.stringify(pagedItems) === JSON.stringify(expectedItems),
+    pagesNewestFirst: JSON.stringify(pages.map((page) => page.items)) === JSON.stringify(expectedPages),
     outputCount: outputItems.length,
     pagedCount: pagedItems.length,
     sourceCount: expectedItems.length,
@@ -258,23 +256,69 @@ test('Claude SDK fixture history preserves native order through Monad page slici
     calls
   }).toEqual({
     outputUnchanged: true,
-    pagesUnchanged: true,
+    pagesNewestFirst: true,
     outputCount: 75,
     pagedCount: 75,
     sourceCount: 75,
     sourceTypeCounts: { assistant: 43, user: 32 },
-    pageCursors: ['20', '40', '60', null],
+    pageCursors: ['55', '35', '15', null],
     calls: [
       [sessionId, { dir: sessionDirectory, includeSystemMessages: true }],
-      ...[0, 20, 40, 60].map((offset) => [
-        sessionId,
-        {
-          dir: sessionDirectory,
-          limit: 20,
-          offset,
-          includeSystemMessages: true
-        }
-      ])
+      [sessionId, { dir: sessionDirectory, includeSystemMessages: true }],
+      [sessionId, { dir: sessionDirectory, limit: 20, offset: 35, includeSystemMessages: true }],
+      [sessionId, { dir: sessionDirectory, limit: 20, offset: 15, includeSystemMessages: true }],
+      [sessionId, { dir: sessionDirectory, limit: 15, offset: 0, includeSystemMessages: true }]
     ]
+  });
+});
+
+test('Claude provider-native event source serves raw and convenience pages from the same latest window', async () => {
+  const messages = Array.from({ length: 3 }, (_, index) => ({
+    type: index === 0 ? ('user' as const) : ('assistant' as const),
+    uuid: `message-${index}`,
+    session_id: 'claude-session',
+    message: {
+      role: index === 0 ? 'user' : 'assistant',
+      content: [{ type: 'text', text: `message ${index}` }]
+    },
+    parent_tool_use_id: null,
+    parent_agent_id: null
+  }));
+  const source = createClaudeEventSource({ getSessionMessages: (async () => messages) as never });
+  const context = { providerSessionRef: 'claude-session', workingPath: '/tmp/project' };
+
+  const [raw, convenience] = await Promise.all([
+    source.readPage?.(context, { view: 'raw', limit: 2 }),
+    source.readPage?.(context, { view: 'convenience', limit: 2 })
+  ]);
+
+  expect({
+    raw,
+    convenience:
+      convenience?.state === 'available' && convenience.view === 'convenience'
+        ? {
+            nextCursor: convenience.nextCursor,
+            events: convenience.events.map(({ role, text }) => ({ role, text }))
+          }
+        : convenience
+  }).toEqual({
+    raw: {
+      state: 'available',
+      view: 'raw',
+      records: messages.slice(1).map((data) => ({
+        data,
+        cursor: data.uuid,
+        providerIdentity: data.uuid
+      })),
+      coverage: 'settled',
+      nextCursor: '1'
+    },
+    convenience: {
+      nextCursor: '1',
+      events: [
+        { role: 'agent', text: 'message 1' },
+        { role: 'agent', text: 'message 2' }
+      ]
+    }
   });
 });
