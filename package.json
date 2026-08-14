@@ -1,7 +1,7 @@
 {
   "name": "monad",
   "description": "Daemon-first agent team runtime with headless architecture.",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "author": "Monadix Labs, Inc.",
   "bugs": {
     "url": "https://github.com/Monadix-AI/monad/issues"
