@@ -58,6 +58,11 @@
       "monad-typecheck": "./dist/main.d.ts",
       "default": "./src/main.ts"
     },
+    "./daemon-child-supervisor": {
+      "types": "./dist/infra/daemon-child-processes.d.ts",
+      "monad-typecheck": "./dist/infra/daemon-child-processes.d.ts",
+      "default": "./src/infra/daemon-child-processes.ts"
+    },
     "./log-maintenance": {
       "types": "./dist/services/log-maintenance.d.ts",
       "monad-typecheck": "./dist/services/log-maintenance.d.ts",

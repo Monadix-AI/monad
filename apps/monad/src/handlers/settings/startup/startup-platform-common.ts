@@ -29,13 +29,13 @@ export function startupIdentity(command: string[]): StartupIdentity {
   };
 }
 
-export function startupIconPath(platform: 'darwin' | 'linux' | 'win32', command: string[]): string {
+export function startupIconPath(platform: 'darwin' | 'linux' | 'win32', command: string[], monadHome: string): string {
   const filename = platform === 'win32' ? 'favicon.ico' : 'monad-icon-vector-solid.svg';
-  const candidates = assetCandidates(command, filename);
+  const candidates = assetCandidates(command, monadHome, filename);
   return candidates.find((path) => existsSync(path)) ?? 'monad';
 }
 
-function assetCandidates(command: string[], filename: string): string[] {
+function assetCandidates(command: string[], monadHome: string, filename: string): string[] {
   const candidates: string[] = [];
   const script = command.find(
     (arg) => arg.endsWith('/apps/monad/src/main.ts') || arg.endsWith('\\apps\\monad\\src\\main.ts')
@@ -49,7 +49,11 @@ function assetCandidates(command: string[], filename: string): string[] {
     candidates.push(join(dirname(executable), 'assets', filename));
     if (filename === 'favicon.ico' && basename(executable).toLowerCase().includes('monad')) candidates.push(executable);
   }
-  candidates.push(join(process.cwd(), 'apps', 'web', 'public', filename), join(process.cwd(), 'assets', filename));
+  candidates.push(
+    join(monadHome, 'assets', filename),
+    join(process.cwd(), 'apps', 'web', 'public', filename),
+    join(process.cwd(), 'assets', filename)
+  );
   return candidates;
 }
 

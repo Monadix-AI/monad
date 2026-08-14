@@ -505,13 +505,13 @@ for (const kind of TRANSPORTS) {
           ((await dmRead.json()) as { messages: Array<{ fromAgent: string; text: string }> }).messages
         ).toMatchObject([{ fromAgent: codexId, text: 'just between us' }]);
 
-        // …but the shared session transcript shows only the public wall post, never the DM — proving
-        // routing isolation between the two providers sharing one session.
+        // …but the shared session transcript records only the public post and the content-free DM audit
+        // receipt, never the private body — proving routing isolation between the two providers.
         const roomMessages = await t.fetch(`/v1/sessions/${sessionId}/messages`);
         const roomTexts = ((await roomMessages.json()) as { messages: Array<{ text: string }> }).messages.map(
           (message) => message.text
         );
-        expect(roomTexts).toEqual(['status update for the room']);
+        expect(roomTexts).toEqual(['status update for the room', 'codex sent claude-code a DM.']);
       } finally {
         await rm(sharedCwd, { recursive: true, force: true });
       }

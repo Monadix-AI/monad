@@ -46,7 +46,7 @@ test('macOS startup setting writes and removes a LaunchAgent', async () => {
 
   const plist = await readFile(join(dir, 'Library', 'LaunchAgents', 'ai.monad.daemon.plist'), 'utf8');
   expect(plist).toContain(join(dir, '.monad'));
-  expect(plist).toContain(join('Monad.app', 'Contents', 'MacOS', 'monad-startup'));
+  expect(plist).toContain(join('Monad.app', 'Contents', 'MacOS', 'Monad'));
 
   const appInfo = await readFile(join(dir, '.monad', 'startup', 'Monad.app', 'Contents', 'Info.plist'), 'utf8');
   expect({
@@ -57,10 +57,7 @@ test('macOS startup setting writes and removes a LaunchAgent', async () => {
   expect(appInfo).toContain('<string>Monadix Labs, Inc.</string>');
   expect(appInfo).toContain('MonadIcon');
 
-  const launcher = await readFile(
-    join(dir, '.monad', 'startup', 'Monad.app', 'Contents', 'MacOS', 'monad-startup'),
-    'utf8'
-  );
+  const launcher = await readFile(join(dir, '.monad', 'startup', 'Monad.app', 'Contents', 'MacOS', 'Monad'), 'utf8');
   expect(launcher).toContain('/Applications/Monad.app/Contents/MacOS/monad');
   expect(launcher).toContain(join(dir, '.monad', 'logs', 'startup.log'));
 
@@ -82,7 +79,7 @@ test('macOS dev startup setting uses Monad Dev identity', async () => {
   expect(await mod.setStartupSettings({ enabled: true })).toMatchObject({ enabled: true, supported: true });
 
   const plist = await readFile(join(dir, 'Library', 'LaunchAgents', 'ai.monad.daemon.plist'), 'utf8');
-  expect(plist).toContain(join('Monad Dev.app', 'Contents', 'MacOS', 'monad-startup'));
+  expect(plist).toContain(join('Monad Dev.app', 'Contents', 'MacOS', 'Monad Dev'));
 
   const appInfo = await readFile(join(dir, '.monad', 'startup', 'Monad Dev.app', 'Contents', 'Info.plist'), 'utf8');
   expect({

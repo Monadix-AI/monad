@@ -22,15 +22,18 @@ async function openHarness(page: Page): Promise<void> {
 }
 
 async function settleLayout(page: Page): Promise<void> {
-  let previous = -1;
-  await expect
-    .poll(async () => {
-      const { scrollHeight } = await page.evaluate(() => window.harness.state());
-      const stable = scrollHeight === previous;
+  await page.evaluate(async () => {
+    let previous = -1;
+    let stableFrames = 0;
+    for (let frame = 0; frame < 120; frame += 1) {
+      await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+      const { scrollHeight } = window.harness.state();
+      stableFrames = scrollHeight === previous ? stableFrames + 1 : 0;
+      if (stableFrames >= 3) return;
       previous = scrollHeight;
-      return stable;
-    })
-    .toBe(true);
+    }
+    throw new Error('virtual list layout did not settle after 120 animation frames');
+  });
 }
 
 async function wheelBy(page: Page, deltaY: number): Promise<void> {

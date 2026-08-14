@@ -30,6 +30,10 @@ export function resolvePlaywrightWebPort(
   return parsePort(env.WEB_PORT) ?? parsePort(readEnvValue(envPath, 'WEB_PORT')) ?? DEFAULT_WEB_PORT;
 }
 
+export function resolvePlaywrightWebServerCommand(port: number): string {
+  return `bun ./node_modules/vite/bin/vite.js --host 0.0.0.0 --port ${port}`;
+}
+
 export function resolvePlaywrightDaemonPort(
   env: NodeJS.ProcessEnv | { MONAD_PORT?: string | undefined } = process.env,
   envPath = repoEnvPath
@@ -96,7 +100,7 @@ export default defineConfig({
     trace: resolvePlaywrightTrace()
   },
   webServer: {
-    command: `bunx --bun vite --host 0.0.0.0 --port ${port}`,
+    command: resolvePlaywrightWebServerCommand(port),
     env: {
       ...(daemonPort ? { MONAD_PORT: String(daemonPort) } : {}),
       WEB_PORT: String(port),

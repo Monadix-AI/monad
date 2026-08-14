@@ -24,7 +24,7 @@ async function dispatch(): Promise<void> {
   }
 
   if (sub === '--daemon-child-supervisor') {
-    await (await import('@monad/monad/start')).runDaemonChildSupervisorFromArgv();
+    await (await import('@monad/monad/daemon-child-supervisor')).runDaemonChildSupervisorFromArgv();
     return;
   }
 

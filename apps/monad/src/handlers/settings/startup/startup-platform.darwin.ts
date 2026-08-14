@@ -27,7 +27,7 @@ const platform: StartupPlatform = {
     await writeFile(
       target.path,
       renderLaunchAgent(
-        [join(app, 'Contents', 'MacOS', 'monad-startup')],
+        [join(app, 'Contents', 'MacOS', context.identity.name)],
         bundleIdentifier,
         context.monadHome,
         context.logPath
@@ -98,9 +98,9 @@ async function writeStartupApp(
   const resources = join(contents, 'Resources');
   await mkdir(macos, { recursive: true });
   await mkdir(resources, { recursive: true });
-  const iconFile = await installIcon(startupIconPath('darwin', context.command), resources);
+  const iconFile = await installIcon(startupIconPath('darwin', context.command, context.monadHome), resources);
   await writeFile(join(contents, 'Info.plist'), renderInfoPlist(context, bundleIdentifier, iconFile), { mode: 0o644 });
-  const launcher = join(macos, 'monad-startup');
+  const launcher = join(macos, context.identity.name);
   await writeFile(launcher, renderLauncher(context), { mode: 0o755 });
   await chmod(launcher, 0o755);
   return app;
@@ -121,7 +121,7 @@ function renderInfoPlist(
   iconFile: string
 ): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
-<plist version="1.0"><dict><key>CFBundleExecutable</key><string>monad-startup</string><key>CFBundleIconFile</key><string>${escapeXml(iconFile)}</string><key>CFBundleIdentifier</key><string>${escapeXml(bundleIdentifier)}</string><key>CFBundleName</key><string>${context.identity.name}</string><key>CFBundleDisplayName</key><string>${context.identity.name}</string><key>NSHumanReadableCopyright</key><string>${context.identity.developer}</string></dict></plist>
+<plist version="1.0"><dict><key>CFBundleExecutable</key><string>${context.identity.name}</string><key>CFBundleIconFile</key><string>${escapeXml(iconFile)}</string><key>CFBundleIdentifier</key><string>${escapeXml(bundleIdentifier)}</string><key>CFBundleName</key><string>${context.identity.name}</string><key>CFBundleDisplayName</key><string>${context.identity.name}</string><key>NSHumanReadableCopyright</key><string>${context.identity.developer}</string></dict></plist>
 `;
 }
 

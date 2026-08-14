@@ -10,6 +10,7 @@ import {
   resolvePlaywrightShard,
   resolvePlaywrightTrace,
   resolvePlaywrightWebPort,
+  resolvePlaywrightWebServerCommand,
   resolvePlaywrightWorkers
 } from '../../playwright.config.ts';
 
@@ -75,6 +76,12 @@ test('resolvePlaywrightDaemonPort prefers explicit MONAD_PORT', () => {
 
 test('resolvePlaywrightWebPort falls back to the Playwright default', () => {
   expect(resolvePlaywrightWebPort({}, '/no/such/env.local')).toBe(3201);
+});
+
+test('Playwright starts the installed Vite entry without package-runner resolution', () => {
+  expect(resolvePlaywrightWebServerCommand(3729)).toBe(
+    'bun ./node_modules/vite/bin/vite.js --host 0.0.0.0 --port 3729'
+  );
 });
 
 test('resolvePlaywrightWorkers keeps local runs fast and limits CI runner contention', () => {

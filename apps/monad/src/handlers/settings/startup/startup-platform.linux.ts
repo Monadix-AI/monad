@@ -24,7 +24,7 @@ Type=Application
 Name=${context.identity.name}
 Comment=Start the Monad daemon at login
 Exec=/bin/sh -lc ${quoteDesktop(shellCommand)}
-Icon=${startupIconPath('linux', context.command)}
+Icon=${startupIconPath('linux', context.command, context.monadHome)}
 Terminal=false
 X-GNOME-Autostart-enabled=true
 `;

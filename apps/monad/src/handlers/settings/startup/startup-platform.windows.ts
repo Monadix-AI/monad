@@ -33,7 +33,7 @@ const platform: StartupPlatform = {
     await (context.writeWindowsShortcut ?? writeShortcut)({
       path: target.path,
       name: context.identity.name,
-      iconPath: startupIconPath('win32', context.command),
+      iconPath: startupIconPath('win32', context.command, context.monadHome),
       command: context.command,
       monadHome: context.monadHome,
       logPath: context.logPath
