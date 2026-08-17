@@ -19,6 +19,7 @@ import constellation from '@dicebear/styles/constellation.json' with { type: 'js
 import critters from '@dicebear/styles/critters.json' with { type: 'json' };
 import croodles from '@dicebear/styles/croodles.json' with { type: 'json' };
 import croodlesNeutral from '@dicebear/styles/croodles-neutral.json' with { type: 'json' };
+import cutouts from '@dicebear/styles/cutouts.json' with { type: 'json' };
 import disco from '@dicebear/styles/disco.json' with { type: 'json' };
 import dylan from '@dicebear/styles/dylan.json' with { type: 'json' };
 import funEmoji from '@dicebear/styles/fun-emoji.json' with { type: 'json' };
@@ -29,6 +30,7 @@ import identicon from '@dicebear/styles/identicon.json' with { type: 'json' };
 import initialFace from '@dicebear/styles/initial-face.json' with { type: 'json' };
 import initials from '@dicebear/styles/initials.json' with { type: 'json' };
 import landscape from '@dicebear/styles/landscape.json' with { type: 'json' };
+import lineFace from '@dicebear/styles/line-face.json' with { type: 'json' };
 import loops from '@dicebear/styles/loops.json' with { type: 'json' };
 import loreleiStyle from '@dicebear/styles/lorelei.json' with { type: 'json' };
 import loreleiNeutral from '@dicebear/styles/lorelei-neutral.json' with { type: 'json' };
@@ -38,6 +40,7 @@ import moods from '@dicebear/styles/moods.json' with { type: 'json' };
 import notionists from '@dicebear/styles/notionists.json' with { type: 'json' };
 import notionistsNeutral from '@dicebear/styles/notionists-neutral.json' with { type: 'json' };
 import openPeeps from '@dicebear/styles/open-peeps.json' with { type: 'json' };
+import patchwork from '@dicebear/styles/patchwork.json' with { type: 'json' };
 import personas from '@dicebear/styles/personas.json' with { type: 'json' };
 import pixelArt from '@dicebear/styles/pixel-art.json' with { type: 'json' };
 import pixelArtNeutral from '@dicebear/styles/pixel-art-neutral.json' with { type: 'json' };
@@ -79,6 +82,7 @@ const STYLE_DEFINITIONS: Record<AvatarStyle, unknown> = {
   critters,
   croodles,
   'croodles-neutral': croodlesNeutral,
+  cutouts,
   disco,
   dylan,
   'fun-emoji': funEmoji,
@@ -89,6 +93,7 @@ const STYLE_DEFINITIONS: Record<AvatarStyle, unknown> = {
   'initial-face': initialFace,
   initials,
   landscape,
+  'line-face': lineFace,
   loops,
   lorelei: loreleiStyle,
   'lorelei-neutral': loreleiNeutral,
@@ -98,6 +103,7 @@ const STYLE_DEFINITIONS: Record<AvatarStyle, unknown> = {
   notionists,
   'notionists-neutral': notionistsNeutral,
   'open-peeps': openPeeps,
+  patchwork,
   personas,
   'pixel-art': pixelArt,
   'pixel-art-neutral': pixelArtNeutral,

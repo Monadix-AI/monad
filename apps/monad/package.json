@@ -45,7 +45,7 @@
     "@monad/tsconfig": "workspace:*",
     "drizzle-kit": "0.31.10",
     "eventsource-parser": "^4.0.0",
-    "openai": "^7.4.0"
+    "openai": "^7.5.0"
   },
   "exports": {
     ".": {
