@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { fileNameFromHref, filePathFromHref } from '../../src/components/FaviconLink.tsx';
 import { FileIcon, fileBaseName, fileIconName } from '../../src/components/FileIcon.tsx';
+import { fileNameFromHref, filePathFromHref } from '../../src/components/InlineLink.tsx';
 
 test('file icon inputs preserve specific names and use MIME fallbacks only when needed', () => {
   expect([

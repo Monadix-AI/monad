@@ -199,7 +199,7 @@ test('user image attachments keep the composer thumbnail treatment after sending
   }).toEqual({ image: true, name: true, removeAction: false, text: true });
 });
 
-test('regular session messages render favicons before human and assistant URLs', () => {
+test('regular session messages render fallback icons before loading human and assistant URL favicons', () => {
   const user = renderToStaticMarkup(
     createElement(MessageBody, {
       isUser: true,
@@ -213,9 +213,9 @@ test('regular session messages render favicons before human and assistant URLs',
     })
   );
 
-  expect(user).toContain('src="https://example.com/favicon.ico"');
+  expect(user).toContain('src="data:image/svg+xml,');
   expect(user).toContain('href="https://example.com/docs"');
-  expect(assistant).toContain('src="https://example.com/favicon.ico"');
+  expect(assistant).toContain('src="data:image/svg+xml,');
   expect(assistant).toContain('Example');
 });
 

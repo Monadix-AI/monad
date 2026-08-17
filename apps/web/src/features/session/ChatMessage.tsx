@@ -20,7 +20,7 @@ import {
   ComposerAttachmentStrip,
   cn,
   Message as ElementsMessage,
-  faviconMarkdownComponents,
+  inlineLinkMarkdownComponents,
   MessageAction,
   MessageActions,
   MessageContent,
@@ -397,7 +397,7 @@ export const Message = memo(function Message({
                 type={msg.type}
               />
             ) : (
-              <MessageResponse components={faviconMarkdownComponents}>{msg.text}</MessageResponse>
+              <MessageResponse components={inlineLinkMarkdownComponents}>{msg.text}</MessageResponse>
             )}
             {msg.attachments?.length ? <MessageAttachments attachments={msg.attachments} /> : null}
           </MessageContent>

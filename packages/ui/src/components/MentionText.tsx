@@ -2,7 +2,7 @@ import type { CSSProperties } from 'react';
 
 import { cn } from '../lib/utils.ts';
 import { ComposerInlineChip } from './ComposerInlineChip';
-import { FaviconLink, faviconHref } from './FaviconLink';
+import { faviconHref, InlineLink } from './InlineLink';
 
 export interface MentionToken {
   name: string;
@@ -120,12 +120,12 @@ export function MentionText({
             name={segment.name}
           />
         ) : segment.kind === 'url' ? (
-          <FaviconLink
+          <InlineLink
             href={segment.href}
             key={key}
           >
             {segment.text}
-          </FaviconLink>
+          </InlineLink>
         ) : (
           <span
             className="[overflow-wrap:anywhere]"

@@ -149,9 +149,8 @@ test('observation message absolute paths resolve to local preview actions withou
 
   expect({
     localAction: /<button[^>]+data-inline-link="file"[^>]*>/.test(markup),
-    noHttpPath: !markup.includes('href="/workspace/result.png"'),
-    hoverStyle: markup.includes('hover:decoration-dashed')
-  }).toEqual({ localAction: true, noHttpPath: true, hoverStyle: true });
+    noHttpPath: !markup.includes('href="/workspace/result.png"')
+  }).toEqual({ localAction: true, noHttpPath: true });
 });
 
 test('observation reasoning uses the shared collapsed reasoning component', () => {

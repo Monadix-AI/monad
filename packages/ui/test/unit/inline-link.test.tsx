@@ -1,6 +1,6 @@
 import { expect, test } from 'bun:test';
 
-import { faviconHref, hideFailedFavicon } from '../../src/components/FaviconLink.tsx';
+import { faviconHref } from '../../src/components/InlineLink.tsx';
 
 test('faviconHref derives the target origin favicon only for HTTP URLs', () => {
   expect([
@@ -16,12 +16,4 @@ test('faviconHref derives the target origin favicon only for HTTP URLs', () => {
     undefined,
     undefined
   ]);
-});
-
-test('failed favicon images are hidden to reveal the fallback icon', () => {
-  const target = { hidden: false };
-
-  hideFailedFavicon(target);
-
-  expect(target).toEqual({ hidden: true });
 });

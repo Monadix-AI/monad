@@ -93,14 +93,12 @@ test('absolute message and observation paths stay local preview buttons instead 
     ],
     fileButton: /<button[^>]+data-inline-link="file"[^>]*>/.test(markup),
     noHttpPath: !markup.includes('href="/workspace/report.ts"'),
-    webLink: markup.includes('href="https://example.com/"'),
-    hoverStyle: markup.includes('hover:decoration-dashed')
+    webLink: markup.includes('href="https://example.com/"')
   }).toEqual({
     absoluteTargets: [true, true, true, false],
     fileButton: true,
     noHttpPath: true,
-    webLink: true,
-    hoverStyle: true
+    webLink: true
   });
 });
 

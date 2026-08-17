@@ -2,7 +2,7 @@ import type { Card, ClientRenderCaps, CommandItem } from '@monad/protocol';
 import type { ComponentType, ReactNode } from 'react';
 
 import { isHttpUrl, type ProviderConfigError, pickRepresentation } from '@monad/protocol';
-import { Button, cn, faviconMarkdownComponents } from '@monad/ui';
+import { Button, cn, inlineLinkMarkdownComponents } from '@monad/ui';
 import { ComposerInlineChip } from '@monad/ui/components/ComposerInlineChip';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { MentionText } from '@monad/ui/components/MentionText';
@@ -41,7 +41,7 @@ function CardRenderer({ data, text }: RichRendererProps) {
     <div className="flex flex-col gap-2">
       {card.title && <div className="font-semibold text-sm">{card.title}</div>}
       <Markdown
-        components={faviconMarkdownComponents}
+        components={inlineLinkMarkdownComponents}
         text={card.body ?? text}
       />
       {actions.length > 0 && (
@@ -159,7 +159,7 @@ export function MessageBody({
     );
   return (
     <Markdown
-      components={faviconMarkdownComponents}
+      components={inlineLinkMarkdownComponents}
       text={text}
     />
   );

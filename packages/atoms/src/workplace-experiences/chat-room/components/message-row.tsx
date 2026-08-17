@@ -10,8 +10,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import {
   ChannelOriginBadge,
   channelOriginDetails,
-  FaviconLink,
-  LinkPathPopover,
+  InlineLink,
   showsChannelOrigin,
   WorkspaceMessageCard
 } from '@monad/ui';
@@ -22,7 +21,6 @@ import {
   TagChip,
   uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
-import { FileIcon } from '@monad/ui/components/FileIcon';
 import { type Components, Markdown } from '@monad/ui/components/Markdown';
 import { MentionCapsule, MentionText, parseMentionTokens } from '@monad/ui/components/MentionText';
 import { memo, useMemo } from 'react';
@@ -199,51 +197,27 @@ function createMessageMarkdownComponents({
       }
       if (typeof href === 'string' && (title === 'monad:file' || isLocalFileTarget(href))) {
         const reference = resolveLocalFileReference(href, attachments);
-        const content = (
-          <>
-            <FileIcon
-              className="size-3.5 shrink-0 self-center"
-              contentType={reference.attachment?.mime}
-              fileName={reference.attachment?.name ?? reference.path}
-            />
-            <span className="min-w-0 [overflow-wrap:anywhere]">{children}</span>
-          </>
-        );
-        if (!reference.attachment && !onOpenFilePath) {
-          return (
-            <LinkPathPopover href={reference.path}>
-              <span className="inline-flex max-w-full items-baseline align-baseline">
-                <button
-                  aria-disabled="true"
-                  className="inline-flex max-w-full items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-muted-foreground leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
-                  data-inline-link="file"
-                  disabled
-                  type="button"
-                >
-                  {content}
-                </button>
-              </span>
-            </LinkPathPopover>
-          );
-        }
         return (
-          <LinkPathPopover href={reference.attachment?.path ?? reference.path}>
-            <button
-              className="inline-flex max-w-full cursor-pointer items-baseline gap-1 border-0 bg-transparent p-0 align-baseline font-[inherit] text-accent-blue leading-[inherit] hover:underline hover:decoration-1 hover:decoration-dashed hover:underline-offset-2"
-              data-inline-link="file"
-              onClick={() =>
-                reference.attachment
-                  ? onOpenAttachment?.(reference.attachment, reference.line)
-                  : onOpenFilePath?.(reference.path, reference.line)
-              }
-              type="button"
-            >
-              {content}
-            </button>
-          </LinkPathPopover>
+          <InlineLink
+            contentType={reference.attachment?.mime}
+            disabled={!reference.attachment && !onOpenFilePath}
+            fileName={reference.attachment?.name ?? reference.path}
+            kind="file"
+            onActivate={
+              reference.attachment || onOpenFilePath
+                ? () =>
+                    reference.attachment
+                      ? onOpenAttachment?.(reference.attachment, reference.line)
+                      : onOpenFilePath?.(reference.path, reference.line)
+                : undefined
+            }
+            path={reference.attachment?.path ?? reference.path}
+          >
+            {children}
+          </InlineLink>
         );
       }
-      return <FaviconLink href={href}>{children}</FaviconLink>;
+      return <InlineLink href={href}>{children}</InlineLink>;
     }
   };
 }

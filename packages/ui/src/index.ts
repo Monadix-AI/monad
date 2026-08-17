@@ -189,19 +189,18 @@ import {
   DropdownMenuTrigger
 } from './components/DropdownMenu';
 import { EditorialQuestion } from './components/EditorialQuestion';
-import {
-  FaviconLink,
-  faviconHref,
-  faviconMarkdownComponents,
-  fileNameFromHref,
-  filePathFromHref,
-  hideFailedFavicon,
-  LinkPathPopover
-} from './components/FaviconLink';
 import { FileIcon, fileIconName } from './components/FileIcon';
 import { FileReadCard, FileReadCardHeader } from './components/FileReadCard';
 import { ImageGalleryDialog, type ImageGalleryLabels, type ImageGallerySlide } from './components/ImageGallery';
 import { ImageZoom, type ImageZoomProps } from './components/ImageZoom';
+import {
+  faviconHref,
+  fileNameFromHref,
+  filePathFromHref,
+  InlineLink,
+  inlineLinkMarkdownComponents,
+  LinkPathPopover
+} from './components/InlineLink';
 import { Input } from './components/Input';
 import {
   InputGroup,
@@ -437,19 +436,17 @@ export {
   DropdownMenuTrigger,
   defaultToolStatusLabels,
   EditorialQuestion,
-  FaviconLink,
   FileIcon,
   FileReadCard,
   FileReadCardHeader,
   faviconHref,
-  faviconMarkdownComponents,
   fileIconName,
   fileNameFromHref,
   filePathFromHref,
   formatMessageTimestamp,
-  hideFailedFavicon,
   ImageGalleryDialog,
   ImageZoom,
+  InlineLink,
   Input,
   InputGroup,
   InputGroupAddon,
@@ -458,6 +455,7 @@ export {
   InputGroupText,
   InputGroupTextarea,
   inferCodeLanguage,
+  inlineLinkMarkdownComponents,
   isProductIconId,
   Label,
   LinkPathPopover,
