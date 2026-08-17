@@ -11,6 +11,7 @@
   <a href="https://github.com/Monadix-AI/monad/actions/workflows/ci.yml"><img src="https://github.com/Monadix-AI/monad/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-2563eb.svg" alt="MIT 许可证"></a>
   <img src="https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-6e56cf.svg" alt="支持 macOS、Linux 和 Windows">
+  <a href="https://scorecard.dev/viewer/?uri=github.com/Monadix-AI/monad"><img src="https://api.scorecard.dev/projects/github.com/Monadix-AI/monad/badge" alt="OpenSSF Scorecard"></a>
 </p>
 
 <p align="center">
