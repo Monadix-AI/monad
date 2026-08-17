@@ -16,7 +16,6 @@ import { CodeInline } from '@monad/ui/components/CodeBlock';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
-import { externalLinkHref, requestExternalLinkOpen } from '#/components/ExternalLinkConfirmation';
 import { useT } from '#/components/I18nProvider';
 import { useToolBackendsSettings } from '#/hooks/use-tool-backends-settings';
 import { type FileDiffPreviewDisplay, FileReadPreview, UnifiedDiffPreview } from './FileToolPreview';
@@ -94,6 +93,15 @@ export function safeWebSearchUrl(url: string): string {
     return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '#';
   } catch {
     return '#';
+  }
+}
+
+export function safeMcpAppExternalUrl(url: string): string | undefined {
+  try {
+    const parsed = new URL(url);
+    return ['http:', 'https:', 'mailto:'].includes(parsed.protocol) ? parsed.toString() : undefined;
+  } catch {
+    return undefined;
   }
 }
 
@@ -1093,15 +1101,13 @@ function McpAppFrame({
       }
       if (method === 'ui/open-link' && id !== undefined) {
         const url = (message.params as { url?: unknown } | undefined)?.url;
-        const externalUrl = typeof url === 'string' ? externalLinkHref(url) : undefined;
+        const externalUrl = typeof url === 'string' ? safeMcpAppExternalUrl(url) : undefined;
         if (!externalUrl) {
           reject(id, -32602, t('web.tools.mcpAppInvalidLink'));
           return;
         }
-        void requestExternalLinkOpen(externalUrl).then((allowed) => {
-          if (allowed) reply(id, {});
-          else reject(id, -32000, t('web.tools.mcpAppLinkDeclined'));
-        });
+        window.open(externalUrl, '_blank', 'noopener,noreferrer');
+        reply(id, {});
         return;
       }
       if (
