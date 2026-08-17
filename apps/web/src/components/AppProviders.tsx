@@ -2,6 +2,7 @@ import { configureBuiltinMeshAgentObservationAdapters } from '@monad/atoms/mesh-
 import { TooltipProvider } from '@monad/ui';
 import { lazy, type ReactNode, Suspense } from 'react';
 
+import { ExternalLinkConfirmation } from '#/components/ExternalLinkConfirmation';
 import { I18nProvider } from '#/components/I18nProvider';
 import { ToastProvider } from '#/components/ToastProvider';
 import { HostInteractionDialog } from '#/features/interactions/HostInteractionDialog';
@@ -23,6 +24,7 @@ export function AppProviders({ children }: { children: ReactNode }) {
         <ToastProvider>
           <TooltipProvider delayDuration={200}>
             {children}
+            <ExternalLinkConfirmation />
             <HostInteractionDialog />
             {DevToolsWidget ? (
               <Suspense fallback={null}>

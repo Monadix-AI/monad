@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 
+import { externalLinkHref } from '../../src/components/ExternalLinkConfirmation';
 import {
   mcpAppPermissionsPolicy,
-  safeMcpAppExternalUrl,
   safeWebSearchUrl,
   sandboxedMcpAppHtml
 } from '../../src/features/session/ToolStepView';
@@ -42,11 +42,11 @@ test('web search links allow only HTTP origins', () => {
 
 test('MCP App link handling allows external web links and rejects active or local schemes', () => {
   expect({
-    https: safeMcpAppExternalUrl('https://example.com/path'),
-    mailto: safeMcpAppExternalUrl('mailto:hello@example.com'),
-    javascript: safeMcpAppExternalUrl('javascript:alert(1)'),
-    data: safeMcpAppExternalUrl('data:text/html,hello'),
-    file: safeMcpAppExternalUrl('file:///etc/passwd')
+    https: externalLinkHref('https://example.com/path'),
+    mailto: externalLinkHref('mailto:hello@example.com'),
+    javascript: externalLinkHref('javascript:alert(1)'),
+    data: externalLinkHref('data:text/html,hello'),
+    file: externalLinkHref('file:///etc/passwd')
   }).toEqual({
     https: 'https://example.com/path',
     mailto: 'mailto:hello@example.com',

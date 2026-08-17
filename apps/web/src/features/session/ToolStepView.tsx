@@ -16,6 +16,7 @@ import { CodeInline } from '@monad/ui/components/CodeBlock';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
 
+import { externalLinkHref, requestExternalLinkOpen } from '#/components/ExternalLinkConfirmation';
 import { useT } from '#/components/I18nProvider';
 import { useToolBackendsSettings } from '#/hooks/use-tool-backends-settings';
 import { type FileDiffPreviewDisplay, FileReadPreview, UnifiedDiffPreview } from './FileToolPreview';
@@ -93,15 +94,6 @@ export function safeWebSearchUrl(url: string): string {
     return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.toString() : '#';
   } catch {
     return '#';
-  }
-}
-
-export function safeMcpAppExternalUrl(url: string): string | undefined {
-  try {
-    const parsed = new URL(url);
-    return ['http:', 'https:', 'mailto:'].includes(parsed.protocol) ? parsed.toString() : undefined;
-  } catch {
-    return undefined;
   }
 }
 
@@ -965,7 +957,6 @@ function McpAppFrame({
   const activeDisplay = liveView ? { ...display, ...liveView } : display;
   const [height, setHeight] = useState(320);
   const heightRef = useRef(height);
-  const [pendingLink, setPendingLink] = useState<{ id: string | number; url: string }>();
   const [viewHealth, setViewHealth] = useState<'live' | 'stale'>('live');
   const [viewRetry, setViewRetry] = useState(0);
 
@@ -1102,12 +1093,15 @@ function McpAppFrame({
       }
       if (method === 'ui/open-link' && id !== undefined) {
         const url = (message.params as { url?: unknown } | undefined)?.url;
-        const externalUrl = typeof url === 'string' ? safeMcpAppExternalUrl(url) : undefined;
+        const externalUrl = typeof url === 'string' ? externalLinkHref(url) : undefined;
         if (!externalUrl) {
           reject(id, -32602, t('web.tools.mcpAppInvalidLink'));
           return;
         }
-        setPendingLink({ id, url: externalUrl });
+        void requestExternalLinkOpen(externalUrl).then((allowed) => {
+          if (allowed) reply(id, {});
+          else reject(id, -32000, t('web.tools.mcpAppLinkDeclined'));
+        });
         return;
       }
       if (
@@ -1162,22 +1156,6 @@ function McpAppFrame({
     t
   ]);
 
-  const respondToLink = (allow: boolean) => {
-    if (!pendingLink) return;
-    if (allow) window.open(pendingLink.url, '_blank', 'noopener,noreferrer');
-    frame.current?.contentWindow?.postMessage(
-      allow
-        ? { jsonrpc: '2.0', id: pendingLink.id, result: {} }
-        : {
-            jsonrpc: '2.0',
-            id: pendingLink.id,
-            error: { code: -32000, message: t('web.tools.mcpAppLinkDeclined') }
-          },
-      '*'
-    );
-    setPendingLink(undefined);
-  };
-
   return (
     <div className="flex w-full flex-col gap-2">
       <iframe
@@ -1199,25 +1177,6 @@ function McpAppFrame({
             variant="outline"
           >
             {t('web.tools.mcpAppRetry')}
-          </Button>
-        </div>
-      )}
-      {pendingLink && (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-muted/40 p-2 text-xs">
-          <span className="min-w-0 flex-1 truncate">{t('web.tools.mcpAppOpenLink', { url: pendingLink.url })}</span>
-          <Button
-            onClick={() => respondToLink(false)}
-            size="sm"
-            variant="ghost"
-          >
-            {t('web.tools.mcpAppDecline')}
-          </Button>
-          <Button
-            onClick={() => respondToLink(true)}
-            size="sm"
-            variant="outline"
-          >
-            {t('web.tools.mcpAppOpen')}
           </Button>
         </div>
       )}
