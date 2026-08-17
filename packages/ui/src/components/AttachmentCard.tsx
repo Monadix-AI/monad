@@ -97,7 +97,7 @@ export function AttachmentCard({
         {previewable && onPreview ? (
           <Button
             aria-label={previewLabel}
-            className="rounded-full border border-border bg-background/90 backdrop-blur-sm"
+            className="rounded-full border border-border bg-background"
             data-attachment-action="preview"
             onClick={onPreview}
             size="icon-sm"
@@ -111,7 +111,7 @@ export function AttachmentCard({
         {onDownload ? (
           <Button
             aria-label={downloadLabel}
-            className="rounded-full border border-border bg-background/90 backdrop-blur-sm"
+            className="rounded-full border border-border bg-background"
             data-attachment-action="download"
             onClick={onDownload}
             size="icon-sm"

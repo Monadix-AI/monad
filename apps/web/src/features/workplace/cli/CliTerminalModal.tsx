@@ -137,7 +137,7 @@ export function CliTerminalModal({
         onKeyPress={stopModalEvent}
         onKeyUp={stopModalEvent}
         onPaste={stopClipboardEvent}
-        overlayClassName="z-[70] bg-[rgb(2_6_14/0.58)] backdrop-blur-[2px]"
+        overlayClassName="z-[70] bg-[rgb(2_6_14/0.58)]"
         ref={modalRef}
         showCloseButton={false}
         size="wide"

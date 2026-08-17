@@ -82,7 +82,6 @@
     inset: 0;
     z-index: 70;
     background: rgb(var(--backgroundColor-transparent) / 0.24);
-    backdrop-filter: blur(2px);
   }
 
   .command-palette-dialog {
@@ -701,15 +700,12 @@
       0 1px 2px rgb(var(--backgroundColor-transparent) / 0.16),
       inset 0 1px 0 rgb(var(--backgroundColor-surface-inverse) / 0.12);
     opacity: 0;
-    -webkit-backdrop-filter: blur(10px) saturate(1.25);
-    backdrop-filter: blur(10px) saturate(1.25);
     transform: translateY(-50%) scaleY(1);
     transition: opacity linear;
   }
 
   @supports (color: color-mix(in lab, red, red)) {
     .panel-nav-resize-handle::after {
-      background: color-mix(in srgb, var(--sidebar) 74%, transparent);
       border: 1px solid color-mix(in srgb, var(--foreground) 18%, var(--sidebar-border));
     }
   }
@@ -785,7 +781,6 @@
 
   @supports (color: color-mix(in lab, red, red)) {
     .workplace-agent-rail-resize-handle::after {
-      background: color-mix(in srgb, var(--card) 74%, transparent);
       border-color: color-mix(in srgb, var(--foreground) 18%, var(--border));
     }
   }
@@ -1014,7 +1009,7 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 4px;
     padding: 4px;
-    background: color-mix(in srgb, var(--muted) 78%, transparent);
+    background: var(--muted);
     border-radius: 12px;
   }
 
@@ -1066,7 +1061,7 @@
     margin-top: 10px;
     overflow-y: auto;
     overscroll-behavior: contain;
-    background: color-mix(in srgb, var(--card) 58%, transparent);
+    background: var(--card);
     border: 1px solid color-mix(in srgb, var(--foreground) 9%, transparent);
     border-radius: 12px;
   }
@@ -1086,7 +1081,7 @@
   }
 
   .workspace-home-target:hover:not(:disabled) {
-    background: color-mix(in srgb, var(--accent) 76%, transparent);
+    background: var(--accent);
   }
 
   .workspace-home-target:active:not(:disabled) {
@@ -1104,7 +1099,7 @@
     width: 34px;
     height: 34px;
     color: var(--muted-foreground);
-    background: color-mix(in srgb, var(--background) 80%, transparent);
+    background: var(--background);
     border-radius: 8px;
     transition:
       color 160ms var(--workspace-home-ease),

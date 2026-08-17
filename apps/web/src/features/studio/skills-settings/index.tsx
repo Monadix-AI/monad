@@ -192,7 +192,7 @@ function SkillsSettingsContent({ embedded = false }: { embedded?: boolean }) {
         checked={isAutoload ? autoload : installReview && installReviewAvailable}
         className={cn(
           density === 'card' && 'h-full rounded-lg border bg-card p-4',
-          density === 'compact' && 'rounded-md border bg-card/60 px-3 py-2',
+          density === 'compact' && 'rounded-md border bg-card px-3 py-2',
           density === 'row' && 'border-b py-3 last:border-b-0'
         )}
         description={hint}
@@ -230,7 +230,7 @@ function SkillsSettingsContent({ embedded = false }: { embedded?: boolean }) {
   );
 
   const renderSettingsRows = () => (
-    <div className="rounded-lg border bg-card/60 px-4">
+    <div className="rounded-lg border bg-card px-4">
       {renderSettingsControl('autoload')}
       {renderSettingsControl('review')}
     </div>

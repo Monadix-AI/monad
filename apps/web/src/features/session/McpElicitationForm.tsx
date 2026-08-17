@@ -30,7 +30,7 @@ export function McpElicitationForm({
   if (reviewing) {
     return (
       <div className="flex flex-col gap-3">
-        <div className="rounded-md border border-border bg-background/70 p-3">
+        <div className="rounded-md border border-border bg-background p-3">
           <div className="mb-2 font-medium text-sm">{t('web.chat.elicitationReview')}</div>
           <dl className="grid gap-2 text-sm">
             {form.fields.map((field) => (

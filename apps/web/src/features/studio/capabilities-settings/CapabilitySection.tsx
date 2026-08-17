@@ -15,7 +15,7 @@ export function CapabilitySection({
 }) {
   return (
     <section>
-      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-background/95 px-5 py-3 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b bg-background px-5 py-3">
         <div className="min-w-0">
           <p className="font-semibold text-sm">{title}</p>
           {subtitle && <p className="mt-0.5 truncate text-muted-foreground text-xs">{subtitle}</p>}

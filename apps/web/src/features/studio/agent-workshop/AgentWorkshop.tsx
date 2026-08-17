@@ -298,7 +298,7 @@ export function AgentWorkshop(props: AgentWorkshopProps) {
           selected && 'lg:right-[520px]'
         )}
       >
-        <div className="pointer-events-auto flex items-center gap-2 rounded-full border bg-background/95 px-3 py-2 text-xs shadow-sm backdrop-blur">
+        <div className="pointer-events-auto flex items-center gap-2 rounded-full border bg-background px-3 py-2 text-xs shadow-sm">
           <span
             className={readiness.saveBlocked ? 'size-2 rounded-full bg-destructive' : 'size-2 rounded-full bg-success'}
           />
@@ -312,7 +312,7 @@ export function AgentWorkshop(props: AgentWorkshopProps) {
           ) : null}
         </div>
         <Button
-          className="pointer-events-auto bg-background/95 shadow-sm backdrop-blur"
+          className="pointer-events-auto bg-background shadow-sm"
           onClick={() => setSampleOpen((value) => !value)}
           size="sm"
           variant="outline"

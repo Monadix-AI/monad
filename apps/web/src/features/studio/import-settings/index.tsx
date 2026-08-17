@@ -286,7 +286,7 @@ export function StudioImportSettings(_props: StudioSectionProps) {
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2 border-t bg-background/70 px-3 py-2">
+                <div className="flex flex-wrap items-center gap-2 border-t bg-background px-3 py-2">
                   <span className="mr-auto text-muted-foreground text-sm">
                     {selectedCount} selected · {applicableItems.length} applyable
                   </span>

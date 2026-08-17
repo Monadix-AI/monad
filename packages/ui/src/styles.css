@@ -56,7 +56,7 @@
   --foreground: rgb(var(--textColor-primary));
   --card: rgb(var(--backgroundColor-surface-container));
   --card-foreground: rgb(var(--textColor-primary));
-  --popover: rgb(var(--backgroundColor-surface-container) / 0.7);
+  --popover: rgb(var(--backgroundColor-surface-container));
   --popover-foreground: rgb(var(--textColor-primary));
   --primary: rgb(var(--backgroundColor-surface-inverse));
   --primary-foreground: rgb(var(--textColor-inverse-primary));
@@ -89,16 +89,15 @@
   --sidebar-muted-foreground: color-mix(in oklab, var(--sidebar-foreground) 70%, transparent);
   --sidebar-primary: rgb(var(--backgroundColor-surface-inverse));
   --sidebar-primary-foreground: rgb(var(--textColor-inverse-primary));
-  --sidebar-accent: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
+  --sidebar-accent: color-mix(in oklab, var(--sidebar-foreground) 8%, var(--sidebar));
   --sidebar-accent-foreground: var(--sidebar-foreground);
-  --sidebar-selected: color-mix(in oklab, var(--sidebar-foreground) 5%, transparent);
+  --sidebar-selected: color-mix(in oklab, var(--sidebar-foreground) 5%, var(--sidebar));
   --sidebar-selected-foreground: var(--sidebar-foreground);
   --sidebar-selected-hover: var(--sidebar-accent);
   --sidebar-selected-hover-foreground: var(--sidebar-foreground);
   --sidebar-border: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
   --sidebar-ring: rgb(var(--outlineColor-focus-ring));
   --radius: 0.5rem;
-  --popup-surface-blur: 8px;
 
   --accent-blue: var(--link);
   --accent-blue-soft: rgb(var(--backgroundColor-accent) / 0.2);
@@ -188,17 +187,17 @@
     rgb(var(--backgroundColor-primary))
   );
   --foreground: rgb(var(--textColor-primary));
-  --card: rgb(var(--backgroundColor-surface-container) / 0.5);
+  --card: color-mix(in srgb, rgb(var(--backgroundColor-surface-container)) 50%, rgb(var(--backgroundColor-primary)));
   --card-foreground: rgb(var(--textColor-primary));
-  --popover: rgb(var(--backgroundColor-surface-container) / 0.7);
+  --popover: rgb(var(--backgroundColor-surface-container));
   --popover-foreground: rgb(var(--textColor-primary));
   --primary: rgb(var(--backgroundColor-surface-inverse));
   --primary-foreground: rgb(var(--textColor-inverse-primary));
-  --secondary: rgb(var(--backgroundColor-secondary) / 0.5);
+  --secondary: color-mix(in srgb, rgb(var(--backgroundColor-secondary)) 50%, rgb(var(--backgroundColor-primary)));
   --secondary-foreground: rgb(var(--textColor-primary));
-  --muted: rgb(var(--backgroundColor-state-enabled) / 0.48);
+  --muted: color-mix(in srgb, rgb(var(--backgroundColor-state-enabled)) 48%, rgb(var(--backgroundColor-primary)));
   --muted-foreground: rgb(var(--textColor-secondary));
-  --accent: rgb(var(--backgroundColor-state-hover) / 0.2);
+  --accent: color-mix(in srgb, rgb(var(--backgroundColor-state-hover)) 20%, rgb(var(--backgroundColor-primary)));
   --accent-foreground: rgb(var(--textColor-primary));
   --destructive: rgb(230 48 8);
   --destructive-foreground: rgb(255 255 255);
@@ -223,9 +222,9 @@
   --sidebar-muted-foreground: color-mix(in oklab, var(--sidebar-foreground) 70%, transparent);
   --sidebar-primary: rgb(var(--backgroundColor-surface-inverse));
   --sidebar-primary-foreground: rgb(var(--textColor-inverse-primary));
-  --sidebar-accent: color-mix(in oklab, var(--sidebar-foreground) 8%, transparent);
+  --sidebar-accent: color-mix(in oklab, var(--sidebar-foreground) 8%, var(--sidebar));
   --sidebar-accent-foreground: var(--sidebar-foreground);
-  --sidebar-selected: color-mix(in oklab, var(--sidebar-foreground) 5%, transparent);
+  --sidebar-selected: color-mix(in oklab, var(--sidebar-foreground) 5%, var(--sidebar));
   --sidebar-selected-foreground: var(--sidebar-foreground);
   --sidebar-selected-hover: var(--sidebar-accent);
   --sidebar-selected-hover-foreground: var(--sidebar-foreground);
@@ -245,7 +244,11 @@
   --chat-input-surface: rgb(var(--backgroundColor-surface-container) / 0.5);
   --chat-input-surface-active: rgb(var(--backgroundColor-state-active));
   --chat-input-placeholder: var(--muted-foreground);
-  --message-agent-surface: rgb(var(--backgroundColor-state-enabled) / 0.42);
+  --message-agent-surface: color-mix(
+    in srgb,
+    rgb(var(--backgroundColor-state-enabled)) 42%,
+    rgb(var(--backgroundColor-primary))
+  );
   --message-human-surface: color-mix(in oklab, var(--background) 76%, var(--link));
 }
 
@@ -485,8 +488,7 @@
 
   .glass-control,
   .glass-surface {
-    background: rgba(var(--backgroundColor-surface-container) / 0.72);
-    backdrop-filter: blur(14px) saturate(1.4);
+    background: var(--popover);
   }
 
   .glass-control {
@@ -505,7 +507,6 @@
     border: 1px solid color-mix(in srgb, var(--foreground) 10%, transparent);
     border-radius: var(--radius-md);
     box-shadow: 0 10px 24px rgb(var(--backgroundColor-transparent) / 0.08);
-    backdrop-filter: blur(var(--popup-surface-blur));
   }
 
   :is(.glass-surface, .popup-surface)
@@ -517,7 +518,7 @@
       [data-slot="select-trigger"],
       [data-slot="command-input"]
     ) {
-    background: rgb(var(--backgroundColor-surface-container) / 0.72);
+    background: rgb(var(--backgroundColor-surface-container));
   }
 
   .dark
@@ -530,7 +531,7 @@
       [data-slot="select-trigger"],
       [data-slot="command-input"]
     ) {
-    background: rgb(var(--backgroundColor-state-enabled) / 0.55);
+    background: rgb(var(--backgroundColor-state-enabled));
   }
 
   :is(.glass-surface, .popup-surface) .glass-foreground {
@@ -565,14 +566,13 @@
     width: 6px;
     height: 52px;
     content: "";
-    background: color-mix(in srgb, var(--sidebar) 74%, transparent);
+    background: var(--sidebar);
     border: 1px solid color-mix(in srgb, var(--foreground) 18%, var(--sidebar-border));
     border-radius: 999px;
     box-shadow:
       0 1px 2px rgb(var(--backgroundColor-transparent) / 0.16),
       inset 0 1px 0 rgb(var(--backgroundColor-surface-inverse) / 0.12);
     opacity: 0;
-    backdrop-filter: blur(10px) saturate(1.25);
     transform: translateY(-50%) scaleY(1);
     transition: opacity 0s linear;
   }

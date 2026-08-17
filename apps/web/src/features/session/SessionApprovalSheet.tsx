@@ -87,7 +87,7 @@ function ApprovalSummary({ approval }: { approval: PendingApproval }) {
   }
   if (approval.input === undefined) return null;
   return (
-    <pre className="max-h-28 overflow-auto rounded-md bg-background/60 p-2 text-muted-foreground text-xs">
+    <pre className="max-h-28 overflow-auto rounded-md bg-background p-2 text-muted-foreground text-xs">
       {JSON.stringify(approval.input, null, 2)}
     </pre>
   );

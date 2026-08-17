@@ -334,7 +334,7 @@ export function ProfileCard({
               className={cn(
                 'flex min-w-0 items-start gap-2 rounded-md border px-2.5 py-2 transition-colors',
                 configured
-                  ? 'border-border/60 bg-background/60 hover:border-border'
+                  ? 'border-border/60 bg-background hover:border-border'
                   : 'border-border/70 border-dashed bg-muted/15 hover:bg-muted/25'
               )}
               data-role-row={row.key}

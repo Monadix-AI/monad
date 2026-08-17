@@ -174,7 +174,7 @@ export function DevToolsWidget() {
                   'glass-surface group flex h-10 items-center gap-2 rounded-full p-1 pr-3 text-xs shadow-lg outline-none transition-colors hover:bg-accent hover:text-accent-foreground focus-visible:ring-2 focus-visible:ring-ring';
                 const content = (
                   <>
-                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-background/75 text-foreground">
+                    <span className="grid size-8 shrink-0 place-items-center rounded-full bg-background text-foreground">
                       <HugeiconsIcon
                         aria-hidden="true"
                         className="size-4"

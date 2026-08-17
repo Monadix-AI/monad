@@ -101,7 +101,7 @@ export function RemoteDaemonDialog({
         showCloseButton={!checking}
       >
         <DialogHeader className="gap-2 pr-8">
-          <div className="flex size-9 items-center justify-center rounded-(--radius-md) border border-border/70 bg-background/70">
+          <div className="flex size-9 items-center justify-center rounded-(--radius-md) border border-border/70 bg-background">
             <HugeiconsIcon
               className="size-4 text-muted-foreground"
               icon={ServerStack01Icon}
@@ -141,7 +141,7 @@ export function RemoteDaemonDialog({
 
           <div
             className={cn(
-              'flex min-h-12 items-start gap-3 rounded-(--radius-md) border border-border/70 bg-background/55 px-3 py-2.5 text-sm',
+              'flex min-h-12 items-start gap-3 rounded-(--radius-md) border border-border/70 bg-background px-3 py-2.5 text-sm',
               error && 'border-destructive/40 bg-destructive/8 text-destructive'
             )}
             id="remote-daemon-status"

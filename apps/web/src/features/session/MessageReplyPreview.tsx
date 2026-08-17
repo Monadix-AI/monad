@@ -23,7 +23,7 @@ export function MessageReplyPreview({
   return (
     <button
       className={cn(
-        'relative mb-2 grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5 overflow-hidden rounded-md border-0 bg-background/35 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-background/55 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+        'relative mb-2 grid w-full min-w-0 grid-cols-[minmax(0,1fr)] gap-0.5 overflow-hidden rounded-md border-0 bg-background px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
         className
       )}
       disabled={!target}

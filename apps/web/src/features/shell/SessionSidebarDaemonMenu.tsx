@@ -68,7 +68,7 @@ function DaemonMenuTile({
         onSelect();
       }}
     >
-      <span className="grid size-8 place-items-center rounded-sm border border-border bg-background/60">
+      <span className="grid size-8 place-items-center rounded-sm border border-border bg-background">
         <HugeiconsIcon
           className="size-4"
           icon={Icon}
@@ -271,7 +271,7 @@ export function DaemonMenu({
               data-testid="daemon-menu-trigger"
               type="button"
             >
-              <div className="flex size-6 shrink-0 items-center justify-center rounded-(--radius-md) border border-border/80 bg-background/60">
+              <div className="flex size-6 shrink-0 items-center justify-center rounded-(--radius-md) border border-border/80 bg-background">
                 <HugeiconsIcon
                   className="size-4"
                   icon={ServerStack01Icon}
@@ -333,7 +333,7 @@ export function DaemonMenu({
                   void startUpgrade();
                 }}
               >
-                <span className="grid size-10 shrink-0 place-items-center rounded-sm border bg-background/70">
+                <span className="grid size-10 shrink-0 place-items-center rounded-sm border bg-background">
                   <HugeiconsIcon
                     className={cn('size-5', upgradeActive && 'animate-spin')}
                     icon={upgradeActive ? LoaderPinwheelIcon : CircleCheckIcon}

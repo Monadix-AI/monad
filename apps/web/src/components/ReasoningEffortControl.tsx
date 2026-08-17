@@ -299,7 +299,7 @@ export function ReasoningEffortControl({
                 aria-hidden="true"
                 className={cn(
                   'pointer-events-none absolute top-1/2 z-20 size-1 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors duration-200',
-                  optionIndex <= previewIndex ? 'bg-background/90' : 'bg-muted-foreground/45'
+                  optionIndex <= previewIndex ? 'bg-background' : 'bg-muted-foreground/45'
                 )}
                 key={option.value}
                 style={{ left: thumbCenterStyle(optionIndex / maxIndex) }}

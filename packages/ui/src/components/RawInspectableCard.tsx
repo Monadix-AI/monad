@@ -101,7 +101,7 @@ export function RawInspectableCard({
       {open ? (
         <section
           aria-label={labels.show}
-          className="-mt-px rounded-b-lg border border-border bg-background/55 p-3"
+          className="-mt-px rounded-b-lg border border-border bg-background p-3"
           id={panelId}
         >
           <div className="mb-2 flex items-center justify-between gap-2">

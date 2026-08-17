@@ -209,7 +209,7 @@ export function ProfileSettings() {
                   className="absolute inset-0 bg-center bg-cover"
                   style={{ backgroundImage: `url(${avatarUrl})` }}
                 />
-                <span className="absolute inset-x-0 bottom-0 flex translate-y-full items-center justify-center gap-1 bg-background/88 px-2 py-2 font-medium text-[11px] text-foreground backdrop-blur-sm transition-transform duration-150 group-hover:translate-y-0 group-focus-visible:translate-y-0 [@media_(hover:none),_(pointer:coarse)]:translate-y-0">
+                <span className="absolute inset-x-0 bottom-0 flex translate-y-full items-center justify-center gap-1 bg-background px-2 py-2 font-medium text-[11px] text-foreground transition-transform duration-150 group-hover:translate-y-0 group-focus-visible:translate-y-0 [@media_(hover:none),_(pointer:coarse)]:translate-y-0">
                   <HugeiconsIcon
                     aria-hidden
                     className="size-3.5"

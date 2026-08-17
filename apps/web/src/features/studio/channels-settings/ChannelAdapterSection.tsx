@@ -67,7 +67,7 @@ export function ChannelAdapterSection({
   };
 
   return (
-    <section className="rounded-lg border bg-card/40">
+    <section className="rounded-lg border bg-card">
       <div className="flex items-center gap-3 px-3 py-3">
         <button
           aria-expanded={expanded}

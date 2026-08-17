@@ -125,7 +125,7 @@ export function AcpAgentsSettings({ embedded = false }: { onClose: () => void; e
                 {presets.map((p) => {
                   return (
                     <button
-                      className="flex min-h-20 w-64 items-center gap-3 rounded-md border bg-card/60 p-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-accent/60"
+                      className="flex min-h-20 w-64 items-center gap-3 rounded-md border bg-card p-3 text-left shadow-sm transition-colors hover:border-primary/40 hover:bg-accent/60"
                       key={p.id}
                       onClick={() => setDraft(presetToView(p))}
                       title={p.installed ? undefined : t(presetHintKey(p.id))}

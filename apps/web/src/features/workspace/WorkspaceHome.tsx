@@ -320,7 +320,7 @@ export function WorkspaceHome({ projects }: WorkspaceHomeProps) {
                 const profileAction = action.id === 'profile';
                 return (
                   <ShellLink
-                    className="group flex min-h-32 flex-col rounded-[1.35rem] border border-border/80 bg-card/80 px-5 py-4 shadow-sm transition-[border-color,background-color,transform,box-shadow] hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
+                    className="group flex min-h-32 flex-col rounded-[1.35rem] border border-border/80 bg-card px-5 py-4 shadow-sm transition-[border-color,background-color,transform,box-shadow] hover:-translate-y-0.5 hover:border-foreground/20 hover:bg-card hover:shadow-md focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-background"
                     href={action.href}
                     key={action.id}
                   >

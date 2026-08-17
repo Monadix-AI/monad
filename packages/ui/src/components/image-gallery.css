@@ -16,13 +16,10 @@
   height: 40px;
   padding: 10px;
   color: var(--foreground);
-  background: color-mix(in srgb, var(--background) 76%, transparent);
+  background: var(--background);
   border: 1px solid color-mix(in srgb, var(--foreground) 13%, transparent);
   border-radius: 9999px;
   box-shadow: 0 8px 24px color-mix(in srgb, black 12%, transparent);
-  opacity: 0.88;
-  -webkit-backdrop-filter: blur(14px) saturate(130%);
-  backdrop-filter: blur(14px) saturate(130%);
 }
 
 .monad-image-gallery .yarl__button:hover:not(:disabled) {

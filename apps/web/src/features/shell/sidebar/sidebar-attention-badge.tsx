@@ -17,7 +17,7 @@ export function SidebarAttentionBadge({
     <span
       className={cn(
         'pointer-events-none max-w-40 truncate whitespace-nowrap rounded-full px-2 py-0.5 font-medium text-[10px]',
-        state === 'unread' ? 'bg-background/80 text-muted-foreground' : 'bg-info/15 text-info',
+        state === 'unread' ? 'bg-background text-muted-foreground' : 'bg-info/15 text-info',
         className
       )}
       data-sidebar-attention-badge={state}

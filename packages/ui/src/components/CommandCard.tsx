@@ -93,7 +93,7 @@ export function CommandCardHeader({ quiet = false, view }: { quiet?: boolean; vi
 
 function CommandMetaChip({ children }: { children: React.ReactNode }) {
   return (
-    <span className="min-w-0 max-w-full truncate rounded-full border border-border/80 bg-background/75 px-2 py-0.5 text-muted-foreground">
+    <span className="min-w-0 max-w-full truncate rounded-full border border-border/80 bg-background px-2 py-0.5 text-muted-foreground">
       {children}
     </span>
   );

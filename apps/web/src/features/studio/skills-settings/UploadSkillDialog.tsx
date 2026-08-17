@@ -46,15 +46,15 @@ export function UploadSkillDialog({
           >
             <div className="flex items-center text-muted-foreground/50 [&>*+*]:-ml-2">
               <HugeiconsIcon
-                className="size-10 rotate-[-8deg] rounded-md bg-background/70 p-2"
+                className="size-10 rotate-[-8deg] rounded-md bg-background p-2"
                 icon={TextIcon}
               />
               <HugeiconsIcon
-                className="z-1 size-12 rounded-md bg-background/90 p-2.5"
+                className="z-1 size-12 rounded-md bg-background p-2.5"
                 icon={TextIcon}
               />
               <HugeiconsIcon
-                className="size-10 rotate-[8deg] rounded-md bg-background/70 p-2"
+                className="size-10 rotate-[8deg] rounded-md bg-background p-2"
                 icon={FileArchiveIcon}
               />
             </div>

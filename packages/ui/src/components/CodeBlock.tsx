@@ -551,7 +551,7 @@ export const CodeBlockCopyButtonOverlay = ({
   >
     <CodeBlockCopyButton
       className={cn(
-        'pointer-events-auto size-6 border border-border/60 bg-background/90 text-muted-foreground hover:bg-background hover:text-foreground',
+        'pointer-events-auto size-6 border border-border/60 bg-background text-muted-foreground hover:bg-background hover:text-foreground',
         buttonClassName
       )}
       {...props}

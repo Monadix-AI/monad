@@ -189,7 +189,7 @@ export function InitProviderTypePickerStep({
           return (
             <button
               className={cn(
-                'group flex min-h-20 flex-col items-center justify-center gap-2 rounded-md border border-border/70 bg-card/40 p-2.5 text-center',
+                'group flex min-h-20 flex-col items-center justify-center gap-2 rounded-md border border-border/70 bg-card p-2.5 text-center',
                 'transition-[background-color,border-color,color] duration-150 ease-out',
                 'hover:border-foreground/30 hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
               )}

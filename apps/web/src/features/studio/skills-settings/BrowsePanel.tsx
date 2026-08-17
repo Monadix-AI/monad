@@ -592,7 +592,7 @@ export function BrowsePanel({
               aria-selected={source === option.source}
               className={cn(
                 'inline-flex h-8 shrink-0 items-center gap-2 rounded-md px-2.5 font-medium text-muted-foreground text-xs transition-[background-color,color,box-shadow] duration-150 ease-out hover:bg-accent hover:text-accent-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                source === option.source && 'bg-background/80 text-foreground shadow-sm hover:bg-background/80'
+                source === option.source && 'bg-background text-foreground shadow-sm hover:bg-background'
               )}
               key={option.source}
               onClick={() => handleSourceChange(option.source)}
