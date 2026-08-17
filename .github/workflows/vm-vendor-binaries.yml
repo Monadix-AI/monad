@@ -6,8 +6,8 @@ name: VM vendor binaries
 # which is also the gate here: a build that does not reproduce the pinned bytes fails instead of
 # publishing something the runtime would then refuse to run.
 #
-# Bump flow: edit the sources → run the native build scripts locally → `bun scripts/pin-vm-vendor.ts
-# --write` → bump VENDOR_ASSET_RELEASE → push the matching tag.
+# Bump flow: edit the sources → run the native build scripts locally → `bun scripts/vm-vendor.ts
+# --pin --write` → bump VENDOR_ASSET_RELEASE → push the matching tag.
 
 on:
   push:
@@ -106,7 +106,7 @@ jobs:
       # Exits non-zero when any built byte stream differs from its pin, so an unreproducible build
       # can never become a published asset the runtime would reject.
       - name: Verify against the committed sha256 pins
-        run: bun scripts/pin-vm-vendor.ts
+        run: bun scripts/vm-vendor.ts --pin
 
       - name: Check the tag matches VENDOR_ASSET_RELEASE
         env:

@@ -40,4 +40,4 @@ jobs:
       # value the runtime verifies before executing a download — is what a rebuild is checked
       # against. A source change that lands without re-pinning fails here.
       - name: Verify the rebuild matches its sha256 pin
-        run: bun scripts/pin-vm-vendor.ts seccomp-observer-${{ matrix.artifact }}
+        run: bun scripts/vm-vendor.ts --pin seccomp-observer-${{ matrix.artifact }}
