@@ -9,3 +9,10 @@ updates:
     directory: /
     schedule:
       interval: weekly
+
+  # The CI images pin their bases by digest, so a base-image CVE is only picked up when
+  # something bumps the digest. Dependabot is that something.
+  - package-ecosystem: docker
+    directory: /docker
+    schedule:
+      interval: weekly
