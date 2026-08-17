@@ -13,6 +13,9 @@ import { AgentProviderBadge } from '../../components/agent-provider-badge.tsx';
 
 export const TIME_STYLE: React.CSSProperties = { fontFamily: uiFont, fontSize: 11, color: 'var(--muted-foreground)' };
 
+const DIRECT_MESSAGE_FROM = '\uE000';
+const DIRECT_MESSAGE_TO = '\uE001';
+
 export function SystemMessageRow({
   actions,
   labels,
@@ -36,6 +39,16 @@ export function SystemMessageRow({
       : msg.systemEvent
         ? labels?.meshAgentSystemEvent?.(msg.systemEvent)
         : msg.text) ?? '';
+  const directMessageTemplate = msg.directMessage
+    ? (labels?.directMessageSent?.(DIRECT_MESSAGE_FROM, DIRECT_MESSAGE_TO) ??
+      `${DIRECT_MESSAGE_FROM} sent ${DIRECT_MESSAGE_TO} a DM.`)
+    : undefined;
+  const directMessageIdentities = msg.directMessage
+    ? {
+        from: resolveAgentIdentity?.({ id: msg.directMessage.fromAgentId, name: msg.directMessage.fromAgentName }),
+        to: resolveAgentIdentity?.({ id: msg.directMessage.toAgentId, name: msg.directMessage.toAgentName })
+      }
+    : undefined;
   const detailTooltip =
     msg.systemPresentation === 'detail-tooltip' ? (
       <span
@@ -124,7 +137,47 @@ export function SystemMessageRow({
         (directMessageText ? (
           <span className="inline-flex min-w-0 items-center gap-2 text-muted-foreground">
             <span className="min-w-0 truncate">
-              {inlineAction && inlineText && inlineStart >= 0 ? (
+              {msg.directMessage && directMessageTemplate ? (
+                directMessageTemplate.split(/([\uE000\uE001])/u).map((part) => {
+                  const identity =
+                    part === DIRECT_MESSAGE_FROM
+                      ? directMessageIdentities?.from
+                      : part === DIRECT_MESSAGE_TO
+                        ? directMessageIdentities?.to
+                        : undefined;
+                  const agent =
+                    part === DIRECT_MESSAGE_FROM
+                      ? { id: msg.directMessage?.fromAgentId ?? '', name: msg.directMessage?.fromAgentName ?? '' }
+                      : part === DIRECT_MESSAGE_TO
+                        ? { id: msg.directMessage?.toAgentId ?? '', name: msg.directMessage?.toAgentName ?? '' }
+                        : undefined;
+                  return agent ? (
+                    <MemberIdentity
+                      agent={{
+                        av: identity?.av,
+                        avatarUrl: identity?.avatarUrl,
+                        name: identity?.name ?? agent.name
+                      }}
+                      avatarSize={18}
+                      badge={
+                        identity?.providerIcon ? (
+                          <AgentProviderBadge
+                            className="size-3"
+                            icon={identity.providerIcon}
+                          />
+                        ) : undefined
+                      }
+                      badgeGap={3}
+                      bordered={false}
+                      className="mx-0.5 align-middle font-semibold text-foreground"
+                      key={`${part}-${agent.id}`}
+                      nameStyle={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    />
+                  ) : (
+                    part
+                  );
+                })
+              ) : inlineAction && inlineText && inlineStart >= 0 ? (
                 <>
                   {directMessageText.slice(0, inlineStart)}
                   <button

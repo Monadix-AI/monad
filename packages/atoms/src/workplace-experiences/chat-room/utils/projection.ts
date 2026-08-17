@@ -137,7 +137,9 @@ export function messageToView(
         text: directMessageArtifact.text ?? '',
         orderKey: item.seq,
         directMessage: {
+          fromAgentId: directMessage.fromAgent,
           fromAgentName,
+          toAgentId,
           toAgentName,
           text: directMessage.text
         }

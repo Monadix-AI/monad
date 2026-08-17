@@ -250,7 +250,9 @@ test('direct-message artifacts project to system events with current display nam
     time: '10:30',
     orderKey: '2026-07-20T00:00:02.000Z',
     directMessage: {
+      fromAgentId: 'codex',
       fromAgentName: 'Lily',
+      toAgentId: 'claude',
       toAgentName: 'Steve',
       text: 'Please review the attached plan.'
     },

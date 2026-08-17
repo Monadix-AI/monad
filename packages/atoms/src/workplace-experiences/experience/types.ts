@@ -90,7 +90,9 @@ export interface Message {
   systemRaw?: unknown;
   systemActions?: Array<{ actionId: string; inlineText?: string; payload?: unknown }>;
   directMessage?: {
+    fromAgentId: string;
     fromAgentName: string;
+    toAgentId: string;
     toAgentName: string;
     text: string;
   };
