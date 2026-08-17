@@ -54,7 +54,7 @@ test('Hermes managed runtime injects Monad MCP through an isolated profile home'
   const context = {
     workspace,
     workingPath: '/project',
-    immutableInstructions: { text: 'Managed Hermes instructions', file: join(workspace, 'GEMINI.md') },
+    immutableInstructions: { text: 'Managed Hermes instructions', file: join(workspace, 'prompt.md') },
     skipProviderApprovals: true,
     agentCommand: 'hermes',
     agentEnv: { HERMES_HOME: sourceHome },

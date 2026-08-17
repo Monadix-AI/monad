@@ -40,7 +40,7 @@ test('Antigravity selects the managed custom agent without folding instructions 
     workingPath: '/workspace',
     extraWorkingPaths: ['/managed'],
     startInput: {
-      immutableInstructions: { text: 'Managed Antigravity instructions', file: '/managed/GEMINI.md' },
+      immutableInstructions: { text: 'Managed Antigravity instructions', file: '/managed/prompt.md' },
       initialTurn: { text: 'hello', attachments: [] }
     }
   });
@@ -340,7 +340,7 @@ describe('Codex resident app-server runtime', () => {
       workingPath: '/workspace',
       extraWorkingPaths: ['/managed'],
       startInput: {
-        immutableInstructions: { text: 'Post through the Monad bridge.', file: '/managed/GEMINI.md' },
+        immutableInstructions: { text: 'Post through the Monad bridge.', file: '/managed/prompt.md' },
         initialTurn: { text: 'hello', attachments: [] }
       },
       skipProviderApprovals: true,
@@ -377,7 +377,7 @@ describe('Codex resident app-server runtime', () => {
 describe('Qwen resident session-event runtime', () => {
   test('appends managed instructions through Qwen native system prompt configuration', () => {
     const root = mkdtempSync(join(tmpdir(), 'monad-qwen-instructions-'));
-    const promptFile = join(root, 'GEMINI.md');
+    const promptFile = join(root, 'prompt.md');
     writeFileSync(promptFile, 'Post through Monad.');
     try {
       const definition = qwenMeshAgentAdapter.createSessionRuntime?.(agent('qwen'), {
@@ -976,24 +976,27 @@ describe('Gemini resident ACP session-event runtime', () => {
     ]);
   });
 
-  test('loads managed instructions as additive context without replacing Gemini defaults', () => {
+  test('loads managed instructions from the renamed Gemini context file', () => {
     const root = mkdtempSync(join(tmpdir(), 'monad-gemini-instructions-'));
     const managedEnv = geminiMeshAgentAdapter.managedRuntime?.env?.({
       workspace: root,
       workingPath: '/workspace',
-      immutableInstructions: { text: 'Managed Gemini instructions', file: join(root, 'GEMINI.md') },
+      immutableInstructions: { text: 'Managed Gemini instructions', file: join(root, 'custom-system-prompt.md') },
       skipProviderApprovals: true
     });
     const settingsFile = join(root, 'gemini-system-settings.json');
     expect(managedEnv).toEqual({ GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile });
     expect(JSON.parse(readFileSync(settingsFile, 'utf8'))).toEqual({
-      context: { loadMemoryFromIncludeDirectories: true }
+      context: {
+        fileName: 'custom-system-prompt.md',
+        loadMemoryFromIncludeDirectories: true
+      }
     });
     const definition = geminiMeshAgentAdapter.createSessionRuntime?.(agent('gemini'), {
       workingPath: '/workspace',
       extraWorkingPaths: [root],
       startInput: {
-        immutableInstructions: { text: 'Post through Monad.', file: join(root, 'GEMINI.md') },
+        immutableInstructions: { text: 'Post through Monad.', file: join(root, 'custom-system-prompt.md') },
         initialTurn: { text: 'hello', attachments: [] }
       },
       env: managedEnv
@@ -1189,7 +1192,7 @@ describe('Claude Code resident session-event runtime', () => {
       workingPath: '/workspace',
       extraWorkingPaths: ['/managed'],
       startInput: {
-        immutableInstructions: { text: 'Post through Monad.', file: '/managed/GEMINI.md' },
+        immutableInstructions: { text: 'Post through Monad.', file: '/managed/prompt.md' },
         initialTurn: { text: 'hello', attachments: [] }
       },
       skipProviderApprovals: true,
@@ -1208,7 +1211,7 @@ describe('Claude Code resident session-event runtime', () => {
       '--include-partial-messages',
       '--replay-user-messages',
       '--append-system-prompt-file',
-      '/managed/GEMINI.md',
+      '/managed/prompt.md',
       '--allowedTools',
       'mcp__monad__*',
       '--dangerously-skip-permissions',

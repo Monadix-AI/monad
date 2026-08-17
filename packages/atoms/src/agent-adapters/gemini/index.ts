@@ -29,9 +29,8 @@ import { hasGeminiStreamJsonEvents } from './stream-json.ts';
 
 function geminiManagedEnv(workspace: string): Record<string, string> {
   const settingsFile = join(workspace, 'gemini-system-settings.json');
-  writeFileSync(settingsFile, `${JSON.stringify({ context: { loadMemoryFromIncludeDirectories: true } }, null, 2)}\n`, {
-    mode: 0o600
-  });
+  const context = { fileName: 'custom-system-prompt.md', loadMemoryFromIncludeDirectories: true };
+  writeFileSync(settingsFile, `${JSON.stringify({ context }, null, 2)}\n`, { mode: 0o600 });
   return { GEMINI_CLI_SYSTEM_SETTINGS_PATH: settingsFile };
 }
 

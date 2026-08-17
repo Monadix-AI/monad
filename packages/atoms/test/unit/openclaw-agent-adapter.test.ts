@@ -36,7 +36,7 @@ test('OpenClaw managed runtime injects Monad MCP through an isolated config file
     {
       workspace,
       workingPath: '/project',
-      immutableInstructions: { text: 'Managed OpenClaw instructions', file: join(workspace, 'GEMINI.md') },
+      immutableInstructions: { text: 'Managed OpenClaw instructions', file: join(workspace, 'prompt.md') },
       skipProviderApprovals: true,
       agentCommand: 'openclaw',
       agentEnv: { OPENCLAW_STATE_DIR: stateDir, OPENCLAW_CONFIG_PATH: sourceConfig },

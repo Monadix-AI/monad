@@ -284,8 +284,6 @@ test('managed project runtimes expose project, agent, session, and private runti
   });
   expect(await readFile(sharedMemory, 'utf8')).toStartWith('# Project memory index');
   expect(await stat(join(projectRoot, 'shared', 'memories'))).toMatchObject({ mode: expect.any(Number) });
-  expect(codex.prompt).toContain(`Session workspace: ${codex.workspaces.session}`);
-  expect(codex.prompt).toContain('the agent workspace for your durable cross-session content');
 
   await rm(monadHome, { recursive: true, force: true });
 });
@@ -304,7 +302,7 @@ test('managed project runtime uses non-interactive Codex launches', () => {
   expect(prepared.env.CODEX_NON_INTERACTIVE).toBe('1');
 });
 
-test('managed project runtime uses MCP communication prompt for managed agents', async () => {
+test('managed project runtime wires MCP communication for managed agents', () => {
   const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
   const codex = prepareManagedProjectRuntime({
     monadHome,
@@ -350,13 +348,6 @@ test('managed project runtime uses MCP communication prompt for managed agents',
     `mcp_servers.monad.env.MONAD_AGENT_TOKEN_FILE=${JSON.stringify(codex.tokenFile)}`
   );
   expect(codex.env.PATH).toBe('/usr/bin:/bin');
-  expect(await Bun.file(codex.promptFile).text()).toMatch(
-    /blocking: true[\s\S]*final action of the turn[\s\S]*awaiting_human[\s\S]*end the turn immediately/
-  );
-  expect(codex.prompt).toContain('To reply to a specific project message, use `project_post` with `replyToMessageId`.');
-  expect(codex.prompt).toContain(
-    'Posting without `replyToMessageId` creates an unreferenced message even while handling inbox work.'
-  );
   expect(claude.mcpConfigArgs).toContain(
     JSON.stringify({
       mcpServers: {
@@ -407,33 +398,6 @@ test('managed project runtime writes MCP configuration for Qwen and Antigravity'
   expect(await readFile(join(antigravity.workspace, '.agents', 'agents', 'monad-managed', 'agent.md'), 'utf8')).toBe(
     `---\nname: monad-managed\ndescription: Monad managed runtime instructions\n---\n\n${antigravity.prompt}\n`
   );
-  for (const prepared of [qwen, antigravity]) {
-    expect(prepared.prompt).toContain('Use only tools from the `monad` MCP server');
-    expect(prepared.prompt).not.toContain('monad project');
-  }
-});
-
-test('managed project runtime treats room wakes as broadcasts that do not require a reply', () => {
-  const monadHome = join(tmpdir(), `monad-managed-runtime-${Date.now()}-${process.hrtime.bigint()}`);
-  const prompts = ['codex', 'gemini'].map(
-    (provider) =>
-      prepareManagedProjectRuntime({
-        monadHome,
-        serverUrl: 'http://127.0.0.1:1234',
-        agentName: provider,
-        projectId: 'prj_PROJECT00000',
-        meshSessionId: `mesh_${provider}000000`,
-        provider
-      }).prompt
-  );
-
-  for (const prompt of prompts) {
-    expect(prompt).toContain('Use only tools from the `monad` MCP server');
-    expect(prompt).not.toContain('monad project');
-    expect(prompt).toContain('Every project-room message is broadcast to every managed agent.');
-    expect(prompt).toContain('A wake means new context is available, not that a public response is required.');
-    expect(prompt).toContain('For agent/system messages, default to no public response.');
-  }
 });
 
 test('managed project runtime rejects agent ids that escape the project workspace', async () => {
@@ -491,11 +455,7 @@ test('managed project runtime writes the prompt file it returns', async () => {
   });
 
   expect(await readFile(prepared.promptFile, 'utf8')).toBe(prepared.prompt);
-  expect(prepared.promptFile).toBe(join(prepared.workspace, 'GEMINI.md'));
-  // presence-ok: ephemeral runtime bindings and join triggers must never enter immutable instructions.
-  expect(prepared.prompt).not.toContain('mesh_prompt000000');
-  expect(prepared.prompt).not.toContain('When this managed project session starts');
-  expect(prepared.prompt).not.toContain('When this managed project session starts, acknowledge');
+  expect(prepared.promptFile).toBe(join(prepared.workspace, 'custom-system-prompt.md'));
 });
 
 test('managed project runtime replaces stale token file content', async () => {

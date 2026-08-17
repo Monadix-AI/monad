@@ -22,7 +22,6 @@ const PROJECT_MEMORY_INDEX_PROMPT = await definePrompt({
   id: 'managed-project.memory-index',
   sourcePath: projectMemoryIndexPath
 });
-
 function buildManagedProjectPrompt(args: NativeAgentRuntimePromptInput): string {
   if (getMeshAgentProviderAdapter(args.provider).managedRuntime?.usesManagedMcpBridge !== true) {
     throw new Error(`${args.provider} managed runtime does not provide the required Monad MCP bridge`);
@@ -165,7 +164,7 @@ export function prepareManagedProjectRuntime(
     ...(args.speed ? { speed: args.speed } : {}),
     ...(args.customPrompt ? { customPrompt: args.customPrompt } : {})
   });
-  const promptFile = join(workspace, 'GEMINI.md');
+  const promptFile = join(workspace, 'custom-system-prompt.md');
   const tokenFile = join(workspace, '.monad-agent-token');
   const token = randomBytes(32).toString('hex');
   writeFileSync(promptFile, prompt, { mode: 0o600 });

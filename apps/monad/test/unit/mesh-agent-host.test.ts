@@ -431,7 +431,7 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
       'runtime',
       'ses_01KWRUNTIME0',
       'pmem_hostagent',
-      'GEMINI.md'
+      'custom-system-prompt.md'
     );
     expect(runtimeStartInput).toEqual({
       immutableInstructions: { file: expectedPromptFile, text: readFileSync(expectedPromptFile, 'utf8') },
