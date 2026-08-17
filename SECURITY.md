@@ -44,6 +44,23 @@ scope will help you decide whether a finding is a vulnerability:
   VPN). Reports about cleartext tokens on an unprotected `http://0.0.0.0` are
   known and documented, not vulnerabilities.
 
+## Supply chain
+
+Release assets carry Sigstore attestations produced by
+[`.github/workflows/release.yml`](.github/workflows/release.yml), and the installer
+verifies each download against the release checksum — see
+[releases](docs/usage/releases.md).
+
+The VM sandbox backend also ships prebuilt guest and host binaries. They are not
+committed: they are published as release assets, sha256-pinned in the source tree,
+and verified before execution — a mismatch refuses to run. How they are built,
+reproduced, and re-pinned is documented in
+[packages/sandbox-vm/docs/supply-chain.md](packages/sandbox-vm/docs/supply-chain.md);
+their dependency and license inventory is in
+[packages/sandbox-vm/vendor/THIRD_PARTY_LICENSES.md](packages/sandbox-vm/vendor/THIRD_PARTY_LICENSES.md).
+
+## Hardening status
+
 This is an **evolving** posture, not a hardened one. The corresponding
 hardening work is tracked in
 [docs/internal/development/security-guidelines.md](docs/internal/development/security-guidelines.md). Findings that
