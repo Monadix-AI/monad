@@ -5,7 +5,8 @@ import {
   observation,
   permissionDenialEvents,
   providerEpochSecondsTimestamp,
-  textValue
+  textValue,
+  turnEndReasonFromStopValue
 } from '../../observation-projection.ts';
 import { codexResponseItem, isCodexObservationResponseItem } from './observation-response-item.ts';
 
@@ -24,6 +25,7 @@ export function codexExecRecordEvents(
         text: textValue(record.result, record.response, record.text),
         source: 'codex-exec',
         providerEventType: 'result',
+        turnEndReason: record.is_error === true ? 'error' : turnEndReasonFromStopValue(record.subtype, record.status),
         raw: record
       }),
       ...permissionDenialEvents(

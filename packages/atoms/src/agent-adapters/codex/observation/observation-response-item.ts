@@ -87,6 +87,11 @@ function codexResponseMessageContentEvents(args: {
         source: args.source,
         providerEventType: args.providerEventType,
         createdAt: args.createdAt,
+        tool: {
+          name: tool,
+          ...(textValue(item.id) ? { callId: textValue(item.id) } : {}),
+          ...(input === undefined ? {} : { input })
+        },
         raw: args.raw
       });
     }
@@ -98,6 +103,11 @@ function codexResponseMessageContentEvents(args: {
         source: args.source,
         providerEventType: args.providerEventType,
         createdAt: args.createdAt,
+        tool: {
+          ...(textValue(item.tool_use_id) ? { callId: textValue(item.tool_use_id) } : {}),
+          output: item.content ?? item.output ?? item.result,
+          status: item.is_error === true ? 'failed' : 'completed'
+        },
         raw: args.raw
       });
     }
@@ -156,6 +166,13 @@ export function codexResponseItem(
       source,
       providerEventType: String(item.type),
       createdAt,
+      tool: {
+        name: tool,
+        ...(textValue(item.call_id, item.callId, item.id)
+          ? { callId: textValue(item.call_id, item.callId, item.id) }
+          : {}),
+        ...(input === undefined ? {} : { input })
+      },
       raw
     });
   }
@@ -167,6 +184,13 @@ export function codexResponseItem(
       source,
       providerEventType: String(item.type),
       createdAt,
+      tool: {
+        ...(textValue(item.call_id, item.callId, item.id)
+          ? { callId: textValue(item.call_id, item.callId, item.id) }
+          : {}),
+        output: item.output,
+        status: 'completed'
+      },
       raw
     });
   }
@@ -178,6 +202,11 @@ export function codexResponseItem(
       source,
       providerEventType: String(item.type),
       createdAt,
+      tool: {
+        name: 'Search',
+        ...(textValue(item.id) ? { callId: textValue(item.id) } : {}),
+        ...(textValue(item.status) ? { status: textValue(item.status) } : {})
+      },
       raw
     });
   }

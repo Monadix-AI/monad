@@ -15,7 +15,8 @@ import {
   rawTextValue,
   recordValue,
   textValue,
-  toolCategoryByName
+  toolCategoryByName,
+  turnEndReasonFromStopValue
 } from '../observation-projection.ts';
 
 type OpenClawMessageGroup = {
@@ -101,6 +102,7 @@ export function openClawRecordEvents(
         source: 'unknown',
         providerEventType: 'turn-end',
         createdAt,
+        turnEndReason: turnEndReasonFromStopValue(data?.status, data?.reason, data?.stopReason),
         raw: record
       });
     }
@@ -131,6 +133,14 @@ export function openClawRecordEvents(
       source: 'unknown',
       providerEventType: 'tool_result',
       createdAt: messageCreatedAt,
+      tool: {
+        ...(textValue(providerMessage.name, providerMessage.toolName)
+          ? { name: textValue(providerMessage.name, providerMessage.toolName) }
+          : {}),
+        ...(textValue(providerMessage.toolCallId) ? { callId: textValue(providerMessage.toolCallId) } : {}),
+        ...(providerMessage.content === undefined ? {} : { output: providerMessage.content }),
+        status: providerMessage.isError === true ? 'failed' : 'completed'
+      },
       raw: providerMessage
     });
   }
@@ -150,6 +160,11 @@ export function openClawRecordEvents(
       source: 'unknown',
       providerEventType: 'tool_call',
       createdAt: messageCreatedAt,
+      tool: {
+        name,
+        ...(textValue(item.toolCallId, item.id) ? { callId: textValue(item.toolCallId, item.id) } : {}),
+        ...(input === undefined ? {} : { input })
+      },
       raw: item
     });
   });

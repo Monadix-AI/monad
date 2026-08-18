@@ -48,48 +48,17 @@ type McpStartupUpdate = {
   threadId?: string;
 };
 
-function recordValue(value: unknown): Record<string, unknown> | undefined {
-  return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
+function mcpStartupSnapshot(event: AgentObservationEvent): McpStartupUpdate[] | null {
+  const progress = event.progress;
+  if (progress?.kind !== 'mcp-startup' || progress.snapshot !== true) return null;
+  return progress.servers.map((server) => ({ ...server }));
 }
 
-function textValue(value: unknown): string | undefined {
-  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
-}
-
-function contractRawEvent(event: AgentObservationEvent): Record<string, unknown> | undefined {
-  const contract = recordValue(event.provenance.contractEvents[0]);
-  const provenance = recordValue(contract?.provenance);
-  const rawEvents = Array.isArray(provenance?.rawEvents) ? provenance.rawEvents : [];
-  return recordValue(rawEvents[0]) ?? contract;
-}
-
-function codexMcpStartupUpdate(event: AgentObservationEvent): McpStartupUpdate | null {
-  const raw = contractRawEvent(event);
-  if (raw?.method !== 'mcpServer/startupStatus/updated') return null;
-  const params = recordValue(raw.params);
-  if (!params) return null;
-  const error = textValue(params.error);
-  const failureReason = textValue(params.failureReason);
-  const threadId = textValue(params.threadId);
-  return {
-    name: textValue(params.name) ?? 'unknown',
-    status: textValue(params.status) ?? 'updated',
-    ...(error ? { error } : {}),
-    ...(failureReason ? { failureReason } : {}),
-    ...(threadId ? { threadId } : {})
-  };
-}
-
-function claudeMcpStartupUpdates(event: AgentObservationEvent): McpStartupUpdate[] | null {
-  const raw = contractRawEvent(event);
-  if (raw?.type !== 'system' || raw.subtype !== 'init' || !Array.isArray(raw.mcp_servers)) return null;
-  const servers = raw.mcp_servers.flatMap((value): McpStartupUpdate[] => {
-    const server = recordValue(value);
-    const name = textValue(server?.name);
-    if (!name) return [];
-    return [{ name, status: textValue(server?.status) ?? 'updated' }];
-  });
-  return servers.length > 0 ? servers : null;
+function mcpStartupUpdates(event: AgentObservationEvent): McpStartupUpdate[] | null {
+  const progress = event.progress;
+  if (progress?.kind !== 'mcp-startup' || progress.snapshot === true) return null;
+  const scope = progress.scopeId ? { threadId: progress.scopeId } : {};
+  return progress.servers.map((server) => ({ ...server, ...scope }));
 }
 
 function collapseMcpStartupUpdates(updates: readonly McpStartupUpdate[]): McpStartupUpdate[] {
@@ -126,21 +95,21 @@ function mcpStartupGroups(events: readonly AgentObservationEvent[]): Map<AgentOb
   const byThread = new Map<string, McpStartupGroup>();
   const anchors = new Map<AgentObservationEvent, McpStartupGroup>();
   for (const event of events) {
-    const snapshot = claudeMcpStartupUpdates(event);
+    const snapshot = mcpStartupSnapshot(event);
     if (snapshot) {
       anchors.set(event, { events: [event], updates: snapshot });
       continue;
     }
-    const update = codexMcpStartupUpdate(event);
-    if (!update) continue;
-    const key = update.threadId ?? '';
+    const updates = mcpStartupUpdates(event);
+    if (!updates || updates.length === 0) continue;
+    const key = updates[0]?.threadId ?? '';
     const group = byThread.get(key);
     if (group) {
       group.events.push(event);
-      group.updates.push(update);
+      group.updates.push(...updates);
       continue;
     }
-    const started: McpStartupGroup = { events: [event], updates: [update] };
+    const started: McpStartupGroup = { events: [event], updates };
     byThread.set(key, started);
     anchors.set(event, started);
   }
@@ -190,19 +159,13 @@ type PlanSnapshot = {
   turnId?: string;
 };
 
-function codexPlanSnapshot(event: AgentObservationEvent): PlanSnapshot | null {
-  const raw = contractRawEvent(event);
-  if (raw?.method !== 'turn/plan/updated') return null;
-  const params = recordValue(raw.params);
-  if (!Array.isArray(params?.plan)) return null;
-  const steps = params.plan.flatMap((value): PlanStep[] => {
-    const entry = recordValue(value);
-    const step = textValue(entry?.step);
-    return step ? [{ status: textValue(entry?.status) ?? 'pending', step }] : [];
-  });
-  if (steps.length === 0) return null;
-  const turnId = textValue(params.turnId);
-  return { steps, ...(turnId ? { turnId } : {}) };
+function planSnapshot(event: AgentObservationEvent): PlanSnapshot | null {
+  const progress = event.progress;
+  if (progress?.kind !== 'plan') return null;
+  return {
+    steps: progress.steps.map((step) => ({ ...step })),
+    ...(progress.scopeId ? { turnId: progress.scopeId } : {})
+  };
 }
 
 type PlanGroup = {
@@ -216,7 +179,7 @@ function planGroups(events: readonly AgentObservationEvent[]): Map<AgentObservat
   const byTurn = new Map<string, PlanGroup>();
   const anchors = new Map<AgentObservationEvent, PlanGroup>();
   for (const event of events) {
-    const snapshot = codexPlanSnapshot(event);
+    const snapshot = planSnapshot(event);
     if (!snapshot) continue;
     const group = byTurn.get(snapshot.turnId ?? '');
     if (group) {
@@ -328,14 +291,14 @@ export function agentObservationCards(
       cards.push(startupCard(startupGroup.events, startupGroup.updates));
       continue;
     }
-    if (codexMcpStartupUpdate(event) || claudeMcpStartupUpdates(event)) continue;
+    if (event.progress?.kind === 'mcp-startup') continue;
 
     const planGroup = planAnchors.get(event);
     if (planGroup) {
       cards.push(planCard(planGroup));
       continue;
     }
-    if (codexPlanSnapshot(event)) continue;
+    if (event.progress?.kind === 'plan') continue;
 
     if (event.kind === 'tool-call') {
       // Pair strictly by `callId`. Adjacency is not a correlation signal: the convenience plane is

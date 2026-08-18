@@ -191,7 +191,8 @@ test('Monad detection advertises the native structured resident runtime', () => 
       events: 'provider-owned',
       resume: 'structured',
       approval: 'provider-owned',
-      approvalProxy: true
+      approvalProxy: true,
+      agentInstances: 'hosted'
     }
   });
 });

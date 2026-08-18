@@ -90,13 +90,14 @@ export function toFallbackAgentObservationEvent(
     streaming: event.projection === 'unknown' ? false : (projector?.isStreamingFragment?.(event) ?? false),
     provenance: { contractEvents: [event] },
     ...(event.diagnostic ? { diagnostic: event.diagnostic } : {}),
+    ...(event.progress ? { progress: event.progress } : {}),
     ...(event.createdAt ? { at: event.createdAt } : {})
   };
   // No `callId`: correlating a `tool-call` with its `tool-result` requires knowing the provider's
   // wire shape, which only the adapter has. An event that reaches here without one stays unpaired
   // and renders as its own card — consumers never guess.
   if (kind === 'tool-call' || kind === 'tool-result') decoded.tool = { name: 'tool', output: event.text };
-  if (kind === 'turn-end') decoded.reason = 'completed';
+  if (kind === 'turn-end') decoded.reason = event.turnEndReason ?? 'completed';
   if (event.text) decoded.text = event.text;
   return decoded;
 }

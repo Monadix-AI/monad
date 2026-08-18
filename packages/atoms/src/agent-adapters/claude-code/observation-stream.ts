@@ -102,7 +102,8 @@ export function reconcileClaudeStreamEvents(events: MeshAgentObservationEvent[])
               ...event,
               role: 'tool',
               text: `Tool call ${toolName}${inputText}`,
-              providerEventType: 'tool_use_delta'
+              providerEventType: 'tool_use_delta',
+              tool: { name: toolName, ...(toolUseId ? { callId: toolUseId } : {}) }
             }) - 1;
           const state = { eventIndex, inputJson: '', toolName };
           blocks.set(key, state);

@@ -3,6 +3,7 @@ import type { AgentObservationEvent } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { observation } from '../../src/agent-adapters/observation-projection.ts';
 
 function toolEvent(args: {
   id: string;
@@ -131,5 +132,22 @@ test('a tool call and result that both omit callId render as separate cards', ()
       payload: { provider: 'codex', event: result },
       provenance: { contractEvents: [{ id: 'event_result', callId: undefined }] }
     }
+  ]);
+});
+
+test('a tool field the schema rejects costs that field, not the whole event', () => {
+  const events = observation({
+    id: 'tool-with-bad-duration',
+    role: 'tool',
+    text: 'Tool result bash',
+    source: 'unknown',
+    providerEventType: 'tool_result',
+    // A provider clock adjustment can report a negative duration; `durationMs` is `nonnegative()`.
+    tool: { name: 'bash', callId: 'call_1', durationMs: -12 },
+    raw: {}
+  });
+
+  expect(events.map((item) => ({ id: item.id, text: item.text, tool: item.tool }))).toEqual([
+    { id: 'tool-with-bad-duration', text: 'Tool result bash', tool: undefined }
   ]);
 });

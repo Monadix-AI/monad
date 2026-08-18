@@ -59,6 +59,40 @@ export const agentObservationProvenanceSchema = z.object({
 });
 export type AgentObservationProvenance = z.infer<typeof agentObservationProvenanceSchema>;
 
+// Long-running provider progress an adapter decodes from its own wire vocabulary. The adapter owns
+// the decode; consumers group and render these without knowing any provider's record shape.
+export const agentObservationMcpStartupServerSchema = z.object({
+  name: z.string().min(1),
+  status: z.string().min(1),
+  error: z.string().min(1).optional(),
+  failureReason: z.string().min(1).optional()
+});
+export type AgentObservationMcpStartupServer = z.infer<typeof agentObservationMcpStartupServerSchema>;
+
+export const agentObservationPlanStepSchema = z.object({
+  status: z.string().min(1),
+  step: z.string().min(1)
+});
+export type AgentObservationPlanStep = z.infer<typeof agentObservationPlanStepSchema>;
+
+export const agentObservationProgressSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('mcp-startup'),
+    servers: z.array(agentObservationMcpStartupServerSchema).nonempty(),
+    // Present when the provider reports startup incrementally: frames sharing a scope collapse into
+    // one card instead of rendering as separate boots.
+    scopeId: z.string().min(1).optional(),
+    // A provider that reports the whole server set at once supersedes rather than accumulates.
+    snapshot: z.boolean().optional()
+  }),
+  z.object({
+    kind: z.literal('plan'),
+    steps: z.array(agentObservationPlanStepSchema).nonempty(),
+    scopeId: z.string().min(1).optional()
+  })
+]);
+export type AgentObservationProgress = z.infer<typeof agentObservationProgressSchema>;
+
 // One flat shape keyed by `kind`; field presence is by kind (the adapter decode sets only what a
 // kind carries): `text` for reasoning / user-message / assistant-message / context-compaction,
 // `tool` for tool-call / tool-result, `reason` for turn-end. `turn-start` carries none of them.
@@ -77,6 +111,7 @@ export const agentObservationEventSchema = z.object({
   tool: agentObservationToolSchema.optional(),
   diagnostic: agentObservationDiagnosticSchema.optional(),
   reason: agentObservationTurnEndReasonSchema.optional(),
+  progress: agentObservationProgressSchema.optional(),
   provenance: agentObservationProvenanceSchema,
   // Provider-supplied event time (ISO 8601), when available.
   at: z.string().optional()

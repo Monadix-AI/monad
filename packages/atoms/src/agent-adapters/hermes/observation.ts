@@ -12,7 +12,8 @@ import {
   rawTextValue,
   recordValue,
   textValue,
-  toolCategoryByName
+  toolCategoryByName,
+  turnEndReasonFromStopValue
 } from '../observation-projection.ts';
 
 function roleFromHermesMessage(record: Record<string, unknown>): ObservationRole {
@@ -72,8 +73,45 @@ function toolCallEvents(
       source: 'unknown',
       providerEventType: 'tool_call',
       createdAt,
+      tool: { name, ...(callId ? { callId } : {}), ...(args === undefined ? {} : { input: args }) },
       rawEvents: [{ ...item, name, arguments: args, tool_call_id: callId }, record]
     });
+  });
+}
+
+function gatewayToolEvent(
+  id: string,
+  record: Record<string, unknown>,
+  recordIdentity: string,
+  eventType: 'tool.start' | 'tool.complete',
+  createdAt: string | undefined
+): MeshAgentObservationEvent[] {
+  const params = recordValue(record.params);
+  const payload = recordValue(params?.payload) ?? {};
+  const name = textValue(payload.name) ?? 'tool';
+  const callId = textValue(payload.tool_id, payload.tool_call_id);
+  const input = payload.args ?? payload.context;
+  const output = payload.result ?? payload.result_text ?? payload.summary;
+  const durationS = numberValue(payload.duration_s);
+  const detail = eventType === 'tool.start' ? input : output;
+  return observation({
+    id: `${id}:json:${recordIdentity}:${eventType}`,
+    role: 'tool',
+    text: `${eventType === 'tool.start' ? 'Tool call' : 'Tool result'} ${name}${
+      detail === undefined ? '' : ` ${compactJson(detail) ?? String(detail)}`
+    }`,
+    source: 'unknown',
+    providerEventType: eventType === 'tool.start' ? 'tool_call' : 'tool_result',
+    createdAt,
+    tool: {
+      name,
+      ...(callId ? { callId } : {}),
+      ...(input === undefined ? {} : { input }),
+      ...(output === undefined ? {} : { output }),
+      ...(durationS === undefined ? {} : { durationMs: Math.round(durationS * 1000) }),
+      status: eventType === 'tool.start' ? 'running' : 'completed'
+    },
+    rawEvents: [{ ...payload, ...(callId ? { tool_call_id: callId } : {}) }, record]
   });
 }
 
@@ -122,6 +160,9 @@ export function hermesRecordEvents(
           raw: record,
           preserveWhitespace: true
         });
+      case 'tool.start':
+      case 'tool.complete':
+        return gatewayToolEvent(id, record, recordIdentity, eventType, createdAt);
       case 'message.complete':
         return observation({
           id: `${id}:json:${recordIdentity}:turn-end`,
@@ -130,6 +171,7 @@ export function hermesRecordEvents(
           source: 'unknown',
           providerEventType: 'turn-end',
           createdAt,
+          turnEndReason: turnEndReasonFromStopValue(payload?.status, payload?.reason, payload?.stop_reason),
           raw: record
         });
       default:
@@ -159,6 +201,16 @@ export function hermesRecordEvents(
     source: 'unknown',
     providerEventType: record.role === 'tool' ? 'tool_result' : 'message',
     createdAt,
+    ...(contentRole === 'tool'
+      ? {
+          tool: {
+            ...(textValue(record.tool_name) ? { name: textValue(record.tool_name) } : {}),
+            ...(textValue(record.tool_call_id, record.toolCallId)
+              ? { callId: textValue(record.tool_call_id, record.toolCallId) }
+              : {})
+          }
+        }
+      : {}),
     raw: record
   });
   return [...reasoning, ...content, ...toolCallEvents(id, record, recordIdentity, createdAt)];
@@ -166,6 +218,14 @@ export function hermesRecordEvents(
 
 export const hermesObservationProjection = {
   classifyActivity: classifyObservationActivity,
+  dedupeIdentity: (event) => {
+    const rawRecords = event.provenance.rawEvents
+      .map((raw) => recordValue(raw))
+      .filter((raw): raw is Record<string, unknown> => raw !== undefined);
+    const callId = rawRecords.map((raw) => textValue(raw.tool_call_id, raw.tool_id)).find(Boolean);
+    if (callId) return callId;
+    return rawRecords.some((raw) => raw.method === 'event') ? event.id : undefined;
+  },
   toolCategory: toolCategoryByName('shell', ['terminal', 'shell', 'bash', 'exec']),
   eventEntries: (entries) =>
     entries.filter(({ record }) => {

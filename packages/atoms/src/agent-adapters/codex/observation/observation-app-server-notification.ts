@@ -10,7 +10,8 @@ import {
   rawTextValue,
   recordValue,
   textValue,
-  thinkingObservation
+  thinkingObservation,
+  turnEndReasonFromStopValue
 } from '../../observation-projection.ts';
 import {
   codexAppServerItemRecord,
@@ -55,6 +56,18 @@ export function codexAppServerRecordEvents(
       text: detail ? `${name} ${status}: ${detail}` : `${name} ${status}`,
       source: 'codex-app-server',
       providerEventType: method,
+      progress: {
+        kind: 'mcp-startup',
+        servers: [
+          {
+            name,
+            status,
+            ...(textValue(p.error) ? { error: textValue(p.error) as string } : {}),
+            ...(textValue(p.failureReason) ? { failureReason: textValue(p.failureReason) as string } : {})
+          }
+        ],
+        ...(textValue(p.threadId) ? { scopeId: textValue(p.threadId) as string } : {})
+      },
       raw: record
     });
   }
@@ -70,6 +83,11 @@ export function codexAppServerRecordEvents(
       text: active ? `Plan ${done}/${steps.length}: ${active}` : `Plan ${done}/${steps.length}`,
       source: 'codex-app-server',
       providerEventType: method,
+      progress: {
+        kind: 'plan',
+        steps: steps as [(typeof steps)[number], ...(typeof steps)[number][]],
+        ...(textValue(p.turnId) ? { scopeId: textValue(p.turnId) as string } : {})
+      },
       raw: record
     });
   }
@@ -187,12 +205,16 @@ export function codexAppServerRecordEvents(
     method === 'item/fileChange/outputDelta' ||
     method === 'item/mcpToolCall/progress'
   ) {
+    // A delta frame carries no item, only `itemId` — and that id must match the one the call and
+    // result declare, or the delta renders as its own card instead of streaming into the command's.
+    const deltaCallId = textValue(p.itemId, p.callId, p.call_id);
     return observation({
       id: `${id}:json:${recordIndex}:tool-delta`,
       role: 'tool',
       text: rawTextValue(p.delta, p.output, p.text, p.message),
       source: 'codex-app-server',
       providerEventType: method,
+      ...(deltaCallId ? { tool: { callId: deltaCallId, status: 'running' as const } } : {}),
       raw: record,
       preserveWhitespace: true
     });
@@ -241,6 +263,7 @@ export function codexAppServerRecordEvents(
       source: 'codex-app-server',
       providerEventType: method,
       createdAt,
+      turnEndReason: turnEndReasonFromStopValue(recordValue(p.error) ? 'error' : undefined, p.reason, turn?.status),
       raw: record
     });
   }

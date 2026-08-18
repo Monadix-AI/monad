@@ -12,6 +12,8 @@ import type { MeshAgentObservationProjector, ObservationRole } from '../observat
 
 import { z } from 'zod';
 
+import { anthropicTranscriptTool } from '../anthropic-transcript.ts';
+
 const looseRecordSchema = z.record(z.string(), z.unknown());
 
 import {
@@ -26,7 +28,8 @@ import {
   resultMarkerText,
   textValue,
   thinkingObservation,
-  toolCategoryByName
+  toolCategoryByName,
+  turnEndReasonFromStopValue
 } from '../observation-projection.ts';
 import { reconcileClaudeStreamEvents } from './observation-stream.ts';
 
@@ -168,6 +171,11 @@ function claudeContentEvents(args: {
         source: 'claude-code-sdk',
         providerEventType: 'tool_use',
         createdAt: args.createdAt,
+        tool: {
+          name: tool,
+          ...(textValue(item.id) ? { callId: textValue(item.id) } : {}),
+          ...(input === undefined ? {} : { input })
+        },
         raw: args.raw
       });
     }
@@ -179,6 +187,10 @@ function claudeContentEvents(args: {
         source: 'claude-code-sdk',
         providerEventType: 'tool_result',
         createdAt: args.createdAt,
+        tool: {
+          ...(textValue(item.tool_use_id) ? { callId: textValue(item.tool_use_id) } : {}),
+          status: item.is_error === true ? 'failed' : 'completed'
+        },
         raw: args.raw
       });
     }
@@ -262,6 +274,7 @@ export function claudeRecordEvents(
         text: claudeResultText(record),
         source: 'claude-code-sdk',
         providerEventType: record.is_error && subtype ? subtype : 'result',
+        turnEndReason: record.is_error ? 'error' : turnEndReasonFromStopValue(subtype),
         raw: record
       }),
       ...permissionDenialEvents(
@@ -317,6 +330,7 @@ export function claudeRecordEvents(
             source: 'claude-code-sdk',
             providerEventType: 'turn-end',
             createdAt,
+            turnEndReason: turnEndReasonFromStopValue(recordValue(record.message)?.stop_reason),
             raw: record
           })
         : [])
@@ -333,6 +347,14 @@ export function claudeRecordEvents(
       text: rawTextValue(loose.output, loose.result, loose.content) ?? JSON.stringify(record),
       source: 'claude-code-sdk',
       providerEventType: 'tool_result',
+      tool: {
+        ...(textValue(loose.name, loose.tool) ? { name: textValue(loose.name, loose.tool) } : {}),
+        ...(textValue(loose.tool_use_id, loose.id) ? { callId: textValue(loose.tool_use_id, loose.id) } : {}),
+        ...((loose.output ?? loose.result ?? loose.content) === undefined
+          ? {}
+          : { output: loose.output ?? loose.result ?? loose.content }),
+        status: loose.is_error === true ? 'failed' : 'completed'
+      },
       raw: record
     });
   }
@@ -387,6 +409,11 @@ export function claudeRecordEvents(
   }
   if (isClaudeSystemMessage(record)) {
     if (loose.subtype === 'init' && Array.isArray(loose.mcp_servers) && loose.mcp_servers.length > 0) {
+      const servers = loose.mcp_servers.flatMap((value) => {
+        const server = recordValue(value);
+        const name = textValue(server?.name);
+        return name ? [{ name, status: textValue(server?.status) ?? 'updated' }] : [];
+      });
       return observation({
         id: claudeProjectionId(base, recordIndex, 'mcp-startup', indexedId),
         projection: 'unknown',
@@ -394,6 +421,15 @@ export function claudeRecordEvents(
         text: 'MCP servers initialized',
         source: 'claude-code-sdk',
         providerEventType: 'mcp_servers_initialized',
+        ...(servers.length > 0
+          ? {
+              progress: {
+                kind: 'mcp-startup' as const,
+                servers: servers as [(typeof servers)[number], ...(typeof servers)[number][]],
+                snapshot: true
+              }
+            }
+          : {}),
         raw: record
       });
     }
@@ -438,6 +474,7 @@ export const claudeCodeObservationProjection = {
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
   toolCategory: toolCategoryByName('shell', ['Bash']),
+  toolFields: anthropicTranscriptTool,
   isStreamingFragment: isStreamingObservationFragment,
   mergeStreamingRun: (events: MeshAgentObservationEvent[]) => {
     const first = events[0];

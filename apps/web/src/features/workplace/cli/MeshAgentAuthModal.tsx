@@ -7,6 +7,7 @@ import {
   useStartMeshAgentAuthMutation,
   useStopMeshAgentAuthMutation
 } from '@monad/client-rtk';
+import { meshAgentProductDisplayName } from '@monad/protocol';
 import { isProductIconId } from '@monad/ui';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
@@ -147,7 +148,7 @@ export function MeshAgentAuthModal({
       stopLabel={t('web.meshAgent.stopConnect')}
       subtitle={t('web.meshAgent.connectHint')}
       tag={t('web.meshAgent.providerOwned')}
-      title={agentName}
+      title={meshAgentProductDisplayName(session?.productIcon, session?.provider, agentName)}
     />
   );
 }

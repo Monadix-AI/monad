@@ -33,7 +33,8 @@ test('Hermes detection advertises gateway approval proxy support', () => {
     resume: 'pty',
     approval: 'provider-owned',
     approvalProxy: true,
-    settingsImport: true
+    settingsImport: true,
+    agentInstances: 'hosted'
   });
 });
 
@@ -388,6 +389,101 @@ test('Hermes projects concatenated gateway frames into turn, reasoning, and assi
     { kind: 'reasoning', streaming: true, text: 'We think' },
     { kind: 'assistant-message', streaming: true, text: 'Hi!' },
     { kind: 'turn-end', streaming: false, text: 'complete' }
+  ]);
+});
+
+test('Hermes keeps a streaming reasoning card stable while appending gateway deltas', () => {
+  const projector = hermesMeshAgentAdapter.events.createLiveProjector?.({ id: 'mesh-hermes-stable' });
+  if (!projector) throw new Error('Hermes incremental projector required');
+  const frame = (text: string) =>
+    JSON.stringify({
+      jsonrpc: '2.0',
+      method: 'event',
+      params: { type: 'reasoning.delta', session_id: 'live-1', payload: { text } }
+    });
+
+  const first = projector.advance(frame('We')).events;
+  const second = projector.advance(frame(' think')).events;
+
+  expect(
+    [first, second].map((events) => {
+      const event = events.find((candidate) => candidate.providerEventType === 'reasoning.delta');
+      return event ? { dedupeKey: event.dedupeKey, id: event.id, text: event.text } : null;
+    })
+  ).toEqual([
+    {
+      dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
+      id: 'mesh-hermes-stable:json:index-0:reasoning',
+      text: 'We'
+    },
+    {
+      dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
+      id: 'mesh-hermes-stable:json:index-0:reasoning',
+      text: 'We think'
+    }
+  ]);
+});
+
+test('Hermes projects gateway tool lifecycle events into one pairable tool card', () => {
+  const events = hermesMeshAgentAdapter.events.projectLive({
+    id: 'mesh-hermes-tools',
+    mode: 'events',
+    output: [
+      {
+        jsonrpc: '2.0',
+        method: 'event',
+        params: {
+          type: 'tool.start',
+          session_id: 'live-1',
+          payload: { tool_id: 'terminal_1', name: 'terminal', context: 'pwd' }
+        }
+      },
+      {
+        jsonrpc: '2.0',
+        method: 'event',
+        params: {
+          type: 'tool.complete',
+          session_id: 'live-1',
+          payload: {
+            tool_id: 'terminal_1',
+            name: 'terminal',
+            args: { command: 'pwd' },
+            result: '/project',
+            duration_s: 0.125
+          }
+        }
+      }
+    ]
+      .map((frame) => JSON.stringify(frame))
+      .join('\n')
+  }).events;
+
+  expect(
+    events.map((event) => {
+      const neutral = toAgentObservationEvent(event, hermesMeshAgentAdapter.observation);
+      return neutral?.kind === 'tool-call' || neutral?.kind === 'tool-result'
+        ? { dedupeKey: event.dedupeKey, kind: neutral.kind, tool: neutral.tool }
+        : null;
+    })
+  ).toEqual([
+    {
+      dedupeKey: 'hermes:terminal_1:tool:tool_call',
+      kind: 'tool-call',
+      tool: { name: 'terminal', category: 'shell', callId: 'terminal_1', input: 'pwd', status: 'running' }
+    },
+    {
+      dedupeKey: 'hermes:terminal_1:tool:tool_result',
+      kind: 'tool-result',
+      tool: {
+        name: 'terminal',
+        category: 'shell',
+        callId: 'terminal_1',
+        input: { command: 'pwd' },
+        output: '/project',
+        status: 'completed',
+        durationMs: 125
+      }
+    }
   ]);
 });
 

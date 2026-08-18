@@ -68,6 +68,7 @@ test('groups discovered Monad, OpenClaw, and Hermes agents by provider for dialo
     tag: provider === 'monad' ? 'Monad' : provider === 'openclaw' ? 'OpenClaw' : 'Hermes',
     enabled: true,
     provider,
+    agentInstances: 'hosted' as const,
     icon: provider,
     modelOptions: [],
     reasoningEfforts: []

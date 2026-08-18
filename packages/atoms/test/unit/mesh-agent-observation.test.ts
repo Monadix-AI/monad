@@ -210,6 +210,27 @@ test('Claude live and history projection ids are based on provider UUIDs', () =>
   });
 });
 
+const mcpStartupNeutralEvent = (id: string, params: Record<string, unknown>, at?: string): AgentObservationEvent => ({
+  id,
+  kind: 'unknown',
+  streaming: false,
+  text: id,
+  progress: {
+    kind: 'mcp-startup',
+    servers: [
+      {
+        name: String(params.name),
+        status: String(params.status),
+        ...(typeof params.error === 'string' ? { error: params.error } : {}),
+        ...(typeof params.failureReason === 'string' ? { failureReason: params.failureReason } : {})
+      }
+    ],
+    ...(typeof params.threadId === 'string' ? { scopeId: params.threadId } : {})
+  },
+  provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] },
+  ...(at ? { at } : {})
+});
+
 const cardsFromNeutral = (items: readonly AgentObservationEvent[], provider: string): AgentObservationCard[] =>
   agentObservationCards(items, provider);
 
@@ -253,16 +274,18 @@ const messageCard = (id: string, text: string, streaming = false, provider = 'co
 
 // The timeline renders adapter-owned AgentObservationCard[]; these tests build legacy events (via
 // meshAgentStreamItems), so convert them the same way the daemon's ui plane does before rendering.
-const renderTimeline = (items: MeshAgentObservationEvent[], provider = 'codex') =>
-  observationTimelineEntries(
+const renderTimeline = (items: MeshAgentObservationEvent[], provider = 'codex') => {
+  const projection = builtinAgentAdapters.find((adapter) => adapter.provider === provider)?.observation;
+  return observationTimelineEntries(
     cardsFromNeutral(
       items
-        .map((event) => toAgentObservationEvent(event))
+        .map((event) => toAgentObservationEvent(event, projection))
         .filter((event): event is AgentObservationEvent => event !== null),
       provider
     ),
     provider
   );
+};
 
 const externalSnapshot = (event: MeshAgentObservationEvent) => {
   const { provenance, ...rest } = event;
@@ -334,6 +357,7 @@ test('Claude Code observation maps server errors to readable system events', () 
       text: 'API Error: overloaded_error. Claude Code is currently overloaded.',
       source: 'claude-code-sdk',
       providerEventType: 'server_error',
+      turnEndReason: 'error',
       rawEvents: [
         {
           type: 'result',
@@ -1329,6 +1353,11 @@ test('Codex MCP startup status stays unknown and becomes a startup card through 
         kind: 'unknown',
         streaming: false,
         text: 'codex-security ready',
+        progress: {
+          kind: 'mcp-startup',
+          scopeId: 'thread_1',
+          servers: [{ name: 'codex-security', status: 'ready' }]
+        },
         rawEvents: [raw]
       }
     ],
@@ -1363,14 +1392,9 @@ test('chat timeline groups consecutive Codex MCP startup statuses and keeps each
     method: 'mcpServer/startupStatus/updated',
     params: { name: 'codex-security', status: 'ready', error: null }
   };
-  const items: AgentObservationEvent[] = [securityStarting, nodeReady, securityReady].map((raw, index) => ({
-    id: `startup_${index}`,
-    kind: 'unknown',
-    streaming: false,
-    text: `${raw.params.name} ${raw.params.status}`,
-    provenance: { contractEvents: [raw] },
-    at: `2026-07-18T10:00:0${index}.000Z`
-  }));
+  const items: AgentObservationEvent[] = [securityStarting, nodeReady, securityReady].map((raw, index) =>
+    mcpStartupNeutralEvent(`startup_${index}`, raw.params, `2026-07-18T10:00:0${index}.000Z`)
+  );
 
   const entries = observationTimelineEntries(cardsFromNeutral(items, 'codex'), 'codex');
   expect(entries).toMatchObject([
@@ -1413,18 +1437,7 @@ test('chat timeline recognizes Codex MCP startup raw records after legacy system
 
   expect(
     observationTimelineEntries(
-      cardsFromNeutral(
-        [
-          {
-            id: 'legacy-startup',
-            kind: 'system',
-            streaming: false,
-            text: 'codex_apps ready',
-            provenance: { contractEvents: [raw] }
-          }
-        ],
-        'mesh-agent'
-      ),
+      cardsFromNeutral([{ ...mcpStartupNeutralEvent('legacy-startup', raw.params), kind: 'system' }], 'mesh-agent'),
       'mesh-agent'
     )
   ).toEqual([
@@ -1451,13 +1464,7 @@ test('chat timeline recognizes Codex MCP startup raw records after legacy system
 });
 
 test('chat timeline merges Codex startup batches split by unrelated events into one thread progress card', () => {
-  const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
-    id,
-    kind: 'unknown',
-    streaming: false,
-    text: id,
-    provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] }
-  });
+  const startup = mcpStartupNeutralEvent;
   const thread = '019ffadc-2dcb-73f2-b464-76a2a081657e';
   const entries = observationTimelineEntries(
     cardsFromNeutral(
@@ -1508,13 +1515,7 @@ test('chat timeline merges Codex startup batches split by unrelated events into 
 });
 
 test('chat timeline reports the in-flight Codex MCP server and keeps separate threads apart', () => {
-  const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
-    id,
-    kind: 'unknown',
-    streaming: false,
-    text: id,
-    provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] }
-  });
+  const startup = mcpStartupNeutralEvent;
   const entries = observationTimelineEntries(
     cardsFromNeutral(
       [
@@ -2814,34 +2815,37 @@ test('observation card projection maps Codex and Claude command tools to the sha
       }
     }
   ]);
-  const claudeEntries = renderTimeline([
-    {
-      id: 'claude-call',
-      role: 'tool',
-      text: 'Tool call Bash',
-      source: 'claude-code-sdk',
-      providerEventType: 'tool_use',
-      provenance: {
-        rawEvents: [
-          {
-            message: {
-              content: [{ type: 'tool_use', id: 'toolu_bash_1', name: 'Bash', input: { command: 'git status' } }]
+  const claudeEntries = renderTimeline(
+    [
+      {
+        id: 'claude-call',
+        role: 'tool',
+        text: 'Tool call Bash',
+        source: 'claude-code-sdk',
+        providerEventType: 'tool_use',
+        provenance: {
+          rawEvents: [
+            {
+              message: {
+                content: [{ type: 'tool_use', id: 'toolu_bash_1', name: 'Bash', input: { command: 'git status' } }]
+              }
             }
-          }
-        ]
+          ]
+        }
+      },
+      {
+        id: 'claude-result',
+        role: 'tool',
+        text: 'On branch main',
+        source: 'claude-code-sdk',
+        providerEventType: 'tool_result',
+        provenance: {
+          rawEvents: [{ type: 'tool_result', tool_use_id: 'toolu_bash_1', output: 'On branch main' }]
+        }
       }
-    },
-    {
-      id: 'claude-result',
-      role: 'tool',
-      text: 'On branch main',
-      source: 'claude-code-sdk',
-      providerEventType: 'tool_result',
-      provenance: {
-        rawEvents: [{ type: 'tool_result', tool_use_id: 'toolu_bash_1', output: 'On branch main' }]
-      }
-    }
-  ]);
+    ],
+    'claude-code'
+  );
 
   expect(codexEntries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual(['tool']);
   expect(claudeEntries.map((entry) => (entry.kind === 'public' ? entry.card.kind : entry.kind))).toEqual(['tool']);
@@ -3035,6 +3039,7 @@ test('observation card projection maps generic tool pairs to the shared command 
       text: 'Tool call Search {"query":"monad"}',
       source: 'unknown',
       providerEventType: 'tool_use',
+      tool: { name: 'Search', callId: 'call_search_1' },
       provenance: { rawEvents: [{ name: 'Search', call_id: 'call_search_1' }] }
     },
     {
@@ -3043,6 +3048,7 @@ test('observation card projection maps generic tool pairs to the shared command 
       text: 'No results',
       source: 'unknown',
       providerEventType: 'tool_result',
+      tool: { callId: 'call_search_1', output: 'No results' },
       provenance: { rawEvents: [{ output: 'No results', call_id: 'call_search_1' }] }
     }
   ]);
@@ -3065,6 +3071,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'Tool call Search {"query":"monad"}',
       source: 'unknown',
       providerEventType: 'tool_use',
+      tool: { name: 'Search', callId: 'call_one' },
       provenance: { rawEvents: [{ name: 'Search', call_id: 'call_one' }] }
     },
     {
@@ -3073,6 +3080,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'No results',
       source: 'unknown',
       providerEventType: 'tool_result',
+      tool: { callId: 'call_one', output: 'No results' },
       provenance: { rawEvents: [{ output: 'No results', call_id: 'call_one' }] }
     },
     {
@@ -3081,6 +3089,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'Tool call Bash',
       source: 'unknown',
       providerEventType: 'tool_use',
+      tool: { name: 'Bash', callId: 'call_two' },
       provenance: { rawEvents: [{ name: 'Bash', call_id: 'call_two' }] }
     },
     {
@@ -3089,6 +3098,7 @@ test('observation timeline rows keep consecutive tool cards grouped for virtual 
       text: 'done',
       source: 'unknown',
       providerEventType: 'tool_result',
+      tool: { callId: 'call_two', output: 'done' },
       provenance: { rawEvents: [{ output: 'done', call_id: 'call_two' }] }
     },
     {
@@ -3284,6 +3294,7 @@ test('observation card projection normalizes JSON-like generic tool output', () 
       text: 'Tool call Search {"query":"monad"}',
       source: 'codex-app-server',
       providerEventType: 'function_call',
+      tool: { name: 'Search', callId: 'call_search_json' },
       provenance: { rawEvents: [{ name: 'Search', call_id: 'call_search_json' }] }
     },
     {
@@ -3292,6 +3303,7 @@ test('observation card projection normalizes JSON-like generic tool output', () 
       text: '\n"{\\"ok\\":true}"\n',
       source: 'codex-app-server',
       providerEventType: 'function_call_output',
+      tool: { callId: 'call_search_json', output: '\n"{\\"ok\\":true}"\n' },
       provenance: { rawEvents: [{ output: '\n"{\\"ok\\":true}"\n', call_id: 'call_search_json' }] }
     }
   ]);
@@ -3438,7 +3450,7 @@ test('Claude Code Read tool result renders as a file read card', () => {
       }
     }
   ] as const;
-  const entries = renderTimeline(items as never);
+  const entries = renderTimeline(items as never, 'claude-code');
 
   expect(
     entries.map((entry) =>
@@ -3606,13 +3618,7 @@ test('Codex retryable stream errors project as warnings and successful hooks sta
 });
 
 test('a cancelled Codex MCP boot stops the startup card from streaming', () => {
-  const startup = (id: string, params: Record<string, unknown>): AgentObservationEvent => ({
-    id,
-    kind: 'unknown',
-    streaming: false,
-    text: id,
-    provenance: { contractEvents: [{ method: 'mcpServer/startupStatus/updated', params }] }
-  });
+  const startup = mcpStartupNeutralEvent;
   const cards = cardsFromNeutral(
     [
       startup('starting', { threadId: 'thread-1', name: 'codex_apps', status: 'starting' }),

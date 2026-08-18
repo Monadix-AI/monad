@@ -3,6 +3,7 @@ import type { MeshAgentObservationEvent } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
+import { turnEndReasonFromStopValue } from '../../src/agent-adapters/observation-projection.ts';
 
 const event = (over: Partial<MeshAgentObservationEvent>): MeshAgentObservationEvent => ({
   id: 'e',
@@ -28,16 +29,35 @@ test('a user record maps to user-message', () => {
   );
 });
 
-test('a tool call decodes structured name+input from raw, not just the formatted text', () => {
+test('a tool call carries the tool fields the adapter normalized, not a re-read of its raw record', () => {
   const neutral = toAgentObservationEvent(
     event({
       role: 'tool',
       providerEventType: 'function_call',
       text: 'Tool call bash {"cmd":"ls"}',
-      provenance: { rawEvents: [{ name: 'bash', input: { cmd: 'ls' } }] }
+      tool: { name: 'bash', callId: 'call_1', input: { cmd: 'ls' } },
+      provenance: { rawEvents: [{ nameOnlyTheAdapterUnderstands: 'bash' }] }
     })
   );
-  expect(neutral).toMatchObject({ kind: 'tool-call', streaming: false, tool: { name: 'bash', input: { cmd: 'ls' } } });
+  expect(neutral).toMatchObject({
+    kind: 'tool-call',
+    streaming: false,
+    tool: { name: 'bash', callId: 'call_1', input: { cmd: 'ls' } }
+  });
+});
+
+test('a projector that only settles its tool fields after a merge supplies them through toolFields', () => {
+  const neutral = toAgentObservationEvent(
+    event({
+      role: 'tool',
+      providerEventType: 'function_call',
+      text: 'Tool call bash',
+      tool: { name: 'bash' },
+      provenance: { rawEvents: [{ partial: '{"cmd":' }, { partial: '"ls"}' }] }
+    }),
+    { toolFields: () => ({ name: 'ignored-because-the-event-declared-one', input: { cmd: 'ls' } }) }
+  );
+  expect(neutral).toMatchObject({ kind: 'tool-call', tool: { name: 'bash', input: { cmd: 'ls' } } });
 });
 
 test('a projected tool name preserves words and stops at a structured payload', () => {
@@ -54,15 +74,28 @@ test('a projected tool name preserves words and stops at a structured payload', 
   ]).toEqual(['code graph   helper', 'code graph', 'Search', 'tool']);
 });
 
-test('a tool result decodes an output payload', () => {
-  const neutral = toAgentObservationEvent(
+test('a tool result carries the adapter output, and falls back to the rendered text without one', () => {
+  const declared = toAgentObservationEvent(
     event({
       role: 'tool',
       providerEventType: 'function_call_output',
-      provenance: { rawEvents: [{ name: 'bash', output: 'ok' }] }
+      text: 'ok',
+      tool: { name: 'bash', output: { stdout: 'ok' }, status: 'completed' },
+      provenance: { rawEvents: [{}] }
     })
   );
-  expect(neutral).toMatchObject({ kind: 'tool-result', tool: { name: 'bash', output: 'ok' } });
+  const undeclared = toAgentObservationEvent(
+    event({
+      role: 'tool',
+      providerEventType: 'function_call_output',
+      text: 'Tool call bash',
+      provenance: { rawEvents: [{}] }
+    })
+  );
+  expect([declared?.tool, undeclared?.tool]).toEqual([
+    { name: 'bash', output: { stdout: 'ok' }, status: 'completed' },
+    { name: 'bash', output: 'Tool call bash' }
+  ]);
 });
 
 test('a Hermes tool result preserves its snake-case call id for pairing', () => {
@@ -72,6 +105,7 @@ test('a Hermes tool result preserves its snake-case call id for pairing', () => 
       role: 'tool',
       providerEventType: 'tool_result',
       text: output,
+      tool: { callId: 'chatcmpl-tool-1' },
       provenance: {
         rawEvents: [{ tool_call_id: 'chatcmpl-tool-1', tool_name: null, content: output }]
       }
@@ -85,25 +119,25 @@ test('a Hermes tool result preserves its snake-case call id for pairing', () => 
   });
 });
 
-test('a terminal record becomes turn-end and derives its reason from the provider raw', () => {
-  expect(toAgentObservationEvent(event({ providerEventType: 'turn/completed', role: 'system' }))).toMatchObject({
-    kind: 'turn-end',
-    reason: 'completed'
-  });
-  expect(
-    toAgentObservationEvent(
-      event({
-        providerEventType: 'result',
-        role: 'agent',
-        provenance: { rawEvents: [{ subtype: 'error', is_error: true }] }
-      })
-    )
-  ).toMatchObject({ kind: 'turn-end', reason: 'error' });
-  expect(
-    toAgentObservationEvent(
-      event({ providerEventType: 'result', role: 'agent', provenance: { rawEvents: [{ stop_reason: 'max_tokens' }] } })
-    )?.reason
-  ).toBe('length');
+test('a terminal record becomes turn-end and carries the reason the adapter mapped', () => {
+  const reasonOf = (over: Partial<MeshAgentObservationEvent>) =>
+    toAgentObservationEvent(event({ providerEventType: 'result', role: 'agent', ...over }))?.reason;
+
+  expect([
+    toAgentObservationEvent(event({ providerEventType: 'turn/completed', role: 'system' }))?.kind,
+    reasonOf({}),
+    reasonOf({ turnEndReason: 'error' }),
+    reasonOf({ turnEndReason: 'length' })
+  ]).toEqual(['turn-end', 'completed', 'error', 'length']);
+});
+
+test('turn-end mapping recognizes case variants and later explicit failure signals', () => {
+  expect([
+    turnEndReasonFromStopValue('FAILED'),
+    turnEndReasonFromStopValue('unknown-status', 'error'),
+    turnEndReasonFromStopValue(undefined, 'MAX_TOKENS'),
+    turnEndReasonFromStopValue('unrecognized')
+  ]).toEqual(['error', 'error', 'length', 'completed']);
 });
 
 test('an explicit turn-start marker fills the turn-start kind the legacy classifier lacks', () => {
@@ -140,4 +174,23 @@ test('provider raw and timestamp pass through, stripped to the neutral shape', (
       ]
     }
   });
+});
+
+test('an in-flight status is folded to `running` whatever spelling the adapter declared', () => {
+  const statusOf = (status: string) =>
+    toAgentObservationEvent(
+      event({
+        role: 'tool',
+        providerEventType: 'function_call',
+        text: 'Tool call bash',
+        tool: { name: 'bash', status }
+      })
+    )?.tool?.status;
+
+  expect([statusOf('in_progress'), statusOf('inProgress'), statusOf('in-progress'), statusOf('completed')]).toEqual([
+    'running',
+    'running',
+    'running',
+    'completed'
+  ]);
 });

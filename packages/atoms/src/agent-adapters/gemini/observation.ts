@@ -9,7 +9,8 @@ import {
   rawTextValue,
   textValue,
   thinkingObservation,
-  toolCategoryByName
+  toolCategoryByName,
+  turnEndReasonFromStopValue
 } from '../observation-projection.ts';
 
 export function geminiRecordEvents(
@@ -52,10 +53,19 @@ export function geminiRecordEvents(
       source: 'gemini-cli',
       providerEventType: 'tool_use',
       createdAt,
+      tool: {
+        name: tool,
+        ...(textValue(record.callId, record.call_id, record.id)
+          ? { callId: textValue(record.callId, record.call_id, record.id) }
+          : {}),
+        ...(input === undefined ? {} : { input }),
+        ...(textValue(record.status) ? { status: textValue(record.status) } : {})
+      },
       raw: record
     });
   }
   if (type === 'tool_result') {
+    const output = record.output ?? record.result ?? record.content;
     return observation({
       id: `${id}:json:${recordIndex}:tool-result`,
       role: 'tool',
@@ -63,6 +73,14 @@ export function geminiRecordEvents(
       source: 'gemini-cli',
       providerEventType: 'tool_result',
       createdAt,
+      tool: {
+        ...(textValue(record.name, record.tool) ? { name: textValue(record.name, record.tool) } : {}),
+        ...(textValue(record.callId, record.call_id, record.id)
+          ? { callId: textValue(record.callId, record.call_id, record.id) }
+          : {}),
+        ...(output === undefined ? {} : { output }),
+        status: record.error != null || record.isError === true ? 'failed' : 'completed'
+      },
       raw: record
     });
   }
@@ -74,6 +92,7 @@ export function geminiRecordEvents(
       source: 'gemini-cli',
       providerEventType: 'error',
       createdAt,
+      turnEndReason: 'error',
       raw: record
     });
   }
@@ -85,6 +104,7 @@ export function geminiRecordEvents(
       source: 'gemini-cli',
       providerEventType: 'result',
       createdAt,
+      turnEndReason: turnEndReasonFromStopValue(record.subtype, record.stop_reason, record.status),
       raw: record
     });
   }

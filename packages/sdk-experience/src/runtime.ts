@@ -1,6 +1,7 @@
 import type {
   AgentSessionSnapshot,
   ChannelIcon,
+  MeshAgentCapabilities,
   MeshAgentProvider,
   ProfileView,
   ProjectId,
@@ -94,6 +95,9 @@ export interface WorkplaceExperienceMemberCandidate {
   speedsByModel?: Record<string, string[]>;
   reasoningEfforts: string[];
   executionCapabilities: { autopilot: boolean; fastMode: boolean };
+  /** `hosted` providers own long-lived agent instances the operator picks from; `spawned` providers
+   *  create one per member. Absent (non-mesh candidates) behaves as `spawned`. */
+  agentInstances?: MeshAgentCapabilities['agentInstances'];
   icon?: WorkplaceExperienceIcon;
   providerIcon?: ChannelIcon;
   provider?: MeshAgentProvider;

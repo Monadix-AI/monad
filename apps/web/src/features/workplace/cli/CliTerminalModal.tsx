@@ -22,15 +22,6 @@ function statusText(status: CliTerminalModalStatus): string {
   return status === 'ok' ? 'done' : status === 'error' ? 'error' : 'running';
 }
 
-function officialCliName(name: string): string {
-  const normalized = name.toLowerCase();
-  if (normalized.includes('gemini')) return 'Gemini CLI';
-  if (normalized.includes('claude')) return 'Claude Code';
-  if (normalized.includes('codex')) return 'OpenAI Codex';
-  if (normalized.includes('qwen')) return 'Qwen Code';
-  return name;
-}
-
 function statusPill(
   status: CliTerminalModalStatus,
   tone: 'default' | 'soft' | 'clear' | 'bright' = 'default'
@@ -145,7 +136,7 @@ export function CliTerminalModal({
         <DialogHeader className="gap-2 px-5 pt-5 pr-5 pb-4">
           <div className="flex min-w-0 items-center gap-3">
             <Avatar
-              av={officialCliName(title).slice(0, 2).toUpperCase()}
+              av={title.slice(0, 2).toUpperCase()}
               icon={icon}
               kind="agent"
               size={30}
@@ -164,7 +155,7 @@ export function CliTerminalModal({
                     letterSpacing: '-0.01em'
                   }}
                 >
-                  {officialCliName(title)}
+                  {title}
                 </DialogTitle>
                 <span style={statusPill(status, 'soft')}>{statusText(status)}</span>
                 {tag ? <span className="truncate text-[#aeb9ca] text-xs">{tag}</span> : null}

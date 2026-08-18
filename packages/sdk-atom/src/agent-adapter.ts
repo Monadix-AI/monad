@@ -10,6 +10,7 @@ import type {
   ChannelIcon,
   MeshAgentAuthState,
   MeshAgentObservationEvent,
+  MeshAgentObservationTool,
   MeshAgentPresetView,
   MeshAgentProductIcon,
   MeshAgentProvider,
@@ -371,6 +372,13 @@ export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector &
   /** Classify a provider-native tool into a neutral capability category. The adapter owns its tool
    *  vocabulary; consumers render the category without branching on provider ids or wire names. */
   toolCategory?(event: MeshAgentObservationEvent, tool: AgentObservationTool): AgentObservationToolCategory | undefined;
+  /** Normalize the tool fields of an event whose values are only knowable after streaming fragments
+   *  merge (a tool input assembled from partial-JSON deltas, a result paired with its call). Simple
+   *  cases set `event.tool` at projection time instead; a field set there wins over this hook. */
+  toolFields?(
+    event: MeshAgentObservationEvent,
+    kind: 'tool-call' | 'tool-result'
+  ): MeshAgentObservationTool | undefined;
   /** Whether an event is a partial streaming fragment (a token delta) rather than a settled item.
    *  Consumers use it to merge adjacent fragments and to drive streaming affordances, without knowing
    *  this provider's delta event names. */

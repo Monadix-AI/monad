@@ -62,6 +62,7 @@ export type {
   ManagedMeshAgentLifecycleLogEvent,
   MeshAgentObservationEvent,
   MeshAgentObservationRole,
+  MeshAgentObservationTool,
   NativeAgentTurnPointer
 } from './mesh-agent-observation.ts';
 export type {
@@ -272,6 +273,7 @@ export {
   managedMeshAgentLifecycleLogEventSchema,
   meshAgentObservationEventSchema,
   meshAgentObservationRoleSchema,
+  meshAgentObservationToolSchema,
   nativeAgentTurnPointerSchema
 } from './mesh-agent-observation.ts';
 export {

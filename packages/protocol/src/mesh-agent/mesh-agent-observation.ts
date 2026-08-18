@@ -2,12 +2,14 @@ import { z } from 'zod';
 
 export type {
   MeshAgentObservationEvent,
-  MeshAgentObservationRole
+  MeshAgentObservationRole,
+  MeshAgentObservationTool
 } from './mesh-agent-observation-event.ts';
 
 export {
   meshAgentObservationEventSchema,
-  meshAgentObservationRoleSchema
+  meshAgentObservationRoleSchema,
+  meshAgentObservationToolSchema
 } from './mesh-agent-observation-event.ts';
 
 export const nativeAgentTurnPointerSchema = z.object({

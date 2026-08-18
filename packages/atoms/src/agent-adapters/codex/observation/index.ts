@@ -9,6 +9,8 @@ import { contentHash } from '@monad/sdk-atom/agent-observation';
 import {
   classifyObservationActivity,
   isStreamingObservationFragment,
+  jsonRecordValue,
+  numberValue,
   recordValue,
   textValue,
   toolCategoryByName
@@ -26,6 +28,7 @@ import { codexExecRecordEvents } from './observation-exec.ts';
 import { codexLogRecordEvents, isCodexLogRecord } from './observation-log.ts';
 import { codexObservationMessageGroupAdapter } from './observation-message-group.ts';
 import { codexUsageRecordsFromRecord } from './observation-usage.ts';
+import { codexObservationToolFields } from './tool-fields.ts';
 
 export type CodexObservationNotification = Record<string, unknown> & { method: string };
 
@@ -80,9 +83,25 @@ function codexObservationCheckpoint(event: MeshAgentObservationEvent): string | 
   return textValue(raw?.method) === 'turn/completed' ? codexObservationIdentity(event) : undefined;
 }
 
+// A tool call and its result arrive as separate records, so the only identity that pairs them is the
+// request id Codex echoes inside the tool arguments.
+function codexRequestIdentity(event: MeshAgentObservationEvent): string | undefined {
+  if (event.role !== 'tool') return undefined;
+  for (const rawEvent of event.provenance.rawEvents) {
+    const raw = recordValue(rawEvent);
+    const params = recordValue(raw?.params);
+    const item = recordValue(params?.item) ?? recordValue(raw?.item) ?? params ?? raw;
+    const input = jsonRecordValue(item?.arguments ?? item?.input ?? item?.args);
+    const requestId = input?.requestId ?? input?.request_id ?? input?.idempotencyKey ?? input?.idempotency_key;
+    const identity = textValue(requestId) ?? numberValue(requestId)?.toString();
+    if (identity) return `request:${identity}`;
+  }
+  return undefined;
+}
+
 function codexObservationDedupeIdentity(event: MeshAgentObservationEvent): string | undefined {
   if (event.providerEventType !== 'item/agentMessage' && event.providerEventType !== 'item/userMessage') {
-    return undefined;
+    return codexRequestIdentity(event);
   }
   for (const rawEvent of event.provenance.rawEvents) {
     const raw = recordValue(rawEvent);
@@ -100,6 +119,7 @@ function codexObservationDedupeIdentity(event: MeshAgentObservationEvent): strin
 export const codexObservationProjection = {
   checkpoint: codexObservationCheckpoint,
   dedupeIdentity: codexObservationDedupeIdentity,
+  toolFields: codexObservationToolFields,
   identity: codexObservationIdentity,
   eventEntries: codexHistoryEntries,
   usageRecords: codexUsageRecordsFromRecord,

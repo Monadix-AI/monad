@@ -286,12 +286,18 @@ function codexMessageGroupEvent(id: string, group: CodexMessageGroup): MeshAgent
 function codexToolGroupEvents(id: string, group: CodexToolGroup): MeshAgentObservationEvent[] {
   const item = group.completedItem ?? group.startedItem;
   if (!item) {
+    // Output arriving before the item does still belongs to that call's card, and `itemId` is the
+    // only id the delta frames carry — the call and result declare the same one as `callId`.
+    const callId = group.raw
+      .map((record) => textValue(recordValue(record.params)?.itemId))
+      .find((value) => value !== undefined);
     return observation({
       id: `${id}:json:${group.key}:tool-delta`,
       role: 'tool',
       text: group.fragments.join(''),
       source: 'codex-app-server',
       providerEventType: 'item/commandExecution/outputDelta',
+      ...(callId ? { tool: { callId, status: 'running' as const } } : {}),
       rawEvents: group.raw,
       preserveWhitespace: true
     });

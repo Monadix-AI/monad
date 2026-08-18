@@ -1,6 +1,13 @@
-import type { MeshAgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationEvent, MeshAgentObservationTool } from '@monad/protocol';
 
-import { compactJson, observation, rawTextValue, recordValue, textValue } from '../../observation-projection.ts';
+import {
+  compactJson,
+  numberValue,
+  observation,
+  rawTextValue,
+  recordValue,
+  textValue
+} from '../../observation-projection.ts';
 
 export function codexAppServerItemRecord(p: Record<string, unknown>): Record<string, unknown> | undefined {
   const item = p.item;
@@ -56,7 +63,7 @@ export function isCodexAppServerToolLikeItem(item: Record<string, unknown>): boo
   );
 }
 
-function codexAppServerToolInput(item: Record<string, unknown>): unknown {
+export function codexAppServerToolInput(item: Record<string, unknown>): unknown {
   return (
     item.arguments ??
     item.input ??
@@ -107,6 +114,37 @@ function codexMcpContentText(value: unknown): string | undefined {
   return parts.length > 0 ? parts.join('\n') : undefined;
 }
 
+export function codexItemToolFields(item: Record<string, unknown>): MeshAgentObservationTool {
+  const rawStatus = textValue(item.status);
+  const status = rawStatus?.replace(/[-_\s]/g, '').toLowerCase() === 'inprogress' ? 'running' : rawStatus;
+  const result = recordValue(item.result);
+  const callId = textValue(item.id, item.callId, item.call_id);
+  const cwd = textValue(item.cwd);
+  const exitCode = numberValue(item.exitCode, item.exit_code);
+  const durationMs = numberValue(item.durationMs, item.duration_ms, result?.durationMs, result?.duration_ms);
+  return {
+    name: codexAppServerToolName(item),
+    ...(callId ? { callId } : {}),
+    ...(cwd ? { cwd } : {}),
+    ...(status ? { status } : {}),
+    ...(exitCode === undefined ? {} : { exitCode }),
+    ...(durationMs === undefined ? {} : { durationMs })
+  };
+}
+
+export function codexAppServerToolOutput(item: Record<string, unknown>): unknown {
+  return (
+    (textValue(item.type)?.toLowerCase() === 'imagegeneration'
+      ? textValue(item.savedPath, item.saved_path)
+      : undefined) ??
+    item.aggregatedOutput ??
+    item.aggregated_output ??
+    item.output ??
+    item.result ??
+    item.results
+  );
+}
+
 export function codexAppServerToolCallObservation(args: {
   id: string;
   recordIndex: number;
@@ -126,6 +164,7 @@ export function codexAppServerToolCallObservation(args: {
     source: 'codex-app-server',
     providerEventType: 'function_call',
     createdAt: args.createdAt,
+    tool: { ...codexItemToolFields(args.item), ...(input === undefined ? {} : { input }) },
     raw: args.record
   });
 }
@@ -173,6 +212,9 @@ export function codexAppServerToolResultObservation(args: {
         args.item.aggregated_output ??
         (isCodexAppServerWebSearchItem(args.item) ? { status: textValue(args.item.status) ?? 'completed' } : args.item)
     );
+  // The rendered `text` above is already flattened for display; the tool payload keeps the item's
+  // structured value so a consumer can render it richly.
+  const structuredOutput = codexAppServerToolOutput(args.item);
   return observation({
     id: `${args.id}:json:${recordKey}${args.itemIndex === undefined ? '' : `:${args.itemIndex}`}:tool-result`,
     role: 'tool',
@@ -180,6 +222,10 @@ export function codexAppServerToolResultObservation(args: {
     source: 'codex-app-server',
     providerEventType: 'function_call_output',
     createdAt: args.createdAt,
+    tool: {
+      ...codexItemToolFields(args.item),
+      ...(structuredOutput === undefined ? {} : { output: structuredOutput })
+    },
     raw: args.record
   });
 }

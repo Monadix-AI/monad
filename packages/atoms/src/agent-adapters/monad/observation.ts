@@ -16,7 +16,8 @@ import {
   classifyObservationActivity,
   isStreamingObservationFragment,
   observation,
-  recordValue
+  recordValue,
+  textValue
 } from '../observation-projection.ts';
 
 function isMonadEventNotification(record: Record<string, unknown>): boolean {
@@ -48,6 +49,10 @@ interface MonadToolMessage {
   phase: 'call' | 'result';
   text: string;
   toolCallId?: string;
+  toolName?: string;
+  input?: unknown;
+  output?: string;
+  ok?: boolean;
   createdAt: string;
 }
 
@@ -105,6 +110,10 @@ function toolMessageFromRecord(record: Record<string, unknown>): MonadToolMessag
     phase,
     text: phase === 'call' ? `Tool call ${toolName ?? 'tool'}` : (nonEmptyString(data?.output) ?? message.text),
     toolCallId: nonEmptyString(data?.toolCallId),
+    ...(toolName ? { toolName } : {}),
+    ...(phase === 'call' && data?.input !== undefined ? { input: data.input } : {}),
+    ...(phase === 'result' ? { output: nonEmptyString(data?.output) ?? message.text } : {}),
+    ...(typeof data?.ok === 'boolean' ? { ok: data.ok } : {}),
     createdAt: message.createdAt
   };
 }
@@ -252,6 +261,16 @@ function monadEventObservations(id: string, record: Record<string, unknown>): Me
       source: 'monad-app-server',
       providerEventType: toolMessage.phase === 'call' ? 'tool.called' : 'tool.result',
       createdAt: toolMessage.createdAt,
+      tool: {
+        ...(toolMessage.toolName ? { name: toolMessage.toolName } : {}),
+        ...(toolMessage.toolCallId ? { callId: toolMessage.toolCallId } : {}),
+        ...(toolMessage.phase === 'call'
+          ? { ...(toolMessage.input === undefined ? {} : { input: toolMessage.input }), status: 'running' as const }
+          : {
+              output: toolMessage.output,
+              status: toolMessage.ok === false ? ('failed' as const) : ('completed' as const)
+            })
+      },
       raw: record
     });
   }
@@ -268,12 +287,18 @@ function monadEventObservations(id: string, record: Record<string, unknown>): Me
       ...common,
       id: `${id}:tool:${payload.toolCallId}:call`,
       role: 'tool',
-      text: `Tool call ${payload.tool}`
+      text: `Tool call ${payload.tool}`,
+      tool: { name: payload.tool, callId: payload.toolCallId, input: payload.input, status: 'running' }
     });
   }
   if (event.type === 'tool.progress') {
     const payload = toolProgressPayloadSchema.parse(event.payload);
-    return observation({ ...common, role: 'tool', text: payload.output });
+    return observation({
+      ...common,
+      role: 'tool',
+      text: payload.output,
+      tool: { name: payload.tool, callId: payload.toolCallId, status: 'running' }
+    });
   }
   if (event.type === 'tool.result') {
     const payload = toolResultPayloadSchema.parse(event.payload);
@@ -281,15 +306,21 @@ function monadEventObservations(id: string, record: Record<string, unknown>): Me
       ...common,
       id: `${id}:tool:${payload.toolCallId}:result`,
       role: 'tool',
-      text: payload.displayResult ?? payload.result
+      text: payload.displayResult ?? payload.result,
+      tool: {
+        name: payload.tool,
+        callId: payload.toolCallId,
+        output: payload.displayResult ?? payload.result,
+        status: payload.ok ? 'completed' : 'failed'
+      }
     });
   }
   if (event.type === 'session.run.completed') {
-    return observation({ ...common, role: 'system', text: 'Turn completed' });
+    return observation({ ...common, role: 'system', text: 'Turn completed', turnEndReason: 'completed' });
   }
   if (event.type === 'session.run.failed') {
     const payload = sessionRunFailedPayloadSchema.parse(event.payload);
-    return observation({ ...common, role: 'system', text: payload.error.message });
+    return observation({ ...common, role: 'system', text: payload.error.message, turnEndReason: 'error' });
   }
   return [];
 }
@@ -317,8 +348,27 @@ function reconcileToolObservations(events: MeshAgentObservationEvent[]): MeshAge
   });
 }
 
+// `tool.called` and `tool.result` are separate envelopes citing the same call; the tool-call id
+// carried in the payload is what pairs them across the live and history planes.
+function monadToolIdentity(event: MeshAgentObservationEvent): string | undefined {
+  if (
+    event.role !== 'tool' ||
+    (event.providerEventType !== 'tool.called' && event.providerEventType !== 'tool.result')
+  ) {
+    return undefined;
+  }
+  for (const rawEvent of event.provenance.rawEvents) {
+    const payload = recordValue(recordValue(recordValue(recordValue(rawEvent)?.params)?.event)?.payload);
+    const data = recordValue(recordValue(payload?.message)?.data);
+    const toolCallId = textValue(payload?.toolCallId, data?.toolCallId);
+    if (toolCallId) return `tool:${toolCallId}`;
+  }
+  return undefined;
+}
+
 export const monadObservationProjection = {
   identity: (event: MeshAgentObservationEvent) => event.id,
+  dedupeIdentity: monadToolIdentity,
   checkpoint: (event: MeshAgentObservationEvent) => event.id,
   eventEntries(entries) {
     const explicitToolEvents = new Set(

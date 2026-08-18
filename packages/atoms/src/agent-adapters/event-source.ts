@@ -32,49 +32,6 @@ function recordValue(value: unknown): Record<string, unknown> | undefined {
     : undefined;
 }
 
-function jsonRecordValue(value: unknown): Record<string, unknown> | undefined {
-  if (typeof value !== 'string') return recordValue(value);
-  try {
-    return recordValue(JSON.parse(value));
-  } catch {
-    return undefined;
-  }
-}
-
-function codexRequestIdentity(event: MeshAgentObservationEvent): string | undefined {
-  if (event.role !== 'tool') return undefined;
-  for (const rawEvent of event.provenance.rawEvents) {
-    const raw = recordValue(rawEvent);
-    const params = recordValue(raw?.params);
-    const item = recordValue(params?.item) ?? recordValue(raw?.item) ?? params ?? raw;
-    const input = jsonRecordValue(item?.arguments ?? item?.input ?? item?.args);
-    const requestId = input?.requestId ?? input?.request_id ?? input?.idempotencyKey ?? input?.idempotency_key;
-    if (typeof requestId === 'string' && requestId.trim().length > 0) return `request:${requestId.trim()}`;
-    if (typeof requestId === 'number') return `request:${requestId}`;
-  }
-  return undefined;
-}
-
-function monadToolIdentity(event: MeshAgentObservationEvent): string | undefined {
-  if (
-    event.role !== 'tool' ||
-    (event.providerEventType !== 'tool.called' && event.providerEventType !== 'tool.result')
-  ) {
-    return undefined;
-  }
-  for (const rawEvent of event.provenance.rawEvents) {
-    const raw = recordValue(rawEvent);
-    const params = recordValue(raw?.params);
-    const sourceEvent = recordValue(params?.event);
-    const payload = recordValue(sourceEvent?.payload);
-    const message = recordValue(payload?.message);
-    const data = recordValue(message?.data);
-    const toolCallId = payload?.toolCallId ?? data?.toolCallId;
-    if (typeof toolCallId === 'string' && toolCallId.trim().length > 0) return `tool:${toolCallId.trim()}`;
-  }
-  return undefined;
-}
-
 // A Codex rollout record carries no per-record id of its own, so the raw plane would have nothing
 // stable to key a row on. The turn it belongs to plus its position inside that turn is the only
 // identity the file itself exposes, and it stays stable across re-reads of the same rollout.
@@ -133,9 +90,7 @@ function eventDedupeKey(
   projection: MeshAgentObservationProjector,
   event: MeshAgentObservationEvent
 ): string {
-  const semanticIdentity =
-    projection.dedupeIdentity?.(event) ??
-    (provider === 'codex' ? codexRequestIdentity(event) : provider === 'monad' ? monadToolIdentity(event) : undefined);
+  const semanticIdentity = projection.dedupeIdentity?.(event);
   if (semanticIdentity) {
     const discriminator = [event.role, event.providerEventType]
       .filter((value): value is string => typeof value === 'string' && value.length > 0)

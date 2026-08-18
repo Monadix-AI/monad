@@ -254,7 +254,8 @@ export const hermesMeshAgentAdapter: MeshAgentProviderAdapter = {
         resume: preset.capabilities?.resume ?? 'pty',
         approval: preset.capabilities?.approval ?? 'provider-owned',
         approvalProxy: true,
-        settingsImport: true
+        settingsImport: true,
+        agentInstances: 'hosted'
       }
     };
   }

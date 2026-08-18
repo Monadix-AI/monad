@@ -38,3 +38,48 @@ test('plain-text output with no adapter projects to assistant-message', () => {
   expect(events.map((event) => event.kind)).toEqual(['assistant-message']);
   expect(events[0]?.text).toBe('just some text');
 });
+
+test('a failed codex turn ends with an error reason rather than a plain completion', () => {
+  const reasonFor = (turn: Record<string, unknown>) =>
+    meshAgentNeutralStreamItems({
+      id: 'c',
+      provider: 'codex',
+      output: JSON.stringify({ method: 'turn/completed', params: { turn } })
+    }).find((event) => event.kind === 'turn-end')?.reason;
+
+  expect([
+    reasonFor({ status: 'completed' }),
+    reasonFor({ status: 'failed', error: { message: 'sandbox denied the write' } }),
+    reasonFor({ status: 'interrupted' })
+  ]).toEqual(['completed', 'error', 'aborted']);
+});
+
+test('a codex command-output delta keeps the item id that pairs it with its call', () => {
+  const events = meshAgentNeutralStreamItems({
+    id: 'c',
+    provider: 'codex',
+    output: JSON.stringify({
+      method: 'item/commandExecution/outputDelta',
+      params: { threadId: 't1', turnId: 'u1', itemId: 'call_7', delta: 'compiling…' }
+    })
+  });
+
+  expect(events.map((event) => ({ kind: event.kind, callId: event.tool?.callId }))).toEqual([
+    { kind: 'tool-call', callId: 'call_7' }
+  ]);
+});
+
+test('a gemini tool result that reports no error settles as completed', () => {
+  const statusFor = (record: Record<string, unknown>) =>
+    meshAgentNeutralStreamItems({
+      id: 'g',
+      provider: 'gemini',
+      output: JSON.stringify({ type: 'tool_result', output: 'ok', ...record })
+    })[0]?.tool?.status;
+
+  expect([statusFor({ error: null }), statusFor({}), statusFor({ error: 'permission denied' })]).toEqual([
+    'completed',
+    'completed',
+    'failed'
+  ]);
+});

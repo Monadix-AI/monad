@@ -5,7 +5,8 @@ import {
   observation,
   providerEpochMsTimestamp,
   recordValue,
-  textValue
+  textValue,
+  turnEndReasonFromStopValue
 } from '../../observation-projection.ts';
 import {
   codexAppServerToolCallObservation,
@@ -188,6 +189,7 @@ function codexAppServerTurnEvents(
       source: 'codex-app-server',
       providerEventType: 'turn-end',
       createdAt: completedAt,
+      turnEndReason: turnEndReasonFromStopValue(recordValue(turnRecord.error) ? 'error' : undefined, turnRecord.status),
       raw: turnRecord
     })
   ];

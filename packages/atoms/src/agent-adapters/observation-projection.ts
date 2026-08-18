@@ -1,8 +1,11 @@
 import type {
   AgentObservationDiagnostic,
+  AgentObservationProgress,
   AgentObservationTool,
   AgentObservationToolCategory,
-  MeshAgentObservationEvent
+  AgentObservationTurnEndReason,
+  MeshAgentObservationEvent,
+  MeshAgentObservationTool
 } from '@monad/protocol';
 import type {
   MeshAgentObservationActivity,
@@ -114,27 +117,39 @@ export function observation(args: {
   hasContent?: boolean;
   summary?: string;
   createdAt?: string;
+  tool?: MeshAgentObservationTool;
+  progress?: AgentObservationProgress;
+  turnEndReason?: AgentObservationTurnEndReason;
   raw?: unknown;
   rawEvents?: unknown[];
   preserveWhitespace?: boolean;
 }): MeshAgentObservationEvent[] {
   const text = args.preserveWhitespace || args.role === 'tool' ? args.text : args.text?.trim();
   if (!text) return [];
-  const parsed = meshAgentObservationEventSchema.safeParse({
-    id: args.id,
-    projection: args.projection,
-    role: args.role,
-    text,
-    source: args.source,
-    providerEventType: args.providerEventType,
-    diagnostic: args.diagnostic,
-    durationMs: args.durationMs,
-    hasContent: args.hasContent,
-    summary: args.summary,
-    createdAt: args.createdAt,
-    provenance: { rawEvents: args.rawEvents ?? [args.raw] }
-  });
-  return parsed.success ? [parsed.data] : [];
+  const build = (tool: MeshAgentObservationTool | undefined) =>
+    meshAgentObservationEventSchema.safeParse({
+      id: args.id,
+      projection: args.projection,
+      role: args.role,
+      text,
+      source: args.source,
+      providerEventType: args.providerEventType,
+      diagnostic: args.diagnostic,
+      durationMs: args.durationMs,
+      hasContent: args.hasContent,
+      summary: args.summary,
+      createdAt: args.createdAt,
+      tool,
+      progress: args.progress,
+      turnEndReason: args.turnEndReason,
+      provenance: { rawEvents: args.rawEvents ?? [args.raw] }
+    });
+  const parsed = build(args.tool);
+  if (parsed.success) return [parsed.data];
+  // A provider value the tool schema rejects (a negative duration, a fractional exit code) must cost
+  // that field, never the event — dropping the event would leave its tool card waiting forever.
+  const withoutTool = args.tool === undefined ? undefined : build(undefined);
+  return withoutTool?.success ? [withoutTool.data] : [];
 }
 
 export function thinkingObservation(args: {
@@ -245,6 +260,43 @@ export function recordValue(value: unknown): Record<string, unknown> | undefined
   return value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : undefined;
 }
 
+/** Map a provider's stop/finish vocabulary to the neutral turn-end reason. The token set is shared
+ *  across providers (OpenAI, Anthropic and the CLIs built on them all name these the same way), so
+ *  adapters pass their own field here rather than each repeating the table. Unrecognized (and
+ *  absent) values mean the turn simply finished. */
+export function turnEndReasonFromStopValue(...values: unknown[]): AgentObservationTurnEndReason {
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
+    switch (value.trim().toLowerCase()) {
+      case 'error':
+      case 'failed':
+      case 'failure':
+        return 'error';
+      case 'aborted':
+      case 'cancelled':
+      case 'canceled':
+      case 'interrupted':
+        return 'aborted';
+      case 'max_tokens':
+      case 'length':
+        return 'length';
+      case 'content_filter':
+      case 'content-filter':
+        return 'content-filter';
+    }
+  }
+  return 'completed';
+}
+
+export function jsonRecordValue(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'string') return recordValue(value);
+  try {
+    return recordValue(JSON.parse(value));
+  } catch {
+    return undefined;
+  }
+}
+
 export function numberValue(...values: unknown[]): number | undefined {
   for (const value of values) {
     if (typeof value === 'number' && Number.isFinite(value)) return value;
@@ -313,6 +365,7 @@ export function permissionDenialEvents(
       text: detail ? `Permission blocked ${label}: ${detail}` : `Permission blocked ${label}`,
       source,
       providerEventType: 'permission_denial',
+      tool: { name: label, input, status: 'failed' },
       raw: denial
     });
   });
@@ -368,6 +421,11 @@ export function contentEvents(args: {
         source: args.source,
         providerEventType: args.providerEventType,
         createdAt: args.createdAt,
+        tool: {
+          name: tool,
+          ...(textValue(item.id) ? { callId: textValue(item.id) } : {}),
+          ...(input === undefined ? {} : { input })
+        },
         raw: args.raw
       });
     }
@@ -379,6 +437,10 @@ export function contentEvents(args: {
         source: args.source,
         providerEventType: args.providerEventType,
         createdAt: args.createdAt,
+        tool: {
+          ...(textValue(item.tool_use_id) ? { callId: textValue(item.tool_use_id) } : {}),
+          status: item.is_error === true ? 'failed' : 'completed'
+        },
         raw: args.raw
       });
     }

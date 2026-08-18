@@ -7,6 +7,8 @@ import type {
 
 import { z } from 'zod';
 
+import { anthropicTranscriptTool } from '../anthropic-transcript.ts';
+
 const looseRecordSchema = z.record(z.string(), z.unknown());
 
 import {
@@ -19,7 +21,8 @@ import {
   resultMarkerText,
   textValue,
   thinkingObservation,
-  toolCategoryByName
+  toolCategoryByName,
+  turnEndReasonFromStopValue
 } from '../observation-projection.ts';
 
 export type QwenObservationMessage = Record<string, unknown> & { type: string };
@@ -117,6 +120,11 @@ function qwenContentEvents(args: {
         text: `Tool call ${tool}${inputText}`,
         source: 'qwen-code-sdk',
         providerEventType: args.providerEventType,
+        tool: {
+          name: tool,
+          ...(textValue(item.id) ? { callId: textValue(item.id) } : {}),
+          ...(input === undefined ? {} : { input })
+        },
         raw: args.raw
       });
     }
@@ -127,6 +135,10 @@ function qwenContentEvents(args: {
         text: rawTextValue(item.content, item.output, item.result) ?? JSON.stringify(item.content ?? item),
         source: 'qwen-code-sdk',
         providerEventType: args.providerEventType,
+        tool: {
+          ...(textValue(item.tool_use_id) ? { callId: textValue(item.tool_use_id) } : {}),
+          status: item.is_error === true ? 'failed' : 'completed'
+        },
         raw: args.raw
       });
     }
@@ -149,6 +161,7 @@ export function qwenRecordEvents(
         text: qwenResultText(record),
         source: 'qwen-code-sdk',
         providerEventType: record.is_error && subtype ? subtype : 'result',
+        turnEndReason: record.is_error ? 'error' : turnEndReasonFromStopValue(subtype),
         raw: record
       }),
       ...permissionDenialEvents(
@@ -181,6 +194,11 @@ export function qwenRecordEvents(
       text: rawTextValue(record.output, record.result, record.content) ?? JSON.stringify(record),
       source: 'qwen-code-sdk',
       providerEventType: 'tool_result',
+      tool: {
+        ...(textValue(record.tool_use_id) ? { callId: textValue(record.tool_use_id) } : {}),
+        output: record.output ?? record.result ?? record.content,
+        status: record.is_error === true ? 'failed' : 'completed'
+      },
       raw: record
     });
   }
@@ -224,6 +242,10 @@ export function qwenRecordEvents(
             text: `Tool call ${textValue(b.name) ?? 'tool'}`,
             source: 'qwen-code-sdk',
             providerEventType: String(e.type),
+            tool: {
+              name: textValue(b.name) ?? 'tool',
+              ...(textValue(b.id) ? { callId: textValue(b.id) } : {})
+            },
             raw: record
           });
         }
@@ -253,6 +275,7 @@ export const qwenObservationProjection = {
   eventEntries: qwenHistoryEntries,
   classifyActivity: classifyObservationActivity,
   toolCategory: toolCategoryByName('shell', ['Bash', 'run_shell_command', 'shell']),
+  toolFields: anthropicTranscriptTool,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
     {

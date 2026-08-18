@@ -237,6 +237,7 @@ export function projectMemberCandidates(args: {
       autopilot: agent.capabilities?.autopilot === true,
       fastMode: agent.capabilities?.fastMode === true
     },
+    agentInstances: agent.capabilities?.agentInstances ?? 'spawned',
     providerIcon: agent.icon,
     icon: productIcon(agent.productIcon)
   }));

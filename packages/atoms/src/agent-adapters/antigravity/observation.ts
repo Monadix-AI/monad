@@ -1,7 +1,12 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type { MeshAgentObservationProjector } from '../observation-projection.ts';
 
-import { classifyObservationActivity, isStreamingObservationFragment, observation } from '../observation-projection.ts';
+import {
+  classifyObservationActivity,
+  isStreamingObservationFragment,
+  observation,
+  turnEndReasonFromStopValue
+} from '../observation-projection.ts';
 
 export function antigravityRecordEvents(
   id: string,
@@ -50,6 +55,7 @@ export function antigravityRecordEvents(
       text,
       source: 'antigravity-cli',
       providerEventType: 'result',
+      turnEndReason: turnEndReasonFromStopValue(result?.status),
       raw: record
     });
   }

@@ -2,18 +2,11 @@ import type {
   AgentObservationEvent,
   AgentObservationKind,
   AgentObservationTool,
-  AgentObservationTurnEndReason,
   MeshAgentObservationEvent
 } from '@monad/protocol';
 import type { MeshAgentObservationActivity, MeshAgentObservationProjector } from '@monad/sdk-atom';
 
-import {
-  classifyObservationActivity,
-  isStreamingObservationFragment,
-  recordValue,
-  textValue
-} from './observation-projection.ts';
-import { parseStreamingJson } from './partial-json.ts';
+import { classifyObservationActivity, isStreamingObservationFragment } from './observation-projection.ts';
 
 // Provider start markers. The legacy classifier folds these into `message`/`system` (it never modelled
 // turn-start), so the neutral decode detects them here to fill the `turn-start` kind.
@@ -43,217 +36,40 @@ function neutralKindFromActivity(activity: MeshAgentObservationActivity | undefi
   }
 }
 
-function turnEndReason(event: MeshAgentObservationEvent): AgentObservationTurnEndReason {
-  if (event.providerEventType === 'error' || event.providerEventType === 'server_error') return 'error';
-  const raw = recordValue(event.provenance.rawEvents[0]);
-  if (raw?.is_error === true) return 'error';
-  switch (textValue(raw?.subtype, raw?.stop_reason, recordValue(raw?.params)?.reason)) {
-    case 'error':
-      return 'error';
-    case 'aborted':
-    case 'cancelled':
-    case 'canceled':
-    case 'interrupted':
-      return 'aborted';
-    case 'max_tokens':
-    case 'length':
-      return 'length';
-    case 'content_filter':
-    case 'content-filter':
-      return 'content-filter';
-    default:
-      return 'completed';
-  }
+// Providers spell the in-flight state `in_progress`, `inProgress`, `in-progress`, … while consumers
+// compare against `running` exactly (see mesh-agent-presence / project-projection). Fold it here so
+// no adapter has to remember, and a provider status that already reads `running` passes through.
+function normalizedToolStatus(status: string | undefined): string | undefined {
+  return status?.replace(/[-_\s]/g, '').toLowerCase() === 'inprogress' ? 'running' : status;
 }
 
-/** A raw slice that IS the provider item (as history pages project it) rather than the JSON-RPC
- *  envelope wrapping one (as live notifications deliver it): its declared id sits at the top level. */
-function isBareProviderItem(raw: Record<string, unknown> | undefined): raw is Record<string, unknown> & { id: string } {
-  return typeof raw?.id === 'string' && typeof raw.type === 'string' && raw.method === undefined;
-}
-
-// Best-effort structured tool extraction across provider raw shapes. The adapter's record projector
-// already normalized the human `text`; here we surface the machine fields a neutral renderer needs.
-function neutralTool(event: MeshAgentObservationEvent, kind: 'tool-call' | 'tool-result'): AgentObservationTool {
-  const rawRecords = event.provenance.rawEvents
-    .map((value) => recordValue(value))
-    .filter((value): value is Record<string, unknown> => value !== undefined);
-  const raw = rawRecords[0];
-  const params = recordValue(raw?.params);
-  const sourceEvent = recordValue(params?.event);
-  const sourcePayload = recordValue(sourceEvent?.payload);
-  const sourceMessage = recordValue(sourcePayload?.message);
-  const sourceMessageData = recordValue(sourceMessage?.data);
-  const item = recordValue(params?.item) ?? recordValue(raw?.item) ?? rawRecords.find(isBareProviderItem);
-  const itemResult = recordValue(item?.result);
-  const content = rawRecords.flatMap((record) => {
-    const message = recordValue(record.message);
-    return Array.isArray(message?.content) ? message.content : Array.isArray(record.content) ? record.content : [];
-  });
-  const transcriptToolUse = content.findLast(
-    (part) =>
-      part && typeof part === 'object' && !Array.isArray(part) && (part as Record<string, unknown>).type === 'tool_use'
-  ) as Record<string, unknown> | undefined;
-  const toolResult = content.find(
-    (part) =>
-      part &&
-      typeof part === 'object' &&
-      !Array.isArray(part) &&
-      (part as Record<string, unknown>).type === 'tool_result'
-  ) as Record<string, unknown> | undefined;
-  const streamToolUse = rawRecords
-    .map((record) => recordValue(recordValue(record.event)?.content_block))
-    .find((block) => block?.type === 'tool_use');
-  const toolUse = transcriptToolUse ?? streamToolUse;
-  const partialInputJson = rawRecords
-    .map((record) => recordValue(recordValue(record.event)?.delta)?.partial_json)
-    .filter((value): value is string => typeof value === 'string')
-    .join('');
-  const partialInput = partialInputJson ? parseStreamingJson(partialInputJson) : undefined;
-  const declaredName = textValue(
-    toolUse?.name,
-    item?.tool,
-    item?.name,
-    raw?.name,
-    raw?.tool,
-    raw?.toolName,
-    raw?.tool_name,
-    params?.name,
-    params?.tool,
-    sourcePayload?.tool,
-    sourceMessageData?.toolName
-  );
-  const projectedName = projectedToolName(event.text);
-  const name =
-    (declaredName?.toLowerCase() === 'tool' ? undefined : declaredName) ??
-    textValue(
-      item?.type === 'commandExecution' ? item.type : undefined,
-      item?.type === 'command_execution' ? item.type : undefined,
-      item?.type === 'imageGeneration' ? item.type : undefined,
-      item?.type === 'fileChange' ? 'File change' : undefined
-    ) ??
-    projectedName ??
-    declaredName ??
-    'tool';
-  const callId = textValue(
-    toolUse?.id,
-    toolResult?.tool_use_id,
-    item?.id,
-    item?.callId,
-    item?.call_id,
-    raw?.callId,
-    raw?.toolCallId,
-    raw?.call_id,
-    raw?.tool_call_id,
-    raw?.tool_use_id,
-    // Both delivery windows must yield the same id, or a call read back from a history page won't
-    // pair with the result that arrived live.
-    isBareProviderItem(raw) ? raw.id : undefined,
-    params?.callId,
-    params?.call_id,
-    params?.itemId,
-    sourcePayload?.toolCallId,
-    sourceMessageData?.toolCallId
-  );
-  const sourceStatus =
-    sourceEvent?.type === 'tool.called'
-      ? 'running'
-      : sourceEvent?.type === 'tool.progress'
-        ? 'running'
-        : sourceEvent?.type === 'tool.result'
-          ? sourcePayload?.ok === false
-            ? 'failed'
-            : 'completed'
-          : sourceEvent?.type === 'session.message.created' && sourceMessage?.type === 'tool_call'
-            ? 'running'
-            : sourceEvent?.type === 'session.message.created' && sourceMessage?.type === 'tool_result'
-              ? sourceMessageData?.ok === false
-                ? 'failed'
-                : 'completed'
-              : undefined;
-  const lifecycleMethod = rawRecords.map((record) => textValue(record.method)).find((method) => method !== undefined);
-  const lifecycleStatus =
-    lifecycleMethod === 'item/started' ? 'running' : lifecycleMethod === 'item/completed' ? 'completed' : undefined;
-  const providerStatus = textValue(item?.status, raw?.status, params?.status, sourceStatus, lifecycleStatus);
-  const explicitStatus =
-    providerStatus?.replace(/[-_\s]/g, '').toLowerCase() === 'inprogress' ? 'running' : providerStatus;
-  const claudeResultStatus =
-    kind === 'tool-result' &&
-    (toolResult !== undefined || (event.source === 'claude-code-sdk' && raw?.type === 'tool_result'))
-      ? toolResult?.is_error === true || raw?.is_error === true
-        ? 'failed'
-        : 'completed'
-      : undefined;
-  const openClawResultStatus =
-    kind === 'tool-result' && typeof raw?.toolCallId === 'string'
-      ? raw.isError === true
-        ? 'failed'
-        : 'completed'
-      : undefined;
+// Every adapter normalizes its own tool vocabulary — at projection time on `event.tool`, or through
+// the projector's `toolFields` hook when a value only settles after streaming fragments merge. The
+// two remaining fallbacks here carry no provider knowledge: a name recovered from the adapter's own
+// rendered text, and the rendered text itself standing in for a result with no structured output.
+function neutralTool(
+  event: MeshAgentObservationEvent,
+  kind: 'tool-call' | 'tool-result',
+  projector?: Pick<MeshAgentObservationProjector, 'toolFields'>
+): AgentObservationTool {
+  const declared = { ...(projector?.toolFields?.(event, kind) ?? {}), ...(event.tool ?? {}) };
+  const declaredName = declared.name?.toLowerCase() === 'tool' ? undefined : declared.name;
+  const name = declaredName ?? projectedToolName(event.text) ?? declared.name ?? 'tool';
+  const status = normalizedToolStatus(declared.status);
   const metadata = {
-    ...(callId ? { callId } : {}),
-    ...(textValue(item?.cwd) ? { cwd: textValue(item?.cwd) } : {}),
-    ...((explicitStatus ?? claudeResultStatus ?? openClawResultStatus)
-      ? { status: explicitStatus ?? claudeResultStatus ?? openClawResultStatus }
-      : {}),
-    ...(typeof item?.exitCode === 'number'
-      ? { exitCode: item.exitCode }
-      : typeof item?.exit_code === 'number'
-        ? { exitCode: item.exit_code }
-        : {}),
-    ...(typeof item?.durationMs === 'number'
-      ? { durationMs: item.durationMs }
-      : typeof item?.duration_ms === 'number'
-        ? { durationMs: item.duration_ms }
-        : typeof itemResult?.durationMs === 'number'
-          ? { durationMs: itemResult.durationMs }
-          : typeof itemResult?.duration_ms === 'number'
-            ? { durationMs: itemResult.duration_ms }
-            : {})
+    ...(declared.callId ? { callId: declared.callId } : {}),
+    ...(declared.cwd ? { cwd: declared.cwd } : {}),
+    ...(status ? { status } : {}),
+    ...(declared.exitCode === undefined ? {} : { exitCode: declared.exitCode }),
+    ...(declared.durationMs === undefined ? {} : { durationMs: declared.durationMs })
   };
-  const input =
-    transcriptToolUse?.input ??
-    partialInput ??
-    streamToolUse?.input ??
-    item?.input ??
-    item?.arguments ??
-    item?.action ??
-    item?.command ??
-    item?.path ??
-    item?.revisedPrompt ??
-    raw?.input ??
-    raw?.args ??
-    raw?.arguments ??
-    params?.input ??
-    sourcePayload?.input ??
-    sourceMessageData?.input;
   if (kind === 'tool-call') {
-    return input === undefined ? { name, ...metadata } : { name, input, ...metadata };
+    return declared.input === undefined ? { name, ...metadata } : { name, input: declared.input, ...metadata };
   }
-  const imageOutput =
-    textValue(item?.type)?.toLowerCase() === 'imagegeneration'
-      ? textValue(item?.savedPath, item?.saved_path)
-      : undefined;
-  const output =
-    imageOutput ??
-    item?.aggregatedOutput ??
-    item?.aggregated_output ??
-    item?.output ??
-    item?.result ??
-    item?.results ??
-    raw?.output ??
-    raw?.result ??
-    raw?.content ??
-    params?.output ??
-    sourcePayload?.displayResult ??
-    sourcePayload?.result ??
-    sourcePayload?.output ??
-    sourceMessageData?.output ??
-    sourceMessageData?.result ??
-    event.text;
+  const output = declared.output ?? event.text;
   return {
     name,
-    ...(input === undefined ? {} : { input }),
+    ...(declared.input === undefined ? {} : { input: declared.input }),
     ...(output === undefined ? {} : { output }),
     ...metadata
   };
@@ -300,7 +116,10 @@ function startsToolPayload(value: string, cursor: number): boolean {
  */
 export function toAgentObservationEvent(
   event: MeshAgentObservationEvent,
-  projector?: Pick<MeshAgentObservationProjector, 'classifyActivity' | 'isStreamingFragment' | 'toolCategory'>
+  projector?: Pick<
+    MeshAgentObservationProjector,
+    'classifyActivity' | 'isStreamingFragment' | 'toolCategory' | 'toolFields'
+  >
 ): AgentObservationEvent | null {
   if (event.projection === 'unknown') {
     return {
@@ -309,6 +128,7 @@ export function toAgentObservationEvent(
       kind: 'unknown',
       streaming: false,
       text: event.text,
+      ...(event.progress ? { progress: event.progress } : {}),
       provenance: { contractEvents: [event] },
       ...(event.createdAt ? { at: event.createdAt } : {})
     };
@@ -334,17 +154,18 @@ export function toAgentObservationEvent(
   if (event.durationMs !== undefined) event_.durationMs = event.durationMs;
   if (event.hasContent !== undefined) event_.hasContent = event.hasContent;
   if (event.summary !== undefined) event_.summary = event.summary;
+  if (event.progress !== undefined) event_.progress = event.progress;
   if (event.createdAt !== undefined) event_.at = event.createdAt;
 
   if (kind === 'tool-call' || kind === 'tool-result') {
-    const tool = neutralTool(event, kind);
+    const tool = neutralTool(event, kind, projector);
     const category = projector?.toolCategory?.(event, tool);
     event_.tool = category ? { ...tool, category } : tool;
     if (event.text) event_.text = event.text;
     return event_;
   }
   if (kind === 'turn-end') {
-    event_.reason = turnEndReason(event);
+    event_.reason = event.turnEndReason ?? 'completed';
     // Some providers' terminal event carries the final assistant text (e.g. codex-exec `result`);
     // keep it so a turn-end that doubles as the last message doesn't drop its content.
     if (event.text) event_.text = event.text;

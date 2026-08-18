@@ -55,7 +55,10 @@ export const meshAgentCapabilitiesSchema = z.object({
   autopilot: z.boolean().optional(),
   fastMode: z.boolean().optional(),
   settingsImport: z.boolean().optional(),
-  approvalProxy: z.boolean().optional()
+  approvalProxy: z.boolean().optional(),
+  // `hosted` providers own long-lived agent instances an operator picks from; `spawned` providers
+  // create a fresh process per member. Absent means `spawned`.
+  agentInstances: z.enum(['hosted', 'spawned']).optional()
 });
 export type MeshAgentCapabilities = z.infer<typeof meshAgentCapabilitiesSchema>;
 
