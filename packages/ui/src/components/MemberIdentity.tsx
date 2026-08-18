@@ -2,7 +2,7 @@ import type { CSSProperties, ReactElement, ReactNode } from 'react';
 
 import { createElement } from 'react';
 
-import { AgentIdentity, AgentInstanceAvatar } from './AgentAvatar';
+import { AgentAvatar, AgentIdentity } from './AgentAvatar';
 
 export function agentProviderTag(provider: string | undefined): string {
   if (provider === 'codex') return 'Codex';
@@ -24,7 +24,6 @@ export interface MemberIdentityProps {
   avatarSize?: number;
   badge?: ReactNode;
   badgeGap?: number;
-  bordered?: boolean;
   className?: string;
   nameStyle?: CSSProperties;
 }
@@ -34,7 +33,6 @@ export function MemberIdentity({
   avatarSize = 28,
   badge,
   badgeGap,
-  bordered = false,
   className,
   nameStyle
 }: MemberIdentityProps): ReactElement {
@@ -44,7 +42,7 @@ export function MemberIdentity({
       className,
       style: { alignItems: 'center', display: 'inline-flex', gap: 8, maxWidth: '100%', minWidth: 0 }
     },
-    createElement(AgentInstanceAvatar, { agent, bordered, size: avatarSize }),
+    createElement(AgentAvatar, { agent, size: avatarSize }),
     createElement(AgentIdentity, {
       badge,
       badgeGap,

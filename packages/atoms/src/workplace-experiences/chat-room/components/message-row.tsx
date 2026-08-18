@@ -14,13 +14,7 @@ import {
   showsChannelOrigin,
   WorkspaceMessageCard
 } from '@monad/ui';
-import {
-  AgentIdentity,
-  AgentInstanceAvatar,
-  Avatar,
-  TagChip,
-  uiFontFamily as uiFont
-} from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, AgentIdentity, Avatar, TagChip, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { type Components, Markdown } from '@monad/ui/components/Markdown';
 import { MentionCapsule, MentionText, parseMentionTokens } from '@monad/ui/components/MentionText';
 import { memo, useMemo } from 'react';
@@ -475,13 +469,12 @@ export const MessageRow = memo(function MessageRow({
   const canReply = Boolean(msg.replyable && !msg.streaming && !msg.localStatus && onReply);
   const sentFrom = messageSentFrom(msg, channelIcons, labels);
   const avatar = agent ? (
-    <AgentInstanceAvatar
+    <AgentAvatar
       agent={{
         av: identity?.av ?? msg.av,
         avatarUrl: identity?.avatarUrl ?? msg.avatarUrl,
         name: identity?.name ?? msg.authorName
       }}
-      bordered={false}
       size={34}
     />
   ) : (

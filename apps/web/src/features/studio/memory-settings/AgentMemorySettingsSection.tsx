@@ -2,7 +2,7 @@ import type { Agent, AgentId, AgentMemorySettings } from '@monad/protocol';
 
 import { agentSelectors, useGetAppearanceQuery, useListAgentsQuery, useUpdateAgentMutation } from '@monad/client-rtk';
 import { Badge, Input, Skeleton } from '@monad/ui';
-import { AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar } from '@monad/ui/components/AgentAvatar';
 import { useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -98,7 +98,7 @@ export function AgentMemorySettingsSection() {
                 className="flex flex-wrap items-center gap-4 p-4"
                 key={agent.id}
               >
-                <AgentInstanceAvatar
+                <AgentAvatar
                   agent={agentCardAvatar(agent, appearance?.avatarStyle)}
                   size={36}
                 />

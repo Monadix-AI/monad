@@ -11,7 +11,7 @@ import {
   useListAgentsQuery
 } from '@monad/client-rtk';
 import { Badge, Button, Confirm, Skeleton, Textarea } from '@monad/ui';
-import { AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar } from '@monad/ui/components/AgentAvatar';
 import { useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -244,7 +244,7 @@ export function AgentsPanel({ onClose, subpath = [] }: StudioSectionProps) {
                   type="button"
                 />
                 <span className="pointer-events-none relative flex min-w-0 flex-1 items-center gap-3 px-1.5 py-1.5">
-                  <AgentInstanceAvatar
+                  <AgentAvatar
                     agent={agentCardAvatar(a, appearance?.avatarStyle)}
                     size={40}
                   />

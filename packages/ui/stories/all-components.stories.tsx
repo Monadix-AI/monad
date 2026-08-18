@@ -102,9 +102,8 @@ import {
   UnifiedComposer
 } from '../src';
 import {
+  AgentAvatar,
   AgentIdentity,
-  AgentInstanceAvatar,
-  Avatar,
   MiniTag,
   PresenceBadge,
   PresenceDot,
@@ -453,12 +452,8 @@ export const AgentIdentityComponents: Story = {
     <div className={frameClassName}>
       <div className="grid max-w-xl gap-4">
         <div className="flex items-center gap-3">
-          <Avatar
-            av="AI"
-            icon="codex"
-            kind="agent"
-          />
-          <AgentInstanceAvatar agent={{ icon: 'claude-code', name: 'Claude Code' }} />
+          <AgentAvatar agent={{ av: 'AI', icon: 'codex', name: 'Codex' }} />
+          <AgentAvatar agent={{ icon: 'claude-code', name: 'Claude Code' }} />
           <ProductIcon
             product="gemini"
             size={28}

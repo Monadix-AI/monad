@@ -10,7 +10,7 @@ import {
   DialogHeader,
   DialogTitle
 } from '@monad/ui';
-import { Avatar, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useRef } from 'react';
 
 import { acquireGlobalKeyboardInput } from '#/lib/global-keyboard-input-capture';
@@ -86,7 +86,7 @@ export function CliTerminalModal({
   subtitle: string;
   eyebrow?: string;
   tag?: string;
-  icon?: ComponentProps<typeof Avatar>['icon'];
+  icon?: ComponentProps<typeof AgentAvatar>['agent']['icon'];
   avatarText?: string;
   status: CliTerminalModalStatus;
   output: string;
@@ -135,10 +135,8 @@ export function CliTerminalModal({
       >
         <DialogHeader className="gap-2 px-5 pt-5 pr-5 pb-4">
           <div className="flex min-w-0 items-center gap-3">
-            <Avatar
-              av={title.slice(0, 2).toUpperCase()}
-              icon={icon}
-              kind="agent"
+            <AgentAvatar
+              agent={{ av: title.slice(0, 2).toUpperCase(), icon, name: title }}
               size={30}
             />
             <div className="min-w-0 flex-1">

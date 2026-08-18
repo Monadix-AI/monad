@@ -13,8 +13,8 @@ import {
 import { entityAvatarUrl, meshAgentProjectMemberAvatarSeed } from '@monad/protocol';
 import { Confirm } from '@monad/ui';
 import {
+  AgentAvatar,
   AgentIdentity,
-  AgentInstanceAvatar,
   workspaceBoxRadius as boxR,
   workspaceSectionLabelStyle as sectionLabel,
   uiFontFamily as uiFont
@@ -67,7 +67,13 @@ export function sessionProjectMemberDisplayName(args: {
   fallbackName: string;
   template?: ProjectMember;
 }): string {
-  return args.template?.displayName ?? args.candidate?.label ?? args.fallbackName;
+  const profileName = args.template?.name ?? args.candidate?.name;
+  return (
+    args.template?.displayName ??
+    (profileName && args.fallbackName !== profileName ? args.fallbackName : undefined) ??
+    args.candidate?.label ??
+    args.fallbackName
+  );
 }
 
 export function shouldDeferSessionMemberRoster(args: {
@@ -104,9 +110,8 @@ function MemberRow({
         borderTop: index === 0 ? 'none' : `1px solid ${'var(--border)'}`
       }}
     >
-      <AgentInstanceAvatar
+      <AgentAvatar
         agent={avatar}
-        bare
         size={30}
       />
       <div style={{ minWidth: 0 }}>
@@ -293,9 +298,8 @@ export function SessionMembersSection({
                         borderTop: index === 0 ? 'none' : `1px solid ${'var(--border)'}`
                       }}
                     >
-                      <AgentInstanceAvatar
+                      <AgentAvatar
                         agent={avatar}
-                        bare
                         size={30}
                       />
                       <div style={{ minWidth: 0 }}>

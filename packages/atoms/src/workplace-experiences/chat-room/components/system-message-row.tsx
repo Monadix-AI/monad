@@ -6,7 +6,7 @@ import type { MessageRowLabels } from './message-row.tsx';
 import { InformationCircleIcon, Mail01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { Tooltip, TooltipContent, TooltipTrigger, WorkspaceSystemEventCard } from '@monad/ui';
-import { AgentInstanceAvatar, TagChip, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, TagChip, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 import { MemberIdentity } from '@monad/ui/components/MemberIdentity';
 
 import { AgentProviderBadge } from '../../components/agent-provider-badge.tsx';
@@ -125,7 +125,6 @@ export function SystemMessageRow({
               avatarSize={22}
               badge={actorIdentity?.providerIcon ? <AgentProviderBadge icon={actorIdentity.providerIcon} /> : undefined}
               badgeGap={4}
-              bordered={false}
               nameStyle={{ maxWidth: 210, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
             />
           </button>
@@ -168,7 +167,6 @@ export function SystemMessageRow({
                         ) : undefined
                       }
                       badgeGap={3}
-                      bordered={false}
                       className="mx-0.5 align-middle font-semibold text-foreground"
                       key={`${part}-${agent.id}`}
                       nameStyle={{ maxWidth: 160, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
@@ -242,14 +240,13 @@ export function SystemMessageRow({
             {msg.fanoutAgents.map((agent) => {
               const identity = resolveAgentIdentity?.({ id: agent.id, name: agent.name });
               return (
-                <AgentInstanceAvatar
+                <AgentAvatar
                   agent={{
                     ...agent,
                     av: identity?.av,
                     avatarUrl: identity?.avatarUrl ?? agent.avatarUrl,
                     name: identity?.name ?? (agent.name === agent.id ? (agent.tag ?? '') : agent.name)
                   }}
-                  bordered={false}
                   key={agent.id}
                   size={20}
                 />

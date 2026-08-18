@@ -2,7 +2,7 @@ import type { MonadMcpMessage } from './monad-mcp-projection.ts';
 
 import { entityAvatarUrl } from '@monad/protocol';
 import { formatMessageTimestamp } from '@monad/ui';
-import { AgentIdentity, Avatar } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, AgentIdentity, Avatar } from '@monad/ui/components/AgentAvatar';
 
 import { AgentProviderBadge } from '../../../components/agent-provider-badge.tsx';
 import { avatarForAgent } from '../../../experience/project-projection.ts';
@@ -44,13 +44,24 @@ export function MonadMcpMessageList({
             data-slot="monad-mcp-message"
             key={message.id}
           >
-            <Avatar
-              av={identity?.av ?? (agent ? avatarForAgent(resolvedName) : resolvedName.slice(0, 2).toUpperCase())}
-              avatarUrl={identity?.avatarUrl ?? entityAvatarUrl(`${agent ? 'mesh-agent' : 'user'}:${resolvedName}`)}
-              bordered={false}
-              kind={agent ? 'agent' : 'human'}
-              size={28}
-            />
+            {agent ? (
+              <AgentAvatar
+                agent={{
+                  av: identity?.av ?? avatarForAgent(resolvedName),
+                  avatarUrl: identity?.avatarUrl ?? entityAvatarUrl(`mesh-agent:${resolvedName}`),
+                  name: resolvedName
+                }}
+                size={28}
+              />
+            ) : (
+              <Avatar
+                av={identity?.av ?? resolvedName.slice(0, 2).toUpperCase()}
+                avatarUrl={identity?.avatarUrl ?? entityAvatarUrl(`user:${resolvedName}`)}
+                bordered={false}
+                kind="human"
+                size={28}
+              />
+            )}
             <div className="min-w-0">
               <header
                 className="flex min-w-0 items-center gap-2"

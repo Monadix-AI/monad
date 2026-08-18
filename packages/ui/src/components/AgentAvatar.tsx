@@ -121,10 +121,8 @@ export function Avatar({
   return createElement('div', { style }, child);
 }
 
-export function AgentInstanceAvatar({
+export function AgentAvatar({
   agent,
-  bare,
-  bordered,
   size = 34
 }: {
   agent: {
@@ -133,15 +131,12 @@ export function AgentInstanceAvatar({
     icon?: AgentAvatarIcon;
     name: string;
   };
-  bare?: boolean;
-  bordered?: boolean;
   size?: number;
 }): React.ReactElement {
   return createElement(Avatar, {
     av: agent.av ?? agent.name.slice(0, 2).toUpperCase(),
     avatarUrl: agent.avatarUrl,
-    bare,
-    bordered,
+    bordered: false,
     icon: agent.icon,
     kind: 'agent',
     size

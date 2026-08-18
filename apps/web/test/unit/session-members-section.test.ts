@@ -84,6 +84,22 @@ test('Monad project members resolve their configured agent name instead of their
   ).toBe('Default Dev Agent');
 });
 
+test('a joined member keeps the configured preview identity and project-scoped avatar', () => {
+  const projectId = 'prj_100000000000';
+  const displayName = sessionProjectMemberDisplayName({
+    candidate: { label: 'Hermes', name: 'hermes' } as never,
+    fallbackName: 'Hermes reviewer'
+  });
+
+  expect({
+    displayName,
+    avatarUrl: sessionMemberAvatar({ avatarStyle: 'bottts', displayName, projectId }).avatarUrl
+  }).toEqual({
+    displayName: 'Hermes reviewer',
+    avatarUrl: entityAvatarUrl(meshAgentProjectMemberAvatarSeed(projectId, 'Hermes reviewer'), 'bottts')
+  });
+});
+
 test('a newly selected session defers its roster until data for that session arrives', () => {
   const activeSessionId = 'ses_new000000000' as never;
 

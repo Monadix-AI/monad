@@ -2,7 +2,7 @@ import type { WorkplaceExperienceAgentIdentityResolver } from '@monad/sdk-experi
 import type { Participant, QuestionView } from '../../../experience/types.ts';
 
 import { ComposerAskSheet } from '@monad/ui';
-import { AgentIdentity, AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, AgentIdentity } from '@monad/ui/components/AgentAvatar';
 
 import { AgentProviderBadge } from '../../../components/agent-provider-badge.tsx';
 import { workplaceExperienceT } from '../../../i18n.ts';
@@ -43,7 +43,7 @@ export function QuestionStack({
       askedLabel={t('web.workplace.askedQuestion')}
       asker={
         <>
-          <AgentInstanceAvatar
+          <AgentAvatar
             agent={displayAgent}
             size={24}
           />

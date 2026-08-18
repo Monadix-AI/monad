@@ -1,6 +1,6 @@
 import { entityAvatarUrl } from '@monad/protocol';
 import { cn } from '@monad/ui';
-import { AgentIdentity, Avatar } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, AgentIdentity } from '@monad/ui/components/AgentAvatar';
 
 import { AgentProviderBadge } from '../../../components/agent-provider-badge.tsx';
 import { avatarForAgent } from '../../../experience/project-projection.ts';
@@ -30,11 +30,12 @@ export function MonadMcpAgentIdentity({
       className={cn('inline-flex min-w-0 items-center gap-2.5', className)}
       data-slot="monad-mcp-agent-identity"
     >
-      <Avatar
-        av={identity?.av ?? av ?? avatarForAgent(resolvedName)}
-        avatarUrl={identity?.avatarUrl ?? avatarUrl ?? entityAvatarUrl(`mesh-agent:${agentName ?? name}`)}
-        bordered={false}
-        kind="agent"
+      <AgentAvatar
+        agent={{
+          av: identity?.av ?? av ?? avatarForAgent(resolvedName),
+          avatarUrl: identity?.avatarUrl ?? avatarUrl ?? entityAvatarUrl(`mesh-agent:${agentName ?? name}`),
+          name: resolvedName
+        }}
         size={size}
       />
       <AgentIdentity

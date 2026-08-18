@@ -1,10 +1,6 @@
 import type { TypingIndicator } from '../../experience/types.ts';
 
-import {
-  AgentInstanceAvatar,
-  workspaceBoxRadius as boxR,
-  uiFontFamily as uiFont
-} from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, workspaceBoxRadius as boxR, uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
 
 const SKELETON_CSS = `
 @keyframes chat-transcript-skeleton-pulse {
@@ -29,9 +25,8 @@ const SKELETON_CSS = `
 export function TypingRow({ typing }: { typing: TypingIndicator }): React.ReactElement {
   return (
     <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-      <AgentInstanceAvatar
+      <AgentAvatar
         agent={{ av: typing.av, avatarUrl: typing.avatarUrl, icon: typing.icon, name: typing.name }}
-        bordered={false}
         size={34}
       />
       <div style={{ display: 'flex', alignItems: 'center', gap: 9 }}>

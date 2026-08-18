@@ -17,7 +17,7 @@ import {
   PopoverTrigger
 } from '@monad/ui';
 import {
-  AgentInstanceAvatar,
+  AgentAvatar,
   workspaceSectionLabelStyle as sectionLabel,
   uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
@@ -116,7 +116,7 @@ export function MeshAgentMemberDialog({
       >
         <DialogHeader>
           <div className="cli-dialog-dense__header">
-            <AgentInstanceAvatar
+            <AgentAvatar
               agent={{
                 ...invite.candidate,
                 avatarUrl: entityAvatarUrl(

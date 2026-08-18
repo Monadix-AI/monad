@@ -4,7 +4,7 @@ import { Edit02Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetAgentQuery, useGetAppearanceQuery } from '@monad/client-rtk';
 import { Badge, Button, Skeleton } from '@monad/ui';
-import { AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar } from '@monad/ui/components/AgentAvatar';
 
 import { useT } from '#/components/I18nProvider';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
@@ -90,7 +90,7 @@ export function AgentDetails({ agentId, subpath }: { agentId: AgentId; subpath: 
       <PanelShellBody className="overflow-y-auto">
         <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-5">
           <section className="flex flex-wrap items-center gap-4 rounded-2xl border bg-card p-5">
-            <AgentInstanceAvatar
+            <AgentAvatar
               agent={agentCardAvatar(agent, appearance?.avatarStyle)}
               size={56}
             />

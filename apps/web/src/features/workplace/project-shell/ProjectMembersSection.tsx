@@ -6,8 +6,8 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { entityAvatarUrl, workplaceProjectMemberAvatarSeed } from '@monad/protocol';
 import { Confirm } from '@monad/ui';
 import {
+  AgentAvatar,
   AgentIdentity,
-  AgentInstanceAvatar,
   workspaceBoxRadius as boxR,
   uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
@@ -226,7 +226,7 @@ function ProjectMemberRow({
       }}
     >
       <div style={{ position: 'relative', flex: 'none' }}>
-        <AgentInstanceAvatar
+        <AgentAvatar
           agent={agent}
           size={30}
         />

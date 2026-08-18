@@ -20,7 +20,7 @@ import {
   DropdownMenuTrigger,
   Skeleton
 } from '@monad/ui';
-import { AgentIdentity, AgentInstanceAvatar } from '@monad/ui/components/AgentAvatar';
+import { AgentAvatar, AgentIdentity } from '@monad/ui/components/AgentAvatar';
 
 import { BrandIcon } from '#/components/BrandIcon';
 import { useT } from '#/components/I18nProvider';
@@ -97,13 +97,12 @@ function SessionMemberRoster({ room }: { room: ProjectController }): React.React
                   className="grid min-w-0 grid-cols-[28px_minmax(0,1fr)] items-center gap-2.5 rounded-md px-2 py-2"
                   key={member.id}
                 >
-                  <AgentInstanceAvatar
+                  <AgentAvatar
                     agent={{
                       av: identity?.av,
                       avatarUrl: identity?.avatarUrl,
                       name
                     }}
-                    bare
                     size={28}
                   />
                   <AgentIdentity

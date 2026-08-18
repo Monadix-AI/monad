@@ -15,8 +15,8 @@ import {
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import {
+  AgentAvatar,
   AgentIdentity,
-  AgentInstanceAvatar,
   agentPresenceColor as presenceColor,
   uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
@@ -412,9 +412,8 @@ export function MeshAgentObservationPanel({
           className="workplace-observation-avatar"
           data-active={active ? 'true' : undefined}
         >
-          <AgentInstanceAvatar
+          <AgentAvatar
             agent={displayAgent}
-            bordered={active}
             size={30}
           />
         </span>

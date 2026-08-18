@@ -29,8 +29,8 @@ import {
 } from '@monad/sdk-experience/react';
 import { type OrbState, ThinkingOrb, Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui';
 import {
+  AgentAvatar,
   AgentIdentity,
-  AgentInstanceAvatar,
   agentPresenceColor as presenceColor,
   uiFontFamily as uiFont
 } from '@monad/ui/components/AgentAvatar';
@@ -977,9 +977,8 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
           data-presence={displayAgent.presence}
         >
           <span className="workplace-agent-status-core">
-            <AgentInstanceAvatar
+            <AgentAvatar
               agent={displayAgent}
-              bordered={active}
               size={42}
             />
             {fastMode ? (
