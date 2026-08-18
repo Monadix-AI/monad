@@ -24,7 +24,7 @@ export function FileReadCard({
   const content = fileReadDisplayContent(view.content, view.provider);
   return (
     <CodeBlock
-      className="**:data-[slot=scroll-shadow]:scrollbar-none rounded-md border border-border/80 bg-background text-[11px] **:data-[slot=scroll-shadow]:max-h-72 [&_[data-slot=scroll-shadow]::-webkit-scrollbar]:hidden [&_pre]:px-3 [&_pre]:py-2.5"
+      className="**:data-[slot=scroll-shadow]:scrollbar-none rounded-md border border-border/80 bg-background text-[11px] [--code-block-inline-padding:0.75rem] **:data-[slot=scroll-shadow]:max-h-72 [&_[data-slot=scroll-shadow]::-webkit-scrollbar]:hidden [&_pre]:py-2.5"
       code={content.code}
       copyLabel={copyCodeLabel}
       copyOverlayClassName="opacity-0 transition-opacity group-focus-within/code-block-content:opacity-100 group-hover/code-block-content:opacity-100"

@@ -139,6 +139,7 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
 });
 
 test('Claude Read cards separate tab-delimited provider line numbers from highlighted source', async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 720 });
   await page.goto(`${HARNESS}?mode=tool&provider=claude-code`);
 
   const fileCard = page.locator('[data-slot="observation-tool-card"]').filter({ hasText: 'ObservationCard.tsx' });
@@ -151,6 +152,16 @@ test('Claude Read cards separate tab-delimited provider line numbers from highli
   await expect(firstGutter).toHaveText('11');
   await expect(firstSource).toHaveText('export const observationLine1 = 1;');
   await expect(codeBlock).not.toContainText('Provider metadata outside the file body.');
+
+  const scrollViewport = codeBlock.locator('[data-slot="scroll-shadow"]');
+  await expect.poll(() => scrollViewport.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  const initialGutterLeft = await firstGutter.evaluate((element) => Math.round(element.getBoundingClientRect().left));
+  await scrollViewport.evaluate((element) => {
+    element.scrollLeft = 40;
+  });
+  await expect
+    .poll(() => firstGutter.evaluate((element) => Math.round(element.getBoundingClientRect().left)))
+    .toBe(initialGutterLeft);
 });
 
 type FixtureExpectation = {

@@ -83,7 +83,7 @@ const LineSpan = ({
     <>
       <span
         aria-hidden="true"
-        className="sticky left-0 z-10 box-content w-[var(--code-block-line-number-width)] select-none bg-background pr-5 text-right font-code text-muted-foreground/50 tabular-nums"
+        className="sticky left-0 z-10 box-content w-[var(--code-block-line-number-width)] select-none bg-background pr-5 pl-[var(--code-block-inline-padding)] text-right font-code text-muted-foreground/50 tabular-nums"
         data-slot={providerLineNumber ? 'code-block-line-number' : undefined}
       >
         {lineNumber}
@@ -247,7 +247,11 @@ const CodeBlockBody = memo(
 
     return (
       <pre
-        className={cn('m-0 px-2 py-2.5 text-sm dark:bg-(--shiki-dark-bg)! dark:text-(--shiki-dark)!', className)}
+        className={cn(
+          'm-0 py-2.5 text-sm dark:bg-(--shiki-dark-bg)! dark:text-(--shiki-dark)!',
+          hasLineNumbers ? 'pr-[var(--code-block-inline-padding)]' : 'px-[var(--code-block-inline-padding)]',
+          className
+        )}
         data-selectable="true"
         style={preStyle}
       >
@@ -290,7 +294,10 @@ const CodeBlockContainer = ({
   // whenever it sits outside the viewport, so every pass across a card re-runs
   // placeholder→content→placeholder — the reader sees each transition as a flicker and a jump.
   <div
-    className={cn('group relative w-full overflow-hidden rounded-md border bg-background text-foreground', className)}
+    className={cn(
+      'group relative w-full overflow-hidden rounded-md border bg-background text-foreground [--code-block-inline-padding:0.5rem]',
+      className
+    )}
     data-language={language}
     style={style}
     {...props}
