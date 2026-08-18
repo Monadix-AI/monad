@@ -152,6 +152,7 @@ export class MeshAgentObservationResolver {
   ) {
     let page = { events: [] } as ReturnType<typeof projector.advance>;
     for (const row of rows) {
+      if (row.stream === 'stderr') continue;
       try {
         page = projector.advance(row.payload, row.observedAt);
       } catch (error) {

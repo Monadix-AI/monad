@@ -309,13 +309,16 @@ export function meshAgentStreamItems(args: {
   if (!text) return [];
   const structured = meshAgentObservationEvents(args);
   if (structured) return structured;
+  const hasStructuredAdapter = observationAdapter(args)?.observation !== undefined;
   return text
     .split(/\n{2,}/)
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part, index) => ({
       id: `${args.id}:${index}`,
-      role: part.startsWith('tool:') ? ('tool' as const) : ('agent' as const),
+      ...(hasStructuredAdapter
+        ? { projection: 'unknown' as const, role: 'system' as const }
+        : { role: part.startsWith('tool:') ? ('tool' as const) : ('agent' as const) }),
       text: part,
       source: 'plain-text' as const,
       ...(args.observedAt ? { createdAt: args.observedAt } : {}),

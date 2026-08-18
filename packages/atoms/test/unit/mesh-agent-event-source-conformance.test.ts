@@ -6,6 +6,7 @@ import { codexObservationProjection } from '../../src/agent-adapters/codex/obser
 import { createOutputEventSource, createProjectedEventSource } from '../../src/agent-adapters/event-source.ts';
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import { observation } from '../../src/agent-adapters/observation-projection.ts';
+import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 
 const projection: MeshAgentObservationProjector = {
   recordProjectors: [
@@ -171,6 +172,29 @@ test('projected event source preserves unrecognized provider records as unknown 
       provenance: { rawEvents: [raw] }
     }
   ]);
+});
+
+test('every built-in adapter keeps unstructured process output out of the assistant transcript', () => {
+  expect(
+    builtinAgentAdapters.map((adapter) => ({
+      provider: adapter.provider,
+      source: adapter.events
+        ?.projectLive({ id: 'live', output: 'gateway startup warning\n' })
+        .events.map(({ projection, role, text }) => ({ projection, role, text })),
+      replay: meshAgentNeutralStreamItems({
+        id: 'live',
+        provider: adapter.provider,
+        adapter,
+        output: 'gateway startup warning\n'
+      }).map(({ kind, text }) => ({ kind, text }))
+    }))
+  ).toEqual(
+    builtinAgentAdapters.map((adapter) => ({
+      provider: adapter.provider,
+      source: [{ projection: 'unknown', role: 'system', text: 'gateway startup warning' }],
+      replay: [{ kind: 'unknown', text: 'gateway startup warning' }]
+    }))
+  );
 });
 
 test('projected event source passes event cursors through without interpreting them', async () => {

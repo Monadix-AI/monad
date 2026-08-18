@@ -37,7 +37,10 @@ const adapter = {
 beforeAll(() => registerAgentAdapterImpl(adapter));
 afterAll(() => unregisterAgentAdapterImpl('event-pages-fixture' as never));
 
-function pagesWithLiveRows(rows: Array<{ seq: number; payload: string }>, nextBefore?: number) {
+function pagesWithLiveRows(
+  rows: Array<{ seq: number; payload: string; stream?: 'stdout' | 'stderr' }>,
+  nextBefore?: number
+) {
   const live = {
     id: 'mesh_pages',
     provider: 'event-pages-fixture',
@@ -49,7 +52,11 @@ function pagesWithLiveRows(rows: Array<{ seq: number; payload: string }>, nextBe
       page: ({ before }: { before?: number }) => ({
         rows: rows
           .filter((row) => (before === undefined ? true : row.seq < before))
-          .map((row) => ({ ...row, stream: 'stdout' as const, observedAt: '2026-07-18T01:00:00.000Z' })),
+          .map((row) => ({
+            ...row,
+            stream: row.stream ?? ('stdout' as const),
+            observedAt: '2026-07-18T01:00:00.000Z'
+          })),
         ...(nextBefore !== undefined ? { nextBefore } : {})
       }),
       cursorBefore: (seq: number) => `live:oep_pages:${seq}`
@@ -68,21 +75,22 @@ test('an earlier convenience page projects into its own id namespace so it prepe
   const pages = pagesWithLiveRows(
     [
       { seq: 1, payload: 'older-a\n' },
-      { seq: 2, payload: 'older-b\n' }
+      { seq: 2, payload: 'older-b\n' },
+      { seq: 3, stream: 'stderr', payload: 'startup warning\n' }
     ],
     1
   );
 
   const page = await pages.convenienceEventsPage('mesh_pages', {
     limit: 20,
-    before: 'live:oep_pages:3'
+    before: 'live:oep_pages:4'
   });
   const frame = page.frames[0];
   const ids =
     frame?.kind === 'patch' ? frame.operations.map((op) => (op.op === 'upsert' ? op.event.id : op.eventId)) : [];
 
   expect({ ids, nextCursor: page.nextCursor }).toEqual({
-    ids: ['mesh_pages@oep_pages:3:json:0:message', 'mesh_pages@oep_pages:3:json:1:message'],
+    ids: ['mesh_pages@oep_pages:4:json:0:message', 'mesh_pages@oep_pages:4:json:1:message'],
     nextCursor: 'live:oep_pages:1'
   });
 });

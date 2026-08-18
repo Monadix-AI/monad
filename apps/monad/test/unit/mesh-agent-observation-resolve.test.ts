@@ -14,7 +14,7 @@ const adapter = {
 
 function resolverWithRows(
   page: (request: { after?: number; before?: number; limit: number; maxBytes?: number; sortDirection: string }) => {
-    rows: Array<{ seq: number; stream: 'stdout'; payload: string; observedAt: string }>;
+    rows: Array<{ seq: number; stream: 'stdout' | 'stderr'; payload: string; observedAt: string }>;
     nextBefore?: number;
   }
 ) {
@@ -192,7 +192,10 @@ test('convenience ready anchors before its separately delivered bootstrap patch'
 });
 
 test('convenience projection advances one retained projector with only newly committed rows', () => {
-  const rows = [{ seq: 1, stream: 'stdout' as const, payload: 'one\n', observedAt: '2026-07-18T01:00:01.000Z' }];
+  const rows = [
+    { seq: 1, stream: 'stdout' as const, payload: 'one\n', observedAt: '2026-07-18T01:00:01.000Z' },
+    { seq: 2, stream: 'stderr' as const, payload: 'warning\n', observedAt: '2026-07-18T01:00:02.000Z' }
+  ];
   const advances: Array<[string, string | undefined]> = [];
   let creations = 0;
   const { live, resolver } = resolverWithRows((request) => {
@@ -233,8 +236,8 @@ test('convenience projection advances one retained projector with only newly com
   } as unknown as MeshAgentProviderAdapter;
 
   const first = resolver.observeConvenience('mesh_observe');
-  rows.push({ seq: 2, stream: 'stdout', payload: 'two\n', observedAt: '2026-07-18T01:00:02.000Z' });
-  const second = resolver.observeConvenience('mesh_observe', 1);
+  rows.push({ seq: 3, stream: 'stdout', payload: 'two\n', observedAt: '2026-07-18T01:00:03.000Z' });
+  const second = resolver.observeConvenience('mesh_observe', 2);
 
   expect({
     creations,
@@ -248,14 +251,14 @@ test('convenience projection advances one retained projector with only newly com
     creations: 1,
     advances: [
       ['one\n', '2026-07-18T01:00:01.000Z'],
-      ['two\n', '2026-07-18T01:00:02.000Z']
+      ['two\n', '2026-07-18T01:00:03.000Z']
     ],
-    firstCursor: 'live:oep_observe:1',
+    firstCursor: 'live:oep_observe:2',
     second: [
-      { kind: 'ready', observationEpoch: 'oep_observe', cursor: 'live:oep_observe:1' },
+      { kind: 'ready', observationEpoch: 'oep_observe', cursor: 'live:oep_observe:2' },
       {
         kind: 'patch',
-        cursor: 'live:oep_observe:2',
+        cursor: 'live:oep_observe:3',
         operations: [
           {
             op: 'upsert',

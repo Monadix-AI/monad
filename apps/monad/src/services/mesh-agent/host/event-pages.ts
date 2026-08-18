@@ -256,14 +256,17 @@ export class MeshAgentEventPages {
       });
       let projection: MeshAgentProjectionPage = { events: [] };
       if (projector) {
-        for (const row of page.rows) projection = projector.advance(row.payload, row.observedAt);
+        for (const row of page.rows) {
+          if (row.stream === 'stdout') projection = projector.advance(row.payload, row.observedAt);
+        }
       } else {
-        const output = page.rows.map((row) => row.payload).join('');
+        const stdout = page.rows.filter((row) => row.stream === 'stdout');
+        const output = stdout.map((row) => row.payload).join('');
         projection = live.adapter.events.projectLive({
           id: livePageProjectionId(id, beforePosition.observationEpoch, beforePosition.seq),
           output,
           mode: 'events',
-          ...(page.rows.at(-1)?.observedAt ? { observedAt: page.rows.at(-1)?.observedAt } : {})
+          ...(stdout.at(-1)?.observedAt ? { observedAt: stdout.at(-1)?.observedAt } : {})
         });
       }
       return {

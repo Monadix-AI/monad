@@ -222,8 +222,8 @@ function plainTextEvents(
     .map((text, index) => {
       const event: MeshAgentObservationEvent = {
         id: `${id}:${index}`,
-        projection: 'normalized',
-        role: text.startsWith('tool:') ? 'tool' : 'agent',
+        projection: 'unknown',
+        role: 'system',
         text,
         source: 'plain-text',
         ...(observedAt ? { createdAt: observedAt } : {}),
