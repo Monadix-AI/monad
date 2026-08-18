@@ -23,12 +23,13 @@ import {
   useSetStartupMutation,
   useStartSystemUpgradeMutation
 } from '@monad/client-rtk';
-import { Badge, Button, Progress, ScrollArea, Separator, Skeleton } from '@monad/ui';
+import { Badge, Button, Progress, Skeleton } from '@monad/ui';
 import { isUpgradeAvailable } from '@monad/utils/release-version';
 import { useEffect, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { MonadLoading } from '#/components/MonadLoading';
+import { ContentColumn, ContentScrollArea } from '#/components/ui/content-column';
 import { SwitchSetting } from '#/components/ui/switch-setting';
 import { resolveConnection, watchDaemonRestartAndReload, watchUpgradeRestartAndReload } from '#/lib/monad-store';
 import { SystemLogSettings } from './SystemLogSettings';
@@ -136,112 +137,112 @@ export function SystemSettings() {
   }
 
   return (
-    <ScrollArea className="h-full">
-      <div className="flex min-h-full flex-col">
-        <div className="flex flex-col gap-6 p-6">
+    <ContentScrollArea className="h-full">
+      <div className="flex min-h-full min-w-0 flex-col">
+        <ContentColumn>
           {/* Version & upgrade */}
           <section className="flex flex-col gap-3">
             <h3 className="font-semibold text-sm">{t('web.settings.system.version')}</h3>
-            <div className="flex items-center gap-3">
-              {isLoading && !health ? (
-                <>
-                  <Skeleton className="h-5 w-24 rounded" />
-                  <Skeleton className="h-5 w-20 rounded-full" />
-                </>
-              ) : (
-                <>
-                  <span className="font-ui text-sm">{version}</span>
-                  {hasUpgrade ? (
-                    <Badge
-                      className="gap-1 text-xs"
-                      variant="outline"
-                    >
-                      <HugeiconsIcon
-                        className="size-3"
-                        icon={SquareArrowUp01Icon}
-                      />
-                      {t('web.settings.system.updateAvailable', { version: upgradeVersion ?? '' })}
-                    </Badge>
-                  ) : (
-                    <Badge
-                      className="gap-1 text-xs"
-                      variant="secondary"
-                    >
-                      <HugeiconsIcon
-                        className="size-3"
-                        icon={CheckIcon}
-                      />
-                      {t('web.settings.system.upToDate')}
-                    </Badge>
-                  )}
-                </>
-              )}
-            </div>
-            {hasUpgrade && (
-              <div className="flex flex-col gap-2 rounded-md border px-3 py-2.5">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex min-w-0 flex-col gap-0.5">
-                    <span className="text-sm">{t('web.settings.system.updateTitle')}</span>
-                    <span className="text-muted-foreground text-xs">
-                      {t('web.settings.system.updateDesc', { version: upgradeVersion ?? '' })}
-                    </span>
-                  </div>
-                  <Button
-                    className="gap-1.5"
-                    disabled={isStartingUpgrade || upgradeActive}
-                    onClick={handleUpgrade}
-                    size="sm"
-                    variant="default"
-                  >
-                    {isStartingUpgrade || upgradeActive ? (
-                      <HugeiconsIcon
-                        className="size-3.5 animate-spin"
-                        icon={LoaderPinwheelIcon}
-                      />
-                    ) : (
-                      <HugeiconsIcon
-                        className="size-3.5"
-                        icon={SquareArrowUp01Icon}
-                      />
-                    )}
-                    {t('web.settings.system.updateButton')}
-                  </Button>
-                </div>
-                {upgradeStage !== 'idle' ? (
-                  <div className="flex flex-col gap-1.5 text-xs">
-                    <div className="flex items-center gap-2">
-                      {upgradeActive ? (
+            <div className="grouped-list">
+              <div className="grouped-list-row flex min-h-12 items-center gap-3">
+                {isLoading && !health ? (
+                  <>
+                    <Skeleton className="h-5 w-24 rounded" />
+                    <Skeleton className="h-5 w-20 rounded-full" />
+                  </>
+                ) : (
+                  <>
+                    <span className="font-ui text-sm">{version}</span>
+                    {hasUpgrade ? (
+                      <Badge
+                        className="gap-1 text-xs"
+                        variant="outline"
+                      >
                         <HugeiconsIcon
-                          className="size-3.5 animate-spin text-muted-foreground"
+                          className="size-3"
+                          icon={SquareArrowUp01Icon}
+                        />
+                        {t('web.settings.system.updateAvailable', { version: upgradeVersion ?? '' })}
+                      </Badge>
+                    ) : (
+                      <Badge
+                        className="gap-1 text-xs"
+                        variant="secondary"
+                      >
+                        <HugeiconsIcon
+                          className="size-3"
+                          icon={CheckIcon}
+                        />
+                        {t('web.settings.system.upToDate')}
+                      </Badge>
+                    )}
+                  </>
+                )}
+              </div>
+              {hasUpgrade && (
+                <div className="grouped-list-row flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-3">
+                    <div className="flex min-w-0 flex-col gap-0.5">
+                      <span className="text-sm">{t('web.settings.system.updateTitle')}</span>
+                      <span className="text-muted-foreground text-xs">
+                        {t('web.settings.system.updateDesc', { version: upgradeVersion ?? '' })}
+                      </span>
+                    </div>
+                    <Button
+                      className="gap-1.5"
+                      disabled={isStartingUpgrade || upgradeActive}
+                      onClick={handleUpgrade}
+                      size="sm"
+                      variant="default"
+                    >
+                      {isStartingUpgrade || upgradeActive ? (
+                        <HugeiconsIcon
+                          className="size-3.5 animate-spin"
                           icon={LoaderPinwheelIcon}
                         />
-                      ) : null}
-                      <span className={upgradeStage === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>
-                        {upgradeStatus?.error ?? upgradeStageLabel(t, upgradeStage)}
-                      </span>
-                      {upgradeStatus?.downloadedBytes != null ? (
-                        <span className="ml-auto text-muted-foreground tabular-nums">
-                          {formatUpgradeTransfer(
-                            upgradeStatus.downloadedBytes,
-                            upgradeStatus.totalBytes,
-                            upgradeStatus.bytesPerSecond
-                          )}
+                      ) : (
+                        <HugeiconsIcon
+                          className="size-3.5"
+                          icon={SquareArrowUp01Icon}
+                        />
+                      )}
+                      {t('web.settings.system.updateButton')}
+                    </Button>
+                  </div>
+                  {upgradeStage !== 'idle' ? (
+                    <div className="flex flex-col gap-1.5 text-xs">
+                      <div className="flex items-center gap-2">
+                        {upgradeActive ? (
+                          <HugeiconsIcon
+                            className="size-3.5 animate-spin text-muted-foreground"
+                            icon={LoaderPinwheelIcon}
+                          />
+                        ) : null}
+                        <span className={upgradeStage === 'failed' ? 'text-destructive' : 'text-muted-foreground'}>
+                          {upgradeStatus?.error ?? upgradeStageLabel(t, upgradeStage)}
                         </span>
+                        {upgradeStatus?.downloadedBytes != null ? (
+                          <span className="ml-auto text-muted-foreground tabular-nums">
+                            {formatUpgradeTransfer(
+                              upgradeStatus.downloadedBytes,
+                              upgradeStatus.totalBytes,
+                              upgradeStatus.bytesPerSecond
+                            )}
+                          </span>
+                        ) : null}
+                      </div>
+                      {upgradeActive && upgradeStatus ? (
+                        <Progress
+                          aria-label={upgradeStageLabel(t, upgradeStage)}
+                          value={upgradeStatus.progress}
+                        />
                       ) : null}
                     </div>
-                    {upgradeActive && upgradeStatus ? (
-                      <Progress
-                        aria-label={upgradeStageLabel(t, upgradeStage)}
-                        value={upgradeStatus.progress}
-                      />
-                    ) : null}
-                  </div>
-                ) : null}
-              </div>
-            )}
+                  ) : null}
+                </div>
+              )}
+            </div>
           </section>
-
-          <Separator />
 
           <SystemLogSettings
             developer={developer}
@@ -250,72 +251,70 @@ export function SystemSettings() {
             onRetry={() => void refetchDeveloper()}
           />
 
-          <Separator />
-
           <section className="flex flex-col gap-3">
             <h3 className="font-semibold text-sm">{t('web.settings.system.developer')}</h3>
-            <SwitchSetting
-              checked={developer?.developerMode === true}
-              className="rounded-md border px-3 py-2.5"
-              description={
-                <>
-                  <span>{t('web.settings.system.developerModeDesc')}</span>
-                  {developer?.logsDir ? (
-                    <code className="mt-1 block truncate rounded bg-muted px-1.5 py-0.5 font-code text-[11px]">
-                      {developer.logsDir}
-                    </code>
-                  ) : null}
-                </>
-              }
-              disabled={isSavingDeveloper}
-              icon={<HugeiconsIcon icon={FileCodeIcon} />}
-              onCheckedChange={handleDeveloperMode}
-              title={t('web.settings.system.developerMode')}
-            />
+            <div className="grouped-list">
+              <SwitchSetting
+                checked={developer?.developerMode === true}
+                className="px-4 py-3.5"
+                description={
+                  <>
+                    <span>{t('web.settings.system.developerModeDesc')}</span>
+                    {developer?.logsDir ? (
+                      <code className="mt-1 block truncate rounded bg-muted px-1.5 py-0.5 font-code text-[11px]">
+                        {developer.logsDir}
+                      </code>
+                    ) : null}
+                  </>
+                }
+                disabled={isSavingDeveloper}
+                icon={<HugeiconsIcon icon={FileCodeIcon} />}
+                onCheckedChange={handleDeveloperMode}
+                title={t('web.settings.system.developerMode')}
+              />
+            </div>
           </section>
-
-          <Separator />
 
           <section className="flex flex-col gap-3">
             <h3 className="font-semibold text-sm">{t('web.settings.system.startup')}</h3>
-            <SwitchSetting
-              checked={startup?.enabled === true}
-              className="rounded-md border px-3 py-2.5"
-              controlBefore={
-                <Button
-                  aria-label={t('web.settings.system.openStartupSettings')}
-                  className="size-7 text-muted-foreground"
-                  disabled={isOpeningStartupSettings || startup?.supported === false}
-                  onClick={() => void openStartupSettings()}
-                  size="icon"
-                  title={t('web.settings.system.openStartupSettings')}
-                  variant="ghost"
-                >
-                  <HugeiconsIcon icon={ArrowUpRight01Icon} />
-                </Button>
-              }
-              description={
-                startup?.supported === false
-                  ? t('web.settings.system.launchAtLoginUnsupported')
-                  : t('web.settings.system.launchAtLoginDesc')
-              }
-              disabled={isSavingStartup || startup?.supported === false}
-              icon={<HugeiconsIcon icon={PowerIcon} />}
-              onCheckedChange={handleStartup}
-              title={t('web.settings.system.launchAtLogin')}
-            />
+            <div className="grouped-list">
+              <SwitchSetting
+                checked={startup?.enabled === true}
+                className="px-4 py-3.5"
+                controlBefore={
+                  <Button
+                    aria-label={t('web.settings.system.openStartupSettings')}
+                    className="size-7 text-muted-foreground"
+                    disabled={isOpeningStartupSettings || startup?.supported === false}
+                    onClick={() => void openStartupSettings()}
+                    size="icon"
+                    title={t('web.settings.system.openStartupSettings')}
+                    variant="ghost"
+                  >
+                    <HugeiconsIcon icon={ArrowUpRight01Icon} />
+                  </Button>
+                }
+                description={
+                  startup?.supported === false
+                    ? t('web.settings.system.launchAtLoginUnsupported')
+                    : t('web.settings.system.launchAtLoginDesc')
+                }
+                disabled={isSavingStartup || startup?.supported === false}
+                icon={<HugeiconsIcon icon={PowerIcon} />}
+                onCheckedChange={handleStartup}
+                title={t('web.settings.system.launchAtLogin')}
+              />
+            </div>
           </section>
-
-          <Separator />
 
           {/* Danger zone */}
           <section className="flex flex-col gap-3">
             <h3 className="font-semibold text-sm">{t('web.settings.system.reset')}</h3>
             <p className="text-muted-foreground text-xs">{t('web.settings.system.resetDesc')}</p>
 
-            <div className="flex flex-col gap-2">
+            <div className="grouped-list">
               {/* Reset usage */}
-              <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+              <div className="grouped-list-row flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm">{t('web.settings.system.resetUsage')}</span>
                   <span className="text-muted-foreground text-xs">{t('web.settings.system.resetUsageDesc')}</span>
@@ -353,7 +352,7 @@ export function SystemSettings() {
               </div>
 
               {/* Clear all sessions */}
-              <div className="flex items-center justify-between rounded-md border px-3 py-2.5">
+              <div className="grouped-list-row flex items-center justify-between gap-4">
                 <div className="flex flex-col gap-0.5">
                   <span className="text-sm">{t('web.settings.system.clearSessions')}</span>
                   <span className="text-muted-foreground text-xs">
@@ -393,7 +392,7 @@ export function SystemSettings() {
               </div>
 
               {/* CLI-only operations notice */}
-              <div className="flex items-start gap-2 rounded-md border border-dashed px-3 py-2.5 text-muted-foreground">
+              <div className="grouped-list-row flex items-start gap-2 text-muted-foreground">
                 <HugeiconsIcon
                   className="mt-0.5 size-3.5 shrink-0"
                   icon={Alert01Icon}
@@ -402,9 +401,9 @@ export function SystemSettings() {
               </div>
             </div>
           </section>
-        </div>
+        </ContentColumn>
       </div>
-    </ScrollArea>
+    </ContentScrollArea>
   );
 }
 

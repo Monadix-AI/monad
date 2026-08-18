@@ -12,6 +12,7 @@ import { Button } from '@monad/ui';
 import { useMemo } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { ContentColumn } from '#/components/ui/content-column';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
@@ -50,55 +51,59 @@ export function ApprovalsSettings(_props: Props) {
     <PanelShell>
       <StudioBreadcrumbHeader title={t('web.settings.approvals')} />
 
-      <PanelShellBody className="flex flex-col gap-4 px-6 py-6">
-        <div className="flex items-center justify-between gap-4">
-          <p className="text-muted-foreground text-sm">{t('web.approvals.desc')}</p>
-          {rules.length > 0 && (
-            <Button
-              disabled={clearing}
-              onClick={() => void clearAll({})}
-              size="sm"
-              variant="outline"
-            >
-              <HugeiconsIcon
-                className="size-4"
-                icon={Delete02Icon}
-              />{' '}
-              {t('web.approvals.clearAll')}
-            </Button>
-          )}
-        </div>
-
-        {isResolvedEmptyList({ isLoading, itemCount: rules.length }) ? (
-          <p className="text-muted-foreground text-sm">{t('web.approvals.empty')}</p>
-        ) : (
-          <div className="flex flex-col gap-1">
-            {rules.map((r) => (
-              <div
-                className="flex items-center justify-between gap-3 rounded-md border px-3 py-2"
-                key={r.id}
+      <PanelShellBody className="overflow-y-auto px-4 py-6 sm:px-6">
+        <ContentColumn className="gap-5 px-0 py-0">
+          <div className="flex items-center justify-between gap-4">
+            <p className="text-muted-foreground text-sm">{t('web.approvals.desc')}</p>
+            {rules.length > 0 && (
+              <Button
+                disabled={clearing}
+                onClick={() => void clearAll({})}
+                size="sm"
+                variant="outline"
               >
-                <div className="flex min-w-0 items-center gap-2 text-sm">
-                  <span className={r.decision === 'deny' ? 'font-medium text-destructive' : 'font-medium text-success'}>
-                    {r.decision}
-                  </span>
-                  <code className="truncate font-code">{approvalRuleLabel(r, t)}</code>
-                  <span className="text-muted-foreground text-xs">
-                    {r.scope === 'agent' ? `agent:${r.agentId ?? '?'}` : r.scope}
-                  </span>
-                </div>
-                <Button
-                  disabled={revoking}
-                  onClick={() => void revoke({ id: r.id })}
-                  size="sm"
-                  variant="ghost"
-                >
-                  {t('web.approvals.revoke')}
-                </Button>
-              </div>
-            ))}
+                <HugeiconsIcon
+                  className="size-4"
+                  icon={Delete02Icon}
+                />{' '}
+                {t('web.approvals.clearAll')}
+              </Button>
+            )}
           </div>
-        )}
+
+          {isResolvedEmptyList({ isLoading, itemCount: rules.length }) ? (
+            <p className="text-muted-foreground text-sm">{t('web.approvals.empty')}</p>
+          ) : (
+            <div className="grouped-list">
+              {rules.map((r) => (
+                <div
+                  className="grouped-list-row flex items-center justify-between gap-3"
+                  key={r.id}
+                >
+                  <div className="flex min-w-0 items-center gap-2 text-sm">
+                    <span
+                      className={r.decision === 'deny' ? 'font-medium text-destructive' : 'font-medium text-success'}
+                    >
+                      {r.decision}
+                    </span>
+                    <code className="truncate font-code">{approvalRuleLabel(r, t)}</code>
+                    <span className="text-muted-foreground text-xs">
+                      {r.scope === 'agent' ? `agent:${r.agentId ?? '?'}` : r.scope}
+                    </span>
+                  </div>
+                  <Button
+                    disabled={revoking}
+                    onClick={() => void revoke({ id: r.id })}
+                    size="sm"
+                    variant="ghost"
+                  >
+                    {t('web.approvals.revoke')}
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
+        </ContentColumn>
       </PanelShellBody>
     </PanelShell>
   );

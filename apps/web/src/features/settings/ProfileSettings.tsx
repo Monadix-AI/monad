@@ -22,6 +22,7 @@ import Cropper from 'react-easy-crop';
 import 'react-easy-crop/react-easy-crop.css';
 
 import { useT } from '#/components/I18nProvider';
+import { ContentColumn } from '#/components/ui/content-column';
 
 const MAX_AVATAR_BYTES = 512 * 1024;
 const AVATAR_ACCEPT = 'image/png,image/jpeg,image/webp,image/gif';
@@ -32,13 +33,30 @@ function ProfileSettingsSkeleton() {
   return (
     <div
       aria-busy="true"
-      className="flex min-h-full flex-1 items-center justify-center overflow-y-auto px-4 py-8 sm:px-6"
+      className="min-h-full flex-1 overflow-y-auto px-4 py-6 sm:px-6"
     >
-      <section className="flex w-full max-w-md flex-col items-center rounded-xl border border-border/70 bg-card p-7 text-center">
-        <Skeleton className="size-32 rounded-full" />
-        <Skeleton className="mt-6 h-7 w-48 rounded-md" />
-        <Skeleton className="mt-3 h-4 w-28 rounded" />
-      </section>
+      <ContentColumn className="gap-3 py-0">
+        <Skeleton className="h-4 w-80 max-w-full rounded" />
+        <section className="mt-5 flex flex-col gap-3">
+          <Skeleton className="h-4 w-28 rounded" />
+          <div className="grouped-list">
+            <div className="grouped-list-row flex items-center justify-between gap-4">
+              <span className="grid gap-2">
+                <Skeleton className="h-4 w-24 rounded" />
+                <Skeleton className="h-3 w-56 max-w-full rounded" />
+              </span>
+              <Skeleton className="size-20 rounded-full" />
+            </div>
+            <div className="grouped-list-row flex items-center justify-between gap-4">
+              <span className="grid gap-2">
+                <Skeleton className="h-4 w-24 rounded" />
+                <Skeleton className="h-3 w-64 max-w-full rounded" />
+              </span>
+              <Skeleton className="h-9 w-64 rounded-md" />
+            </div>
+          </div>
+        </section>
+      </ContentColumn>
     </div>
   );
 }
@@ -181,13 +199,8 @@ export function ProfileSettings() {
       {isLoading && !data ? (
         <ProfileSettingsSkeleton />
       ) : (
-        <div className="flex min-h-full flex-1 items-center justify-center overflow-y-auto px-4 py-8 sm:px-6">
-          <section className="relative flex w-full max-w-md flex-col items-center overflow-hidden rounded-xl border border-border/70 bg-card px-6 py-8 text-center shadow-[0_10px_28px_-24px_rgba(15,23,42,0.5)] sm:px-8">
-            <div
-              aria-hidden="true"
-              className="pointer-events-none absolute inset-x-0 top-0 h-28 bg-[radial-gradient(circle_at_50%_0%,color-mix(in_srgb,var(--accent)_22%,transparent),transparent_58%)]"
-            />
-
+        <div className="min-h-full flex-1 overflow-y-auto px-4 py-6 sm:px-6">
+          <ContentColumn className="px-0 py-0">
             <input
               accept={AVATAR_ACCEPT}
               className="hidden"
@@ -195,106 +208,123 @@ export function ProfileSettings() {
               ref={inputRef}
               type="file"
             />
+            <p className="text-muted-foreground text-sm">{t('web.settings.profileDesc')}</p>
 
-            <button
-              aria-label={t('web.settings.profile.avatarEdit')}
-              className="group relative z-10 flex size-32 items-center justify-center rounded-full border border-border/70 bg-muted p-1 outline-none transition-[border-color,box-shadow,transform] duration-150 hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 active:scale-[0.99]"
-              disabled={isLoading || isSaving}
-              onClick={() => inputRef.current?.click()}
-              type="button"
-            >
-              <span className="relative size-full overflow-hidden rounded-full bg-background">
-                <span
-                  aria-hidden="true"
-                  className="absolute inset-0 bg-center bg-cover"
-                  style={{ backgroundImage: `url(${avatarUrl})` }}
-                />
-                <span className="absolute inset-x-0 bottom-0 flex translate-y-full items-center justify-center gap-1 bg-background px-2 py-2 font-medium text-[11px] text-foreground transition-transform duration-150 group-hover:translate-y-0 group-focus-visible:translate-y-0 [@media_(hover:none),(pointer:coarse)]:translate-y-0">
-                  <HugeiconsIcon
-                    aria-hidden
-                    className="size-3.5"
-                    icon={PencilEdit02Icon}
-                  />
-                  {t('web.settings.profile.avatarEditShort')}
-                </span>
-              </span>
-            </button>
+            <section className="flex flex-col gap-3">
+              <h3 className="font-semibold text-sm">{t('web.settings.profile.identityHint')}</h3>
+              <div className="grouped-list">
+                <div className="grouped-list-row grid gap-4 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-center">
+                  <div className="min-w-0">
+                    <h4 className="font-medium text-sm">{t('web.settings.profile.avatar')}</h4>
+                    <p className="mt-0.5 text-muted-foreground text-xs">{t('web.settings.profile.avatarHelp')}</p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    {avatarDataUrl ? (
+                      <Button
+                        aria-label={t('web.settings.profile.avatarRemove')}
+                        disabled={isLoading || isSaving}
+                        onClick={() => void removeAvatar()}
+                        size="icon"
+                        variant="ghost"
+                      >
+                        <HugeiconsIcon
+                          aria-hidden
+                          className="size-4"
+                          icon={Delete02Icon}
+                        />
+                      </Button>
+                    ) : null}
+                    <button
+                      aria-label={t('web.settings.profile.avatarEdit')}
+                      className="group relative flex size-20 items-center justify-center rounded-full border border-border/70 bg-muted p-1 outline-none transition-[border-color,box-shadow,transform] duration-150 hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30 active:scale-[0.99]"
+                      disabled={isLoading || isSaving}
+                      onClick={() => inputRef.current?.click()}
+                      type="button"
+                    >
+                      <span className="relative size-full overflow-hidden rounded-full bg-background">
+                        <span
+                          aria-hidden="true"
+                          className="absolute inset-0 bg-center bg-cover"
+                          style={{ backgroundImage: `url(${avatarUrl})` }}
+                        />
+                        <span className="absolute inset-x-0 bottom-0 flex translate-y-full items-center justify-center gap-1 bg-background/90 px-2 py-1.5 font-medium text-[11px] text-foreground transition-transform duration-150 group-hover:translate-y-0 group-focus-visible:translate-y-0 [@media_(hover:none),(pointer:coarse)]:translate-y-0">
+                          <HugeiconsIcon
+                            aria-hidden
+                            className="size-3.5"
+                            icon={PencilEdit02Icon}
+                          />
+                          {t('web.settings.profile.avatarEditShort')}
+                        </span>
+                      </span>
+                    </button>
+                  </div>
+                </div>
 
-            <div className="relative z-10 mt-6 flex min-h-10 w-full items-center justify-center">
-              {editingName ? (
-                <Input
-                  aria-invalid={Boolean(error)}
-                  aria-label={t('web.settings.profile.displayName')}
-                  className="h-10 max-w-72 text-center font-semibold text-lg"
-                  maxLength={DISPLAY_NAME_MAX_LENGTH}
-                  onBlur={() => {
-                    setEditingName(false);
-                    if (!trimmedName && data) setDisplayName(data.displayName);
-                  }}
-                  onChange={(event) => setDisplayName(event.currentTarget.value)}
-                  onKeyDown={(event) => {
-                    if (event.key === 'Enter') event.currentTarget.blur();
-                    if (event.key === 'Escape' && data) {
-                      setDisplayName(data.displayName);
-                      event.currentTarget.blur();
-                    }
-                  }}
-                  ref={nameInputRef}
-                  value={displayName}
-                />
-              ) : (
-                <button
-                  className="max-w-full truncate rounded-xs px-1 font-semibold text-2xl leading-8 underline-offset-4 outline-none transition-[color,text-decoration-color,box-shadow] duration-150 hover:underline focus-visible:ring-[3px] focus-visible:ring-ring/30"
-                  onClick={() => setEditingName(true)}
-                  type="button"
-                >
-                  {previewName}
-                </button>
-              )}
-            </div>
+                <div className="grouped-list-row grid gap-4 sm:grid-cols-[minmax(0,1fr)_18rem] sm:items-center">
+                  <div className="min-w-0">
+                    <h4 className="font-medium text-sm">{t('web.settings.profile.displayName')}</h4>
+                    <p className="mt-0.5 text-muted-foreground text-xs">{t('web.settings.profile.displayNameHelp')}</p>
+                  </div>
+                  <div className="min-w-0">
+                    {editingName ? (
+                      <Input
+                        aria-invalid={Boolean(error)}
+                        aria-label={t('web.settings.profile.displayName')}
+                        className="h-9 w-full"
+                        maxLength={DISPLAY_NAME_MAX_LENGTH}
+                        onBlur={() => {
+                          setEditingName(false);
+                          if (!trimmedName && data) setDisplayName(data.displayName);
+                        }}
+                        onChange={(event) => setDisplayName(event.currentTarget.value)}
+                        onKeyDown={(event) => {
+                          if (event.key === 'Enter') event.currentTarget.blur();
+                          if (event.key === 'Escape' && data) {
+                            setDisplayName(data.displayName);
+                            event.currentTarget.blur();
+                          }
+                        }}
+                        ref={nameInputRef}
+                        value={displayName}
+                      />
+                    ) : (
+                      <button
+                        className="h-9 w-full truncate rounded-md border bg-background px-3 text-left text-sm outline-none transition-[border-color,box-shadow] duration-150 hover:border-ring focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/30"
+                        onClick={() => setEditingName(true)}
+                        type="button"
+                      >
+                        {previewName}
+                      </button>
+                    )}
+                    <div className="mt-1.5 flex h-4 items-center justify-end gap-1.5 text-muted-foreground text-xs">
+                      {isSaving || saveState === 'saving' ? (
+                        <>
+                          <HugeiconsIcon
+                            aria-hidden
+                            className="size-3.5 animate-spin"
+                            icon={LoaderPinwheelIcon}
+                          />
+                          {t('web.settings.profile.saving')}
+                        </>
+                      ) : (
+                        t('web.settings.profile.saved')
+                      )}
+                    </div>
+                  </div>
+                </div>
 
-            <div className="relative z-10 mt-2 flex h-5 items-center justify-center gap-1.5 text-muted-foreground text-xs">
-              {isSaving || saveState === 'saving' ? (
-                <>
-                  <HugeiconsIcon
-                    aria-hidden
-                    className="size-3.5 animate-spin"
-                    icon={LoaderPinwheelIcon}
-                  />
-                  {t('web.settings.profile.saving')}
-                </>
-              ) : (
-                t('web.settings.profile.saved')
-              )}
-            </div>
-
-            {avatarDataUrl ? (
-              <Button
-                className="relative z-10 mt-5 gap-2"
-                disabled={isLoading || isSaving}
-                onClick={() => void removeAvatar()}
-                size="sm"
-                variant="ghost"
-              >
-                <HugeiconsIcon
-                  aria-hidden
-                  className="size-4"
-                  icon={Delete02Icon}
-                />
-                {t('web.settings.profile.avatarRemove')}
-              </Button>
-            ) : null}
-
-            {error ? (
-              <p
-                className="relative z-10 mt-5 w-full rounded-md border border-destructive/25 bg-destructive/8 px-3 py-2 text-destructive text-xs"
-                id="profile-error"
-                role="alert"
-              >
-                {error}
-              </p>
-            ) : null}
-          </section>
+                {error ? (
+                  <p
+                    className="bg-destructive/8 px-4 py-3 text-destructive text-xs"
+                    id="profile-error"
+                    role="alert"
+                  >
+                    {error}
+                  </p>
+                ) : null}
+              </div>
+            </section>
+          </ContentColumn>
         </div>
       )}
 

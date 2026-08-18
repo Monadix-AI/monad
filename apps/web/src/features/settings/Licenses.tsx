@@ -11,6 +11,7 @@ import { Button, Input, Skeleton } from '@monad/ui';
 import { memo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { ContentColumn } from '#/components/ui/content-column';
 
 interface LicenseRowProps {
   icon: typeof PackageIcon;
@@ -434,7 +435,7 @@ export function LicensesSettings() {
   return (
     <div className="licenses-shell flex min-h-0 min-w-0 flex-1 flex-col">
       <LicensePolishStyle />
-      <div className="flex flex-col gap-4 border-b px-6 py-4">
+      <ContentColumn className="gap-4 border-b py-5">
         <div className="licenses-toolbar">
           <div className="min-w-0">
             <p className="licenses-section-copy text-muted-foreground text-sm">{t('web.licenses.desc')}</p>
@@ -474,10 +475,10 @@ export function LicensesSettings() {
             </Button>
           ) : null}
         </div>
-      </div>
+      </ContentColumn>
 
-      <div className="licenses-scroll min-h-0 flex-1 overflow-y-auto px-6 pb-6">
-        <div className="flex flex-col gap-6 pt-5">
+      <div className="licenses-scroll min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
+        <ContentColumn className="px-0 py-0 pt-6">
           <section className="licenses-section">
             <div className="licenses-section-head">
               <div>
@@ -536,7 +537,7 @@ export function LicensesSettings() {
               </div>
             ) : null}
           </div>
-        </div>
+        </ContentColumn>
       </div>
     </div>
   );

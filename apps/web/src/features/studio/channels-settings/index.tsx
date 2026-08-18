@@ -5,6 +5,7 @@ import { Button } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { ContentColumn } from '#/components/ui/content-column';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { useChannelSettings } from '#/hooks/use-channel-settings';
@@ -84,7 +85,7 @@ export function ChannelsSettings(_props: { onClose: () => void }) {
         className="overflow-y-auto"
         data-testid="channels-scroll-area"
       >
-        <div className="flex flex-col gap-2 p-4">
+        <ContentColumn className="gap-2 p-4 sm:p-6">
           {loading || atomPacksQuery.isLoading ? (
             <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.common.loading')}</p>
           ) : null}
@@ -127,7 +128,7 @@ export function ChannelsSettings(_props: { onClose: () => void }) {
                 />
               ))
             : null}
-        </div>
+        </ContentColumn>
       </PanelShellBody>
     </PanelShell>
   );

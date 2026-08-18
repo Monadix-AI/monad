@@ -2,11 +2,12 @@ import type { NetworkSettings, SetNetworkSettingsRequest } from '@monad/protocol
 
 import { Alert01Icon, Copy01Icon, GlobeIcon, RotateLeft01Icon, Shield01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
-import { Button, Confirm, Input, Label, ScrollArea } from '@monad/ui';
+import { Button, Confirm, Input, Label } from '@monad/ui';
 import { useState } from 'react';
 import { z } from 'zod';
 
 import { useT } from '#/components/I18nProvider';
+import { ContentColumn, ContentScrollArea } from '#/components/ui/content-column';
 import { SwitchSetting } from '#/components/ui/switch-setting';
 import { useNetworkSettings } from '#/hooks/use-network-settings';
 import { REMOTE_URL_KEY } from '#/lib/monad-store';
@@ -195,52 +196,102 @@ export function ConnectionSettings() {
   const networkSection = (className = 'flex flex-col gap-3') => (
     <section className={className}>
       <h3 className="font-semibold text-sm">{t('web.settings.system.network')}</h3>
-      <div className="overflow-hidden rounded-md border text-xs">
-        <div className="grid grid-cols-[minmax(9rem,0.4fr)_minmax(0,1fr)] border-b">
-          <div className="bg-muted px-3 py-2 text-muted-foreground">{t('web.conn.localEndpoint')}</div>
-          <code className="min-w-0 break-all px-3 py-2 font-code text-foreground">
-            {daemonScheme}://{daemonHost}:{network.settings?.port ?? 52749}
-          </code>
+      <div className="grouped-list">
+        <div className="grouped-list-row grid items-center gap-3 sm:grid-cols-[minmax(0,1fr)_11.25rem]">
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <Label
+              className="text-sm"
+              htmlFor="daemon-bind-host"
+            >
+              {t('web.settings.system.host')}
+            </Label>
+            <span className="text-muted-foreground text-xs">{t('web.settings.system.hostDesc')}</span>
+          </div>
+          <Input
+            className="font-ui text-xs"
+            defaultValue={network.settings?.host ?? '127.0.0.1'}
+            disabled={networkBusy}
+            id="daemon-bind-host"
+            key={network.settings?.host ?? '127.0.0.1'}
+            onBlur={(event) => void updateNetworkHost(event.currentTarget.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') event.currentTarget.blur();
+            }}
+          />
         </div>
-        <div className="grid grid-cols-[minmax(9rem,0.4fr)_minmax(0,1fr)]">
-          <div className="bg-muted px-3 py-2 text-muted-foreground">{t('web.settings.system.localHttpEndpoint')}</div>
-          <code className="min-w-0 break-all px-3 py-2 font-code text-foreground">{fallbackLabel}</code>
-        </div>
-      </div>
 
-      <div className="grid items-end gap-2 rounded-md border px-3 py-2.5 sm:grid-cols-[1fr_180px]">
-        <div className="flex min-w-0 flex-col gap-0.5">
-          <Label
-            className="text-sm"
-            htmlFor="daemon-bind-host"
-          >
-            {t('web.settings.system.host')}
-          </Label>
-          <span className="text-muted-foreground text-xs">{t('web.settings.system.hostDesc')}</span>
-        </div>
-        <Input
-          className="font-ui text-xs"
-          defaultValue={network.settings?.host ?? '127.0.0.1'}
+        <SwitchSetting
+          checked={switchingToHttps || network.settings?.https.enabled !== false}
+          className="px-4 py-3.5"
+          description={t('web.settings.system.httpsDesc')}
           disabled={networkBusy}
-          id="daemon-bind-host"
-          key={network.settings?.host ?? '127.0.0.1'}
-          onBlur={(event) => void updateNetworkHost(event.currentTarget.value)}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter') {
-              event.currentTarget.blur();
-            }
-          }}
+          onCheckedChange={(checked) => void toggleHttps(checked)}
+          title={t('web.settings.system.https')}
+        />
+
+        <SwitchSetting
+          checked={network.settings?.remoteAccess.enabled === true}
+          className="border-t px-4 py-3.5"
+          description={t('web.conn.localRemoteDesc')}
+          disabled={networkBusy}
+          icon={<HugeiconsIcon icon={GlobeIcon} />}
+          onCheckedChange={(checked) => void toggleRemoteAccess(checked)}
+          title={t('web.conn.localRemoteTitle')}
+        />
+
+        {network.settings?.remoteAccess.enabled ? (
+          <div className="flex flex-col gap-2 border-t px-4 py-3.5">
+            <Label
+              className="text-xs"
+              htmlFor="local-remote-token"
+            >
+              {t('web.conn.localRemoteToken')}
+            </Label>
+            <div className="flex gap-2">
+              <Input
+                className="font-ui text-xs [-webkit-text-security:disc]"
+                id="local-remote-token"
+                readOnly
+                value={network.settings.remoteAccess.token ?? ''}
+                {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
+              />
+              <Button
+                aria-label={t('web.conn.copyToken')}
+                disabled={!network.settings.remoteAccess.token}
+                onClick={() => void copyRemoteToken()}
+                size="icon"
+                variant="outline"
+              >
+                <HugeiconsIcon
+                  className={networkCopied ? 'text-success' : undefined}
+                  icon={Copy01Icon}
+                />
+              </Button>
+              <Button
+                aria-label={t('web.conn.rotateToken')}
+                disabled={networkBusy}
+                onClick={() => {
+                  setRotateRemoteTokenError(undefined);
+                  setConfirmRotateRemoteToken(true);
+                }}
+                size="icon"
+                variant="outline"
+              >
+                <HugeiconsIcon icon={RotateLeft01Icon} />
+              </Button>
+            </div>
+          </div>
+        ) : null}
+
+        <SwitchSetting
+          checked={network.settings?.localHttpFallback.enabled === true}
+          className="border-t px-4 py-3.5"
+          description={t('web.settings.system.localHttpFallbackDesc')}
+          disabled={networkBusy}
+          onCheckedChange={(checked) => void toggleLocalHttpFallback(checked)}
+          title={t('web.settings.system.localHttpFallback')}
         />
       </div>
-
-      <SwitchSetting
-        checked={switchingToHttps || network.settings?.https.enabled !== false}
-        className="rounded-md border px-3 py-2.5"
-        description={t('web.settings.system.httpsDesc')}
-        disabled={networkBusy}
-        onCheckedChange={(checked) => void toggleHttps(checked)}
-        title={t('web.settings.system.https')}
-      />
 
       {switchingScheme ? (
         <div className="flex items-center gap-2 rounded border border-primary/30 bg-primary/5 px-2.5 py-2 text-primary text-xs">
@@ -281,16 +332,6 @@ export function ConnectionSettings() {
         </div>
       ) : null}
 
-      <SwitchSetting
-        checked={network.settings?.remoteAccess.enabled === true}
-        className="rounded-md border px-3 py-2.5"
-        description={t('web.conn.localRemoteDesc')}
-        disabled={networkBusy}
-        icon={<HugeiconsIcon icon={GlobeIcon} />}
-        onCheckedChange={(checked) => void toggleRemoteAccess(checked)}
-        title={t('web.conn.localRemoteTitle')}
-      />
-
       <div className="flex items-start gap-2 rounded-md border bg-muted/30 px-3 py-2.5 text-muted-foreground text-xs">
         <HugeiconsIcon
           className="mt-0.5 size-3.5 shrink-0"
@@ -298,59 +339,6 @@ export function ConnectionSettings() {
         />
         <span>{t('web.conn.remoteAccessTlsHint')}</span>
       </div>
-
-      {network.settings?.remoteAccess.enabled ? (
-        <div className="flex flex-col gap-2 rounded-md border px-3 py-2.5">
-          <Label
-            className="text-xs"
-            htmlFor="local-remote-token"
-          >
-            {t('web.conn.localRemoteToken')}
-          </Label>
-          <div className="flex gap-2">
-            <Input
-              className="font-ui text-xs [-webkit-text-security:disc]"
-              id="local-remote-token"
-              readOnly
-              value={network.settings.remoteAccess.token ?? ''}
-              {...SECRET_INPUT_PASSWORD_MANAGER_PROPS}
-            />
-            <Button
-              aria-label={t('web.conn.copyToken')}
-              disabled={!network.settings.remoteAccess.token}
-              onClick={() => void copyRemoteToken()}
-              size="icon"
-              variant="outline"
-            >
-              <HugeiconsIcon
-                className={networkCopied ? 'text-success' : undefined}
-                icon={Copy01Icon}
-              />
-            </Button>
-            <Button
-              aria-label={t('web.conn.rotateToken')}
-              disabled={networkBusy}
-              onClick={() => {
-                setRotateRemoteTokenError(undefined);
-                setConfirmRotateRemoteToken(true);
-              }}
-              size="icon"
-              variant="outline"
-            >
-              <HugeiconsIcon icon={RotateLeft01Icon} />
-            </Button>
-          </div>
-        </div>
-      ) : null}
-
-      <SwitchSetting
-        checked={network.settings?.localHttpFallback.enabled === true}
-        className="rounded-md border px-3 py-2.5"
-        description={t('web.settings.system.localHttpFallbackDesc')}
-        disabled={networkBusy}
-        onCheckedChange={(checked) => void toggleLocalHttpFallback(checked)}
-        title={t('web.settings.system.localHttpFallback')}
-      />
 
       {network.settings?.restartRequired ? (
         <div className="flex items-start gap-2 rounded border border-warning/30 bg-warning/5 px-2.5 py-2 text-warning text-xs">
@@ -377,16 +365,16 @@ export function ConnectionSettings() {
     </div>
   ) : null;
 
-  const endpointOverview = (className: string) => (
-    <div className={className}>
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="font-semibold text-sm">{t('web.conn.localEndpoint')}</span>
+  const endpointOverview = () => (
+    <div className="grouped-list">
+      <div className="grouped-list-row grid min-w-0 gap-1 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
+        <span className="font-medium text-sm">{t('web.conn.localEndpoint')}</span>
         <code className="min-w-0 break-all font-code text-foreground text-xs">
           {daemonScheme}://{daemonHost}:{network.settings?.port ?? 52749}
         </code>
       </div>
-      <div className="flex min-w-0 flex-col gap-1">
-        <span className="font-semibold text-sm">{t('web.settings.system.localHttpEndpoint')}</span>
+      <div className="grouped-list-row grid min-w-0 gap-1 sm:grid-cols-[12rem_minmax(0,1fr)] sm:items-center">
+        <span className="font-medium text-sm">{t('web.settings.system.localHttpEndpoint')}</span>
         <code className="min-w-0 break-all font-code text-foreground text-xs">{fallbackLabel}</code>
       </div>
     </div>
@@ -394,13 +382,13 @@ export function ConnectionSettings() {
 
   return (
     <div className="flex min-w-0 flex-1 flex-col">
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-3 px-6 py-5 pt-4">
+      <ContentScrollArea className="min-h-0 flex-1">
+        <ContentColumn>
           {remoteIndicator}
-          {endpointOverview('grid gap-2 rounded-md border bg-muted/30 px-3 py-2.5 sm:grid-cols-2')}
+          {endpointOverview()}
           {networkSection()}
-        </div>
-      </ScrollArea>
+        </ContentColumn>
+      </ContentScrollArea>
       <Confirm
         cancelLabel={t('web.common.cancel')}
         confirmLabel={t('web.settings.system.remoteHttpConfirmAction')}

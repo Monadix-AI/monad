@@ -1,9 +1,9 @@
 .project-settings-layout {
-  grid-template-columns: minmax(0, 1fr) minmax(240px, 0.56fr);
-  gap: 20px;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 24px;
   align-content: start;
   width: 100%;
-  max-width: 1040px;
+  max-width: 896px;
   margin-inline: auto;
 }
 
@@ -21,9 +21,9 @@
   border-color: color-mix(in srgb, var(--link) 34%, var(--border));
 }
 
-.project-settings-layout > section:nth-of-type(n + 3),
+.project-settings-layout > section,
 .project-settings-layout__notice {
-  grid-column: 1 / -1;
+  grid-column: 1;
 }
 
 @media (max-width: 840px) {

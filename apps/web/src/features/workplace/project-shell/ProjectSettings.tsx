@@ -79,155 +79,157 @@ export function ProjectSettings({
       <section className="flex min-h-0 flex-1 flex-col overflow-hidden bg-card">
         <PanelShellHeader title={t('web.workplace.projectSettingsLabel')} />
 
-        <div className="project-settings-layout scwf-scroll grid min-h-0 flex-1 overflow-y-auto p-5 max-sm:p-4">
-          {initialIntent ? (
-            <div
-              className="project-settings-layout__notice"
-              style={{
-                marginBottom: 16,
-                border: `1px solid ${'color-mix(in srgb, var(--accent-blue) 42%, var(--border))'}`,
-                borderRadius: 12,
-                background: 'color-mix(in srgb, var(--accent-blue) 9%, var(--card))',
-                padding: '10px 12px'
-              }}
-            >
-              <div style={{ fontFamily: uiFont, fontSize: 13, fontWeight: 650, color: 'var(--foreground)' }}>
-                {initialIntent === 'spawn-agent'
-                  ? t('web.workplace.emptySpawnHintTitle')
-                  : t('web.workplace.emptyConnectHintTitle')}
-              </div>
-              <p style={{ margin: '3px 0 0', fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
-                {initialIntent === 'spawn-agent'
-                  ? t('web.workplace.emptySpawnHint')
-                  : t('web.workplace.emptyConnectHint')}
-              </p>
-            </div>
-          ) : null}
-          <ProjectExperienceSettings
-            experiences={experiences}
-            loading={experiencesLoading}
-            mode={mode}
-            onChange={onModeChange}
-          />
-          <ProjectWorkdirSettings
-            labels={{
-              description: t('web.workplace.workdirSettingsDescription'),
-              empty: t('web.workplace.workdirSettingsUnset'),
-              title: t('web.workplace.workdirSettingsTitle')
-            }}
-            path={room.workdir.path}
-          />
-          <ProjectMembersSection
-            avatarStyle={room.source.avatarStyle}
-            candidates={room.availableProjectMembers}
-            loading={room.membersLoading}
-            members={room.projectMembers}
-            onOpenSettings={(member) => {
-              if (openMeshAgentMemberSettings(member)) return;
-              setMemberSettings(member);
-            }}
-            onRefresh={room.refreshMeshAgentCatalog}
-            onRemove={room.removeProjectMember}
-            projectId={room.projectId}
-            refreshing={room.membersRefreshing}
-          />
-
-          <section
-            aria-labelledby="agent-providers-heading"
-            style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
-          >
-            <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
-              <div>
-                <h3
-                  id="agent-providers-heading"
-                  style={{ margin: 0, fontFamily: uiFont, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
-                >
-                  {t('web.workplace.agentProvidersTitle')}
-                </h3>
-                <p
-                  style={{
-                    margin: '3px 0 0',
-                    maxWidth: 600,
-                    fontFamily: uiFont,
-                    fontSize: 12,
-                    lineHeight: 1.45,
-                    color: 'var(--muted-foreground)'
-                  }}
-                >
-                  {t('web.workplace.agentProvidersDescription')}
+        <div className="scwf-scroll min-h-0 flex-1 overflow-y-auto">
+          <div className="project-settings-layout grid p-5 max-sm:p-4">
+            {initialIntent ? (
+              <div
+                className="project-settings-layout__notice"
+                style={{
+                  marginBottom: 16,
+                  border: `1px solid ${'color-mix(in srgb, var(--accent-blue) 42%, var(--border))'}`,
+                  borderRadius: 12,
+                  background: 'color-mix(in srgb, var(--accent-blue) 9%, var(--card))',
+                  padding: '10px 12px'
+                }}
+              >
+                <div style={{ fontFamily: uiFont, fontSize: 13, fontWeight: 650, color: 'var(--foreground)' }}>
+                  {initialIntent === 'spawn-agent'
+                    ? t('web.workplace.emptySpawnHintTitle')
+                    : t('web.workplace.emptyConnectHintTitle')}
+                </div>
+                <p style={{ margin: '3px 0 0', fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
+                  {initialIntent === 'spawn-agent'
+                    ? t('web.workplace.emptySpawnHint')
+                    : t('web.workplace.emptyConnectHint')}
                 </p>
               </div>
-              <RefreshButton
-                className="size-7"
-                iconOnly
-                label={t('web.refresh')}
-                loading={room.membersRefreshing}
-                onClick={room.refreshMeshAgentCatalog}
-                size="icon"
-                variant="ghost"
-              />
-            </div>
-            <ProjectAddMemberSection
+            ) : null}
+            <ProjectExperienceSettings
+              experiences={experiences}
+              loading={experiencesLoading}
+              mode={mode}
+              onChange={onModeChange}
+            />
+            <ProjectWorkdirSettings
+              labels={{
+                description: t('web.workplace.workdirSettingsDescription'),
+                empty: t('web.workplace.workdirSettingsUnset'),
+                title: t('web.workplace.workdirSettingsTitle')
+              }}
+              path={room.workdir.path}
+            />
+            <ProjectMembersSection
+              avatarStyle={room.source.avatarStyle}
               candidates={room.availableProjectMembers}
               loading={room.membersLoading}
-              onAdd={addAvailableMember}
-              promoted={Boolean(initialIntent)}
-            />
-          </section>
-
-          <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ fontFamily: uiFont, fontSize: 12, fontWeight: 600, color: 'var(--destructive)' }}>
-              {t('web.workplace.dangerZone')}
-            </div>
-            <div
-              style={{
-                border: `1px solid ${'color-mix(in srgb, var(--destructive) 38%, var(--border))'}`,
-                borderRadius: boxR,
-                background: 'color-mix(in srgb, var(--destructive) 7%, var(--card))',
-                display: 'grid',
-                gridTemplateColumns: 'minmax(0, 1fr) auto',
-                alignItems: 'center',
-                gap: 12,
-                padding: 12
+              members={room.projectMembers}
+              onOpenSettings={(member) => {
+                if (openMeshAgentMemberSettings(member)) return;
+                setMemberSettings(member);
               }}
+              onRefresh={room.refreshMeshAgentCatalog}
+              onRemove={room.removeProjectMember}
+              projectId={room.projectId}
+              refreshing={room.membersRefreshing}
+            />
+
+            <section
+              aria-labelledby="agent-providers-heading"
+              style={{ display: 'flex', flexDirection: 'column', gap: 10 }}
             >
-              <div style={{ minWidth: 0 }}>
-                <div style={{ fontFamily: uiFont, fontSize: 14, fontWeight: 650, color: 'var(--foreground)' }}>
-                  {t('web.workplace.deleteProject')}
+              <div style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16 }}>
+                <div>
+                  <h3
+                    id="agent-providers-heading"
+                    style={{ margin: 0, fontFamily: uiFont, fontSize: 15, fontWeight: 650, color: 'var(--foreground)' }}
+                  >
+                    {t('web.workplace.agentProvidersTitle')}
+                  </h3>
+                  <p
+                    style={{
+                      margin: '3px 0 0',
+                      maxWidth: 600,
+                      fontFamily: uiFont,
+                      fontSize: 12,
+                      lineHeight: 1.45,
+                      color: 'var(--muted-foreground)'
+                    }}
+                  >
+                    {t('web.workplace.agentProvidersDescription')}
+                  </p>
                 </div>
-                <p style={{ margin: '4px 0 0', fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
-                  {t('web.workplace.deleteProjectHint')}
-                </p>
-              </div>
-              <button
-                className="workplace-action"
-                disabled={!room.ready}
-                onClick={() => setDeleteDialogOpen(true)}
-                style={{
-                  minHeight: 30,
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  gap: 6,
-                  border: `1px solid ${'var(--destructive)'}`,
-                  borderRadius: 8,
-                  background: 'transparent',
-                  color: 'var(--destructive)',
-                  fontFamily: uiFont,
-                  fontSize: 11,
-                  padding: '5px 10px',
-                  whiteSpace: 'nowrap'
-                }}
-                type="button"
-              >
-                <HugeiconsIcon
-                  icon={Delete02Icon}
-                  size={14}
+                <RefreshButton
+                  className="size-7"
+                  iconOnly
+                  label={t('web.refresh')}
+                  loading={room.membersRefreshing}
+                  onClick={room.refreshMeshAgentCatalog}
+                  size="icon"
+                  variant="ghost"
                 />
-                {t('web.workplace.deleteProject')}
-              </button>
-            </div>
-          </section>
+              </div>
+              <ProjectAddMemberSection
+                candidates={room.availableProjectMembers}
+                loading={room.membersLoading}
+                onAdd={addAvailableMember}
+                promoted={Boolean(initialIntent)}
+              />
+            </section>
+
+            <section style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ fontFamily: uiFont, fontSize: 12, fontWeight: 600, color: 'var(--destructive)' }}>
+                {t('web.workplace.dangerZone')}
+              </div>
+              <div
+                style={{
+                  border: `1px solid ${'color-mix(in srgb, var(--destructive) 38%, var(--border))'}`,
+                  borderRadius: boxR,
+                  background: 'color-mix(in srgb, var(--destructive) 7%, var(--card))',
+                  display: 'grid',
+                  gridTemplateColumns: 'minmax(0, 1fr) auto',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: 12
+                }}
+              >
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontFamily: uiFont, fontSize: 14, fontWeight: 650, color: 'var(--foreground)' }}>
+                    {t('web.workplace.deleteProject')}
+                  </div>
+                  <p style={{ margin: '4px 0 0', fontFamily: uiFont, fontSize: 12, color: 'var(--muted-foreground)' }}>
+                    {t('web.workplace.deleteProjectHint')}
+                  </p>
+                </div>
+                <button
+                  className="workplace-action"
+                  disabled={!room.ready}
+                  onClick={() => setDeleteDialogOpen(true)}
+                  style={{
+                    minHeight: 30,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    gap: 6,
+                    border: `1px solid ${'var(--destructive)'}`,
+                    borderRadius: 8,
+                    background: 'transparent',
+                    color: 'var(--destructive)',
+                    fontFamily: uiFont,
+                    fontSize: 11,
+                    padding: '5px 10px',
+                    whiteSpace: 'nowrap'
+                  }}
+                  type="button"
+                >
+                  <HugeiconsIcon
+                    icon={Delete02Icon}
+                    size={14}
+                  />
+                  {t('web.workplace.deleteProject')}
+                </button>
+              </div>
+            </section>
+          </div>
         </div>
       </section>
       <DeleteProjectDialog

@@ -6,6 +6,7 @@ import { useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
 import { RefreshButton } from '#/components/RefreshButton';
+import { ContentColumn } from '#/components/ui/content-column';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
 import { isResolvedEmptyList } from '#/lib/async-list-state';
@@ -108,7 +109,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
       ) : null}
 
       <PanelShellBody className="overflow-y-auto">
-        <div className="flex flex-col gap-2 p-4">
+        <ContentColumn className="max-w-5xl gap-2 p-4 sm:p-6">
           {isResolvedEmptyList({ isLoading, itemCount: packs.length }) ? (
             <p className="px-1 py-8 text-center text-muted-foreground text-xs">{t('web.atoms.empty')}</p>
           ) : null}
@@ -119,7 +120,7 @@ export function AtomsSettings(_props: { onClose: () => void }) {
               pack={p}
             />
           ))}
-        </div>
+        </ContentColumn>
       </PanelShellBody>
 
       <InstallAtomPackDialog

@@ -12,6 +12,7 @@ import { z } from 'zod';
 
 import { type TFn, useT } from '#/components/I18nProvider';
 import { RefreshButton } from '#/components/RefreshButton';
+import { ContentColumn } from '#/components/ui/content-column';
 import { PanelShell, PanelShellBody } from '#/components/ui/panel-shell';
 import { SwitchSetting } from '#/components/ui/switch-setting';
 import { StudioBreadcrumbHeader } from '#/features/studio/StudioBreadcrumbHeader';
@@ -306,8 +307,8 @@ export function OpenaiCompatSettings({ embedded = false }: { onClose: () => void
         title={t('web.api.title')}
       />
 
-      <PanelShellBody>
-        <div className="flex flex-col gap-5 p-5">{body}</div>
+      <PanelShellBody className="overflow-y-auto">
+        <ContentColumn className="gap-5 p-5">{body}</ContentColumn>
       </PanelShellBody>
     </PanelShell>
   );

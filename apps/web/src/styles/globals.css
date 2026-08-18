@@ -77,6 +77,21 @@
     margin-inline: auto;
   }
 
+  .grouped-list {
+    overflow: hidden;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 0.75rem;
+  }
+
+  .grouped-list-row {
+    padding: 0.875rem 1rem;
+  }
+
+  .grouped-list > .grouped-list-row:not(:last-child) {
+    border-bottom: 1px solid var(--border);
+  }
+
   [cmdk-overlay] {
     position: fixed;
     inset: 0;
