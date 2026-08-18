@@ -401,12 +401,10 @@ export function activeMeshAgentNames(args: {
   const names = new Set(args.streamingAgentNames);
   for (const agentName of args.activityOverrideAgentNames) names.add(agentName);
   for (const session of args.meshSessions) {
-    // Live tool status is authoritative when present (it clears at turn end); the frozen session
-    // snapshot is only the fallback — see meshAgentIsGenerating.
-    if (
-      args.activeMeshSessionIds?.has(session.id) ||
-      meshAgentIsGenerating(session.agentName, args.liveTools, session)
-    ) {
+    const active = args.activeMeshSessionIds
+      ? args.activeMeshSessionIds.has(session.id)
+      : meshAgentIsGenerating(session.agentName, args.liveTools, session);
+    if (active) {
       names.add(session.agentName);
     }
   }

@@ -162,6 +162,19 @@ test('jump-to-latest re-arms following, including after a smooth animation', asy
   await expectSettledAtBottom(page);
 });
 
+test('jump-to-latest reaches the real end after older variable-height rows are prepended', async ({ page }) => {
+  await openHarness(page);
+  await wheelBy(page, -3000);
+  await page.evaluate(() => window.harness.prependRows(20));
+
+  await page.evaluate(() => window.harness.jumpToLatest());
+  await waitForStableScrollHeight(page);
+  await expectSettledAtBottom(page);
+
+  await page.evaluate(() => window.harness.growLastRowInDom(500));
+  await expectSettledAtBottom(page);
+});
+
 test('clicking inside a row while content streams does not cancel following', async ({ page }) => {
   await openHarness(page);
 

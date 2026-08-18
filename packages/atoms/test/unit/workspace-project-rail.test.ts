@@ -425,6 +425,17 @@ test('project rail uses observed turn activity instead of the cached participant
   expect(railAgentActivityPhase({ ...cachedIdle, presence: 'working' }, settledTurn)).toBeUndefined();
 });
 
+test('project rail stops stale observed activity when mesh state has settled the participant', () => {
+  const settledAgent = agent('codex', 'idle');
+  const interruptedTurn = [neutralEvent('turn-start'), neutralEvent('assistant-message', { text: 'drafting' })];
+
+  expect({
+    active: isActiveRailAgent(settledAgent, interruptedTurn, true),
+    phase: railAgentActivityPhase(settledAgent, interruptedTurn, true),
+    animated: shouldAnimateRailAgent(settledAgent, interruptedTurn, true)
+  }).toEqual({ active: false, phase: undefined, animated: false });
+});
+
 test('MeshAgent participant shows thinking while its managed reply is streaming before provider output', () => {
   const participants = __workplaceProjectMessageTest.projectParticipants({
     acpAgents: [],

@@ -84,6 +84,8 @@ interface CompletedObservationTurn {
   start: number;
   end: number;
   signature: string;
+  userSignature: string;
+  assistantTexts: string[];
 }
 
 function completedObservationTurns(events: AgentObservationEvent[], settledTail: boolean): CompletedObservationTurn[] {
@@ -93,9 +95,18 @@ function completedObservationTurns(events: AgentObservationEvent[], settledTail:
     if (start === undefined) return;
     const turn = events.slice(start, end + 1);
     const userText = turn.filter((item) => item.kind === 'user-message').map((item) => item.text ?? '');
-    const assistantText = turn.filter((item) => item.kind === 'assistant-message').at(-1)?.text;
+    const assistantTexts = turn
+      .filter((item) => item.kind === 'assistant-message' && !item.streaming)
+      .map((item) => item.text ?? '');
+    const assistantText = assistantTexts.at(-1);
     if (userText.length > 0 && assistantText) {
-      turns.push({ start, end, signature: JSON.stringify([userText, assistantText]) });
+      turns.push({
+        start,
+        end,
+        signature: JSON.stringify([userText, assistantText]),
+        userSignature: JSON.stringify(userText),
+        assistantTexts
+      });
     }
   };
   for (const [index, event] of events.entries()) {
@@ -122,26 +133,32 @@ function completedObservationTurns(events: AgentObservationEvent[], settledTail:
   return turns;
 }
 
-function withoutSettledTurnOverlap(
+function splitSettledTurnOverlap(
   earlier: AgentObservationEvent[],
   current: AgentObservationEvent[]
-): AgentObservationEvent[] {
+): { before: AgentObservationEvent[]; after: AgentObservationEvent[] } {
   const earlierTurns = completedObservationTurns(earlier, true);
   const currentTurns = completedObservationTurns(current, true);
   const limit = Math.min(earlierTurns.length, currentTurns.length);
   for (let count = limit; count > 0; count -= 1) {
     const earlierStart = earlierTurns.length - count;
-    const matches = Array.from(
-      { length: count },
-      (_, index) => earlierTurns[earlierStart + index]?.signature === currentTurns[index]?.signature
-    ).every(Boolean);
+    const matches = Array.from({ length: count }, (_, index) => {
+      const earlierTurn = earlierTurns[earlierStart + index];
+      const currentTurn = currentTurns[index];
+      if (!earlierTurn || !currentTurn) return false;
+      if (earlierTurn.signature === currentTurn.signature) return true;
+      return (
+        earlierTurn.userSignature === currentTurn.userSignature &&
+        currentTurn.assistantTexts.every((text) => earlierTurn.assistantTexts.includes(text))
+      );
+    }).every(Boolean);
     if (!matches) continue;
     const first = currentTurns[0];
     const last = currentTurns[count - 1];
-    if (!first || !last) return current;
-    return [...current.slice(0, first.start), ...current.slice(last.end + 1)];
+    if (!first || !last) return { before: [], after: current };
+    return { before: current.slice(0, first.start), after: current.slice(last.end + 1) };
   }
-  return current;
+  return { before: [], after: current };
 }
 
 export function foldConvenienceEvents(
@@ -149,10 +166,11 @@ export function foldConvenienceEvents(
   earlierFrames: MeshConvenienceFrame[]
 ): ObservationTimeline {
   const earlier = mergeConvenienceFrames(emptyObservationTimeline, earlierFrames);
-  const currentEvents = withoutSettledTurnOverlap(earlier.events, timeline.events);
+  const current = splitSettledTurnOverlap(earlier.events, timeline.events);
+  const currentEvents = [...current.before, ...current.after];
   const currentByKey = new Map(currentEvents.map((event) => [observationJoinKey(event), event]));
   const seen = new Set<string>();
-  const events = [...earlier.events, ...currentEvents]
+  const events = [...current.before, ...earlier.events, ...current.after]
     .map((event) => currentByKey.get(observationJoinKey(event)) ?? event)
     .filter((event) => {
       const key = observationJoinKey(event);

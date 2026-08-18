@@ -66,7 +66,12 @@ export function observedRailAgent(
   );
 }
 
-export function isActiveRailAgent(agent: Participant, observationEvents?: readonly AgentObservationEvent[]): boolean {
+export function isActiveRailAgent(
+  agent: Participant,
+  observationEvents?: readonly AgentObservationEvent[],
+  presenceAuthoritative = false
+): boolean {
+  if (presenceAuthoritative && agent.presence !== 'working') return false;
   if (observationEvents) {
     const observation = meshAgentObservationActivity(observationEvents);
     if (observation.hasTurnBoundary) return observation.active;
@@ -76,8 +81,10 @@ export function isActiveRailAgent(agent: Participant, observationEvents?: readon
 
 export function railAgentActivityPhase(
   agent: Participant,
-  observationEvents?: readonly AgentObservationEvent[]
+  observationEvents?: readonly AgentObservationEvent[],
+  presenceAuthoritative = false
 ): Participant['activityPhase'] {
+  if (presenceAuthoritative && agent.presence !== 'working') return undefined;
   if (observationEvents) {
     const observation = meshAgentObservationActivity(observationEvents);
     if (observation.hasTurnBoundary) return observation.phase;
@@ -88,9 +95,10 @@ export function railAgentActivityPhase(
 
 export function shouldAnimateRailAgent(
   agent: Participant,
-  observationEvents?: readonly AgentObservationEvent[]
+  observationEvents?: readonly AgentObservationEvent[],
+  presenceAuthoritative = false
 ): boolean {
-  return isActiveRailAgent(agent, observationEvents);
+  return isActiveRailAgent(agent, observationEvents, presenceAuthoritative);
 }
 
 export function groupProjectRailAgents(agents: readonly Participant[]): {

@@ -678,7 +678,11 @@ export function VirtualList<T>({
       scrollToBottom: (behavior = 'auto') => {
         scrollbarPointerTopOffsetRef.current = null;
         scrollbarPointerRowAnchorRef.current = null;
+        initialEndScrollDoneRef.current = true;
+        lastAtEndRef.current = true;
+        leftBottomRef.current = false;
         userDetachedRef.current = false;
+        wasAtEndRef.current = true;
         upwardTravelRef.current = 0;
         virtualizer.scrollToEnd({ behavior });
       },

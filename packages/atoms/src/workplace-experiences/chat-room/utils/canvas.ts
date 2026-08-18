@@ -54,6 +54,7 @@ export interface ChatRoomCanvas {
   messages: Message[];
   participants: Participant[];
   railAgents: Participant[];
+  meshAgentPresenceAuthoritative: boolean;
   activity: ActivityRow[];
   busy: boolean;
   meshAgentStreams: MeshAgentStreamView[];
@@ -247,6 +248,7 @@ export function toChatRoomCanvas(
     messages,
     participants: c.participants,
     railAgents,
+    meshAgentPresenceAuthoritative: Boolean(source.meshAgentState),
     activity,
     busy,
     meshAgentStreams,

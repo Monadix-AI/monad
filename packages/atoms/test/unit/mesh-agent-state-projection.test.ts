@@ -3,6 +3,7 @@ import type { EventId, MeshAgentStateEvent, MeshAgentStateSession, SessionId } f
 import { expect, test } from 'bun:test';
 
 import { projectCanvasIsBusy } from '../../src/workplace-experiences/chat-room/utils/canvas.ts';
+import { meshAgentMemberPresence } from '../../src/workplace-experiences/experience/mesh-agent-presence.ts';
 import {
   applyMeshAgentExperienceEvent,
   foldMeshAgentExperienceState,
@@ -211,6 +212,48 @@ test('derives active agent identity from neutral turn state without mesh tool ro
       activeMeshSessionIds: new Set([meshSessionId])
     })
   ]).toEqual(['codex']);
+});
+
+test('neutral turn state overrides a stale running runtime snapshot after settlement', () => {
+  const staleRunningSession: MeshAgentStateSession = {
+    ...session,
+    activity: { state: 'running', pid: 1234, queuedTurnCount: 0 }
+  };
+  const state = foldMeshAgentExperienceState({
+    sessions: { [meshSessionId]: staleRunningSession },
+    loginRequirements: {},
+    approvals: {},
+    events: [],
+    snapshotReceived: true,
+    stale: false
+  });
+  const activeBeforeSettlement = [...state.activeMeshSessionIds];
+  applyMeshAgentExperienceEvent(state, event(1, 'mesh.turn_settled', { meshSessionId }));
+  const activeAgentNames = activeMeshAgentNames({
+    activityOverrideAgentNames: [],
+    liveTools: [],
+    meshSessions: [staleRunningSession],
+    streamingAgentNames: new Set(),
+    activeMeshSessionIds: state.activeMeshSessionIds
+  });
+
+  expect({
+    activeBeforeSettlement,
+    activeSessionIds: [...state.activeMeshSessionIds],
+    activeAgentNames: [...activeAgentNames],
+    presence: meshAgentMemberPresence({
+      activeAgentNames,
+      agentName: 'codex',
+      enabled: true,
+      meshSessions: [staleRunningSession],
+      liveTools: []
+    })
+  }).toEqual({
+    activeBeforeSettlement: [meshSessionId],
+    activeSessionIds: [],
+    activeAgentNames: [],
+    presence: 'online'
+  });
 });
 
 test('derives canvas busy state from neutral turns and approvals without mesh UI rows', () => {

@@ -50,14 +50,27 @@ export interface MeshAgentExperienceState {
 }
 
 export function foldMeshAgentExperienceState(input: MeshAgentExperienceInput): MeshAgentExperienceState {
+  const sessions = new Map(Object.entries(input.sessions));
   const state: MeshAgentExperienceState = {
-    sessions: new Map(Object.entries(input.sessions)),
+    sessions,
     loginRequirements: new Map(Object.entries(input.loginRequirements)),
     approvals: new Map(Object.entries(input.approvals)),
     events: [],
     acceptedEventIds: new Set(),
-    activeMeshSessionIds: new Set(),
-    connectedMeshSessionIds: new Set(),
+    activeMeshSessionIds: new Set(
+      [...sessions.values()]
+        .filter(
+          (session) =>
+            session.lifecycle.state === 'active' &&
+            (session.activity.state === 'starting' || session.activity.state === 'running')
+        )
+        .map((session) => session.id)
+    ),
+    connectedMeshSessionIds: new Set(
+      [...sessions.values()]
+        .filter((session) => session.connection.state === 'connected' || session.connection.state === 'reconnecting')
+        .map((session) => session.id)
+    ),
     snapshotReceived: input.snapshotReceived,
     stale: input.stale
   };

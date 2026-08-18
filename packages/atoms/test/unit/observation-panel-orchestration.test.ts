@@ -307,6 +307,36 @@ test('an unfinished live turn with repeated text remains after settled history',
   ]);
 });
 
+test('a completed history turn replaces the partial live prefix loaded after it', () => {
+  const startup = { ...observationEvent('live-startup', 'Runtime initialized'), kind: 'system' as const };
+  const sharedProgress = observationEvent('history-progress', 'scoped the implementation');
+  const historical = [
+    { ...observationEvent('history-start', 'Turn started'), kind: 'turn-start' as const },
+    { ...observationEvent('history-user', 'same prompt'), kind: 'user-message' as const },
+    sharedProgress,
+    observationEvent('history-final', 'finished implementation'),
+    { ...observationEvent('history-end', 'Turn completed'), kind: 'turn-end' as const, reason: 'completed' as const }
+  ];
+  const live = [
+    startup,
+    { ...observationEvent('live-start', 'turn/started'), kind: 'turn-start' as const },
+    { ...observationEvent('live-user', 'same prompt'), kind: 'user-message' as const },
+    { ...sharedProgress, id: 'live-progress' }
+  ];
+  const frames: MeshConvenienceFrame[] = [
+    {
+      kind: 'patch',
+      cursor: 'provider:turn-1',
+      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
+    }
+  ];
+
+  expect(foldConvenienceEvents({ ...emptyObservationTimeline, events: live }, frames).events).toEqual([
+    startup,
+    ...historical
+  ]);
+});
+
 test('convenience history preserves a tool call and result that share a provider record dedupe key', () => {
   const call: AgentObservationEvent = {
     ...observationEvent('mesh:json:item_1:tool-call', 'Tool call command_execution'),

@@ -600,6 +600,7 @@ type AgentTasksRailRoom = {
   activeSessionId: string | null;
   messages: Message[];
   railAgents: Participant[];
+  meshAgentPresenceAuthoritative?: boolean;
   stopMeshAgent: (id: string) => void;
   // The experience runtime can inject the RTK hooks; otherwise the standard Mesh event hooks apply.
   dualObservationHooks?: ObservationPanelHooks;
@@ -886,9 +887,9 @@ export function AgentTasksRail({ room }: { room: AgentTasksRailRoom }): React.Re
 
   const renderAgent = (agent: Participant, observationEvents?: readonly AgentObservationEvent[]) => {
     const identity = resolveAgentIdentity?.({ id: agent.id, name: agent.name });
-    const active = isActiveRailAgent(agent, observationEvents);
-    const shouldAnimate = shouldAnimateRailAgent(agent, observationEvents);
-    const activityPhase = railAgentActivityPhase(agent, observationEvents);
+    const active = isActiveRailAgent(agent, observationEvents, room.meshAgentPresenceAuthoritative);
+    const shouldAnimate = shouldAnimateRailAgent(agent, observationEvents, room.meshAgentPresenceAuthoritative);
+    const activityPhase = railAgentActivityPhase(agent, observationEvents, room.meshAgentPresenceAuthoritative);
     const observedPresence = observationEvents
       ? active
         ? 'working'

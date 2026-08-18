@@ -245,7 +245,7 @@ export function meshAgentMemberPresence({
   if (!latest) return 'idle';
   if (latest.activity.state === 'suspended') return 'sleeping';
   if ((latest.pendingApprovalCount ?? 0) > 0) return 'working';
-  if (meshAgentIsGenerating(agentName, liveTools, latest)) return 'working';
+  if (activeAgentNames === undefined && meshAgentIsGenerating(agentName, liveTools, latest)) return 'working';
   if (latest.lifecycle.state === 'starting') return 'working';
   if (latest.lifecycle.state === 'active') return 'online';
   if (latest.lifecycle.termination.kind === 'failed') return 'failed';
