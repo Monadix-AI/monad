@@ -129,6 +129,7 @@ export const channelIconSchema = z.object({
     .string()
     .regex(/^[0-9a-f]{6}$/i)
     .optional(),
+  darkBackground: channelIconHexColorSchema.optional(),
   viewBox: z.tuple([z.number().finite(), z.number().finite(), z.number().positive(), z.number().positive()]).optional(),
   fillRule: z.enum(['evenodd', 'nonzero']).optional(),
   layers: z.array(channelIconLayerSchema).min(1).max(32).optional(),

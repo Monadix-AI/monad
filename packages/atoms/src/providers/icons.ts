@@ -12,8 +12,13 @@ import {
   siVercel
 } from 'simple-icons';
 
-function fromSimpleIcon(icon: SimpleIcon): ChannelIcon {
-  return { title: icon.title, path: icon.path, hex: icon.hex, source: icon.source };
+function fromSimpleIcon(icon: SimpleIcon, color: 'brand' | 'monochrome' = 'brand'): ChannelIcon {
+  return {
+    title: icon.title,
+    path: icon.path,
+    ...(color === 'brand' ? { hex: icon.hex } : {}),
+    source: icon.source
+  };
 }
 
 const openAI: ChannelIcon = {
@@ -57,7 +62,6 @@ const huggingFace: ChannelIcon = {
 
 const anthropic: ChannelIcon = {
   title: 'Anthropic',
-  hex: '141413',
   viewBox: [0, 0, 92, 64],
   source: 'https://www.anthropic.com/press',
   path: 'M66.4915 0H52.5029L78.0115 64H92.0001L66.4915 0Z',
@@ -277,7 +281,7 @@ const providerFallbacks = {
 export const providerIcons = {
   anthropic,
   openai: openAI,
-  'vercel-gateway': fromSimpleIcon(siVercel),
+  'vercel-gateway': fromSimpleIcon(siVercel, 'monochrome'),
   openrouter: openRouter,
   google: gemini,
   mistral,
@@ -292,11 +296,11 @@ export const providerIcons = {
   fireworks: providerFallbacks.fireworks,
   cerebras: providerFallbacks.cerebras,
   perplexity: fromSimpleIcon(siPerplexity),
-  moonshot: fromSimpleIcon(siMoonshotai),
+  moonshot: fromSimpleIcon(siMoonshotai, 'monochrome'),
   zai: providerFallbacks.zai,
   minimax: fromSimpleIcon(siMinimax),
   nvidia: fromSimpleIcon(siNvidia),
   novita: providerFallbacks.novita,
-  ollama: fromSimpleIcon(siOllama),
+  ollama: fromSimpleIcon(siOllama, 'monochrome'),
   huggingface: huggingFace
 } satisfies Record<string, ChannelIcon>;

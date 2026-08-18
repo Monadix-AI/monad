@@ -47,6 +47,7 @@ export interface BrandGlyphIcon {
   path?: string;
   fillRule?: 'nonzero' | 'evenodd' | 'inherit';
   hex?: string;
+  darkBackground?: string;
   viewBox?: readonly number[];
   layers?: readonly BrandGlyphLayer[];
   gradients?: readonly BrandGlyphGradient[];
@@ -65,12 +66,13 @@ export function BrandGlyph({
   const gradientPrefix = useId().replaceAll(':', '');
   const fill = icon.hex ? `#${icon.hex}` : 'currentColor';
   const layers = icon.layers ?? [{ path: icon.path ?? '', fill, fillRule: icon.fillRule }];
+  const viewBox = icon.viewBox ?? [0, 0, 24, 24];
   return (
     <svg
       aria-hidden="true"
       className={cn('shrink-0', className)}
       style={style}
-      viewBox={(icon.viewBox ?? [0, 0, 24, 24]).join(' ')}
+      viewBox={viewBox.join(' ')}
     >
       {icon.gradients ? (
         <defs>
@@ -112,6 +114,16 @@ export function BrandGlyph({
             );
           })}
         </defs>
+      ) : null}
+      {icon.darkBackground ? (
+        <rect
+          className="hidden dark:block"
+          fill={icon.darkBackground}
+          height={viewBox[3]}
+          width={viewBox[2]}
+          x={viewBox[0]}
+          y={viewBox[1]}
+        />
       ) : null}
       {layers.map((layer) => (
         <path
