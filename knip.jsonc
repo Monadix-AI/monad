@@ -74,7 +74,13 @@
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     },
     "packages/monad-power-pack": {
-      "entry": ["src/experiences/kanban/client.tsx"],
+      // Web-component experiences are reached by built path at runtime (`dist/experiences/*.js`),
+      // never by import, so each one's client is its own entry — see `build:atom-pack:*`.
+      "entry": ["src/experiences/kanban/client.tsx", "src/experiences/research-desk/client.tsx"],
+      // Same policy as `packages/atoms`: an experience's domain barrel keeps its full vocabulary
+      // exported even where nothing consumes a name yet. Unused FILES and dependencies are still
+      // reported — that is the class that matters for a pack shipped as built artifacts.
+      "ignoreIssues": { "src/**/*.{ts,tsx}": ["exports", "types"] },
       "bun": { "entry": ["test/**/*.{ts,tsx}", "**/*.test.{ts,tsx}"] }
     }
   }

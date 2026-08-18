@@ -5,7 +5,7 @@ import { cn, ScrollArea } from '@monad/ui';
 export function ContentScrollArea({ className, ...props }: ComponentProps<typeof ScrollArea>) {
   return (
     <ScrollArea
-      className={cn('[&>div>div]:!block min-w-0', className)}
+      className={cn('[&>div>div]:block! min-w-0', className)}
       {...props}
     />
   );

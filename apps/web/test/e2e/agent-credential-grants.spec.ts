@@ -136,6 +136,7 @@ test('persists, reloads, revokes, and atomically removes agent credential grants
   await grant.click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => state.agent.credentialIds).toEqual(['credential-grant-e2e']);
+  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
 
   await page.reload();
   await page.getByRole('button', { name: 'Edit' }).click();
@@ -144,6 +145,7 @@ test('persists, reloads, revokes, and atomically removes agent credential grants
   await page.getByRole('switch', { name: 'GitHub runtime' }).click();
   await page.getByRole('button', { name: 'Save' }).click();
   await expect.poll(() => state.agent.credentialIds).toEqual([]);
+  await expect(page.getByRole('button', { name: 'Edit' })).toBeVisible();
 
   await page.getByRole('button', { name: 'Edit' }).click();
   await openSandbox(page);

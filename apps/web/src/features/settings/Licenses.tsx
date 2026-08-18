@@ -341,7 +341,7 @@ function LicenseSkeleton({ rows = 8 }: { rows?: number }) {
           key={rowKey}
         >
           <div className="grid min-w-0 grid-cols-[30px_minmax(0,1fr)] items-center gap-3">
-            <Skeleton className="size-[30px] rounded-lg" />
+            <Skeleton className="size-7.5 rounded-lg" />
             <span className="grid gap-2">
               <Skeleton className="h-2.5 w-3/5 rounded-full" />
               <Skeleton className="h-2.5 w-1/4 rounded-full" />
