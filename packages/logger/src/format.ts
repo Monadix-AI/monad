@@ -16,13 +16,34 @@ type PrettyRecord = LogRecord & {
 };
 
 const reset = '\x1B[0m';
-const dim = (s: string) => `\x1B[2m${s}${reset}`;
-const cyan = (s: string) => `\x1B[36m${s}${reset}`;
-const green = (s: string) => `\x1B[32m${s}${reset}`;
-const yellow = (s: string) => `\x1B[33m${s}${reset}`;
-const red = (s: string) => `\x1B[31m${s}${reset}`;
-const magenta = (s: string) => `\x1B[35m${s}${reset}`;
-const bold = (s: string) => `\x1B[1m${s}${reset}`;
+
+// Call sites hand the coloured result to the logger as `msg`, so the escape codes travel with the
+// record to EVERY sink — the pretty console renders them, but a JSON sink (production stdout,
+// daemon.log, a configured non-pretty console) writes them verbatim into the `msg` string. Only the
+// pretty path can consume colour, and pretty output is dev-only, so paint nothing in production or
+// under NO_COLOR.
+export function isLogColorEnabled(): boolean {
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env;
+  if (!env) return false;
+  if (env.NO_COLOR !== undefined && env.NO_COLOR !== '') return false;
+  return env.NODE_ENV !== 'production';
+}
+
+const paint = (code: string) => (s: string) => (isLogColorEnabled() ? `\x1B[${code}m${s}${reset}` : s);
+const dim = paint('2');
+const cyan = paint('36');
+const green = paint('32');
+const yellow = paint('33');
+const red = paint('31');
+const magenta = paint('35');
+const bold = paint('1');
+
+// biome-ignore lint/suspicious/noControlCharactersInRegex: matching the ANSI escape is the point.
+const ANSI_PATTERN = /\x1B\[[0-9;]*m/g;
+
+export function stripAnsi(value: string): string {
+  return value.includes('\x1B') ? value.replace(ANSI_PATTERN, '') : value;
+}
 
 export function formatPrettyMessage(record: PrettyRecord): string {
   const transport = transportName(record);

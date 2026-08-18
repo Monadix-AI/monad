@@ -25,7 +25,7 @@ export type {
 
 export { createLogger, setDeveloperLogTransport } from '#platform-sink';
 export { subscribeDeveloperLogRecords } from './developer.ts';
-export { formatPrettyMessage, formatTransportCall } from './format.ts';
+export { formatPrettyMessage, formatTransportCall, isLogColorEnabled, stripAnsi } from './format.ts';
 export { configureLogger, type LogLevelOverride, setLogFile, setLogLevel, setLogStderr } from './level.ts';
 
 export const logger = createLogger('monad');

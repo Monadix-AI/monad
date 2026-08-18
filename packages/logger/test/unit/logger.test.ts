@@ -55,6 +55,23 @@ describe('createLogger', () => {
     ]);
   });
 
+  test('developer log records carry the transport summary without ANSI escapes', async () => {
+    const { createLogger, formatTransportCall, setLogLevel, subscribeDeveloperLogRecords } = await import(
+      '../../src/index.ts'
+    );
+    const records: Record<string, unknown>[] = [];
+    const dispose = subscribeDeveloperLogRecords((record) => records.push(record));
+    setLogLevel('debug');
+    const log = createLogger('transport:http');
+
+    const call = { method: 'GET', path: '/v1/health', status: 200, durationMs: 12 };
+    log.debug({ sessionId: 'ses_LOGTEST00001', ...call }, formatTransportCall(call));
+    await waitFor(() => records.length === 1, { message: 'subscriber never received the record' });
+    dispose();
+
+    expect(records.map((record) => record.msg)).toEqual(['GET 200 /v1/health in 12ms']);
+  });
+
   test('custom destinations receive records at their own level', async () => {
     const { configureLogger, createLogger } = await import('../../src/index.ts');
     const sentryRecords: Record<string, unknown>[] = [];
@@ -213,6 +230,38 @@ describe('formatPrettyMessage', () => {
       durationMs: 9
     });
     expect(stripAnsi(acpLine)).toBe('[transport:acp] prompt error in 9ms');
+  });
+
+  test('drops ANSI colour from the summary when NODE_ENV is production', async () => {
+    const proc = Bun.spawn({
+      cmd: [
+        process.execPath,
+        '-e',
+        "import { formatPrettyMessage } from './src/format.ts'; process.stdout.write(formatPrettyMessage({ name: 'transport:http', msg: 'call', method: 'GET', path: '/health', status: 200, durationMs: 20 }))"
+      ],
+      cwd: join(import.meta.dir, '../..'),
+      env: { ...Bun.env, NODE_ENV: 'production' },
+      stdout: 'pipe',
+      stderr: 'pipe'
+    });
+    const [exitCode, stdout] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
+    expect({ exitCode, stdout }).toEqual({ exitCode: 0, stdout: '[transport:http] GET 200 /health in 20ms' });
+  });
+
+  test('drops ANSI colour from the summary when NO_COLOR is set', async () => {
+    const proc = Bun.spawn({
+      cmd: [
+        process.execPath,
+        '-e',
+        "import { formatPrettyMessage } from './src/format.ts'; process.stdout.write(formatPrettyMessage({ name: 'transport:jsonrpc', transport: 'stdio', msg: 'call', method: 'sessions.list', durationMs: 3 }))"
+      ],
+      cwd: join(import.meta.dir, '../..'),
+      env: { ...Bun.env, NODE_ENV: 'development', NO_COLOR: '1' },
+      stdout: 'pipe',
+      stderr: 'pipe'
+    });
+    const [exitCode, stdout] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
+    expect({ exitCode, stdout }).toEqual({ exitCode: 0, stdout: '[transport:stdio] sessions.list ok in 3ms' });
   });
 
   test('keeps the regular logger prefix for non-transport logs', async () => {

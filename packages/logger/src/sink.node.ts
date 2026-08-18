@@ -13,6 +13,7 @@ import pino from 'pino';
 import { z } from 'zod';
 
 import { emitDeveloperRecord, hasDeveloperRecordSubscribers } from './developer.ts';
+import { isLogColorEnabled, stripAnsi } from './format.ts';
 import { getLogFile, getLoggerConfig, getLoggerConfigVersion, getLogLevel, getLogStderr } from './level.ts';
 import { debugLogPath, developerLogFileName } from './log-files.ts';
 
@@ -69,6 +70,9 @@ const developerStream: pino.DestinationStream = {
     } catch {
       return;
     }
+    // Pretty-console call sites colour `msg` in place; this consumer is structured JSON (devtools
+    // stream + on-disk developer log), so drop the escape codes rather than persist them.
+    if (typeof record.msg === 'string') record.msg = stripAnsi(record.msg);
     const channelId = typeof record.channelId === 'string' ? record.channelId : undefined;
     const sessionId = typeof record.sessionId === 'string' ? record.sessionId : undefined;
     const id = channelId ?? sessionId;
@@ -132,11 +136,13 @@ function buildLogger(name?: string, context?: Record<string, unknown>): Logger {
     const devTransport: pino.TransportSingleOptions = {
       target: 'pino-pretty',
       options: {
-        colorize: true,
+        colorize: isLogColorEnabled(),
         destination: dest,
         translateTime: 'SYS:HH:MM:ss',
         ignore: 'pid,hostname,name,method,path,status,durationMs,transport,transportCall',
-        messageFormat: '{if name}\x1B[2m[{name}]\x1B[0m {end}{msg}',
+        messageFormat: isLogColorEnabled()
+          ? '{if name}\x1B[2m[{name}]\x1B[0m {end}{msg}'
+          : '{if name}[{name}] {end}{msg}',
         errorLikeObjectKeys: ['err', 'error'],
         levelFirst: false,
         singleLine: false
@@ -229,11 +235,13 @@ function streamEntriesForDestination(destination: LogDestination): StreamEntry[]
               ? pino.transport({
                   target: 'pino-pretty',
                   options: {
-                    colorize: true,
+                    colorize: isLogColorEnabled(),
                     destination: destination.stream === 'stderr' ? 2 : 1,
                     translateTime: 'SYS:HH:MM:ss',
                     ignore: 'pid,hostname,name,method,path,status,durationMs,transport,transportCall',
-                    messageFormat: '{if name}\x1B[2m[{name}]\x1B[0m {end}{msg}',
+                    messageFormat: isLogColorEnabled()
+                      ? '{if name}\x1B[2m[{name}]\x1B[0m {end}{msg}'
+                      : '{if name}[{name}] {end}{msg}',
                     errorLikeObjectKeys: ['err', 'error'],
                     levelFirst: false,
                     singleLine: false
