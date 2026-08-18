@@ -8,6 +8,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { hermesEventPage } from '../../src/agent-adapters/hermes/event-pages.ts';
+import { echoHermesInput } from '../../src/agent-adapters/hermes/gateway/index.ts';
 import { hermesManagedMcpEnv, hermesMeshAgentAdapter } from '../../src/agent-adapters/hermes/index.ts';
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 
@@ -704,5 +705,33 @@ test('Hermes gives the reasoning and message events of one record distinct dedup
   expect(events.map((event) => event.dedupeKey)).toEqual([
     'hermes:791b9e7f:agent:reasoning:reasoning',
     'hermes:791b9e7f:agent:message:message'
+  ]);
+});
+
+test('Hermes turn echo projects the accepted user message the gateway never sends back', () => {
+  const events = hermesMeshAgentAdapter.events.projectLive({
+    id: 'live-hermes',
+    output: [
+      echoHermesInput('run the tests'),
+      JSON.stringify({
+        jsonrpc: '2.0',
+        method: 'event',
+        params: {
+          type: 'message.delta',
+          session_id: 'hermes-session',
+          payload: { text: 'Done.' }
+        }
+      })
+    ].join('')
+  }).events;
+
+  expect(
+    events.map((event) => {
+      const neutral = toAgentObservationEvent(event, hermesMeshAgentAdapter.observation);
+      return neutral ? { kind: neutral.kind, text: neutral.text } : null;
+    })
+  ).toEqual([
+    { kind: 'user-message', text: 'run the tests' },
+    { kind: 'assistant-message', text: 'Done.' }
   ]);
 });

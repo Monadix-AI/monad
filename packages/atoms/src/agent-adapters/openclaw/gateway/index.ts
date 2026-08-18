@@ -401,6 +401,21 @@ export function sendOpenClawInput(handle: MeshAgentRuntimeHandle, input: string)
   handle.gateway.send(req('sessions.send', id, { key: handle.providerSessionRef, message: input }));
 }
 
+// OpenClaw's gateway streams generated output only: `sessions.send` is answered with `chat` events for
+// the ASSISTANT turn and the accepted user message is never echoed back over the socket. It does land in
+// OpenClaw's own session jsonl, which is why an observer that re-reads the transcript sees the question
+// and a live observer sees only the answer. This is that missing record, in the same shape the jsonl
+// uses, so both planes project the same user-message event.
+export function echoOpenClawInput(input: string): string {
+  const timestamp = Date.now();
+  return `\n${JSON.stringify({
+    type: 'message',
+    id: `monad-echo-${timestamp}`,
+    timestamp: new Date(timestamp).toISOString(),
+    message: { role: 'user', content: input, timestamp }
+  })}\n`;
+}
+
 export function steerOpenClawInput(handle: MeshAgentRuntimeHandle, input: string): void {
   if (!handle.gateway) throw new Error('MeshAgent session has no OpenClaw gateway input bridge');
   if (!handle.providerSessionRef) throw new Error('OpenClaw gateway session is not ready');
@@ -446,6 +461,7 @@ export const openClawGatewayHooks: GatewayHooks = {
   initialize: openClawInitialize,
   parseOutput: parseOpenClawOutput,
   sendInput: sendOpenClawInput,
+  echoInput: echoOpenClawInput,
   steer: steerOpenClawInput,
   interrupt: interruptOpenClaw,
   resolveApproval: resolveOpenClawApproval

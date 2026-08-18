@@ -33,7 +33,9 @@ export function MonadMcpMessageList({
       {messages.map((message) => {
         const agent = message.role === 'assistant';
         const name = message.name ?? (message.role === 'user' ? userFallback : agentFallback);
-        const identity = agent ? resolveAgentIdentity?.({ name: message.agentName ?? name }) : undefined;
+        const identity = agent
+          ? resolveAgentIdentity?.({ id: message.agentId, name: message.agentName ?? name })
+          : undefined;
         const resolvedName = identity?.name ?? name;
         const time = formatMessageTimestamp(message.createdAt, locale);
         return (

@@ -206,6 +206,20 @@ export function sendHermesInput(handle: MeshAgentRuntimeHandle, input: string): 
   handle.gateway.send(jsonRpcRequest('prompt.submit', id, { session_id: sessionId, text: input }));
 }
 
+// Hermes streams `message.delta`/`message.complete`/`tool.*`/`approval.*` events only: the prompt it
+// accepted is never sent back over the socket, so a live observer sees answers without their question
+// until the session is re-read from Hermes' own stored transcript. This is that missing record, in the
+// role-carrying shape the transcript uses, so both planes project the same user-message event.
+export function echoHermesInput(input: string): string {
+  const timestamp = Date.now();
+  return `\n${JSON.stringify({
+    id: `monad-echo-${timestamp}`,
+    role: 'user',
+    content: input,
+    timestamp: new Date(timestamp).toISOString()
+  })}\n`;
+}
+
 export function steerHermesInput(handle: MeshAgentRuntimeHandle, input: string): void {
   if (!handle.gateway) throw new Error('MeshAgent session has no Hermes gateway input bridge');
   const sessionId = ephemeralSessionIds.get(handle);
@@ -241,6 +255,7 @@ export const hermesGatewayHooks: GatewayHooks = {
   initialize: hermesInitialize,
   parseOutput: parseHermesOutput,
   sendInput: sendHermesInput,
+  echoInput: echoHermesInput,
   steer: steerHermesInput,
   interrupt: interruptHermes,
   resolveApproval: resolveHermesApproval

@@ -108,8 +108,6 @@ test('expanding one row leaves another row collapsed', async () => {
 test('expanded reasoning remains open when streaming adds content and pairs the response', () => {
   const store = createObservationDisclosureStore();
   const mounted = render(reasoningTree(store, 'First reasoning update'));
-  expect(mounted.getByRole('button').getAttribute('aria-expanded')).toBe('true');
-  fireEvent.click(mounted.getByRole('button'));
   fireEvent.click(mounted.getByRole('button'));
   mounted.unmount();
 
@@ -133,7 +131,6 @@ test('expanded observation reasoning stays open when history loading recomputes 
   try {
     const store = createObservationDisclosureStore();
     const mounted = render(reasoningTree(store, 'Inspecting the loaded history'));
-    fireEvent.click(mounted.getByRole('button'));
     fireEvent.click(mounted.getByRole('button'));
 
     mounted.rerender(reasoningTree(store, 'Inspecting the loaded history', undefined, false));

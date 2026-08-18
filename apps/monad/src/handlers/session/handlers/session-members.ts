@@ -12,7 +12,6 @@ import type { Store } from '#/store/db/index.ts';
 import { newId } from '@monad/protocol';
 
 import { HandlerError } from '#/handlers/handler-error.ts';
-import { managedMeshAgentProjectMembers } from '#/handlers/session/handlers/messaging-members.ts';
 import {
   buildProjectSessionMember,
   createSessionMemberRoster,
@@ -49,7 +48,7 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
     deps: { store },
     requireSession
   } = ctx;
-  const { addProjectSessionMemberBinding } = createSessionMemberRoster(ctx, deps);
+  const { addProjectSessionMemberBinding, spawnIfManaged } = createSessionMemberRoster(ctx, deps);
 
   return {
     async listSessionMembers({ sessionId }: { sessionId: SessionId }) {
@@ -168,21 +167,13 @@ export function createSessionMembersHandlers(ctx: SessionContext, deps: SessionM
         member: canonicalMember,
         binding
       });
-      const meshAgents = (ctx.deps.configManager?.get().cfg.meshAgents ?? []).filter(
-        (agent) => agent.enabled !== false
-      );
-      const managed = managedMeshAgentProjectMembers(store, sessionId, meshAgents).find(
-        (candidate) => candidate.runtimeAgentName === memberId
-      );
-      if (ctx.deps.paths && managed) {
-        const result = await deps.spawnManagedSessionMember(session, managed);
-        if (result.started && result.nativeSessionId) {
-          store.updateSessionMember(sessionId, memberId, {
-            meshSessionId: result.nativeSessionId,
-            updatedAt: new Date().toISOString()
-          });
-        }
-      }
+      // Same completion boundary as invite: the durable member + binding IS the spawn result. A
+      // runtime start runs preflight, a provider handshake, and an opening turn — seconds at best, and
+      // unbounded when the provider stalls — so awaiting it here holds the HTTP response open and the
+      // caller's dialog sits in a spawning state long after the member exists.
+      void spawnIfManaged(session, memberId).catch((error) => {
+        ctx.deps.log?.warn({ sessionId, memberId, err: error }, 'managed session member background start failed');
+      });
       return requireSessionMemberBinding(store, session.projectId, sessionId, memberId);
     },
 

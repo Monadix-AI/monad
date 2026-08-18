@@ -104,3 +104,31 @@ test('turn bodies stay visible after prepending older events', () => {
   expect(before.map(itemShape)).toEqual([{ rowId: 'current-body' }]);
   expect(after.map(itemShape)).toEqual([{ rowId: 'older-body' }, { rowId: 'current-body' }]);
 });
+
+test("an earlier turn's streaming reasoning settles once a later turn produces output", () => {
+  const streamingReasoning = { ...event('turn-1-reasoning', 'reasoning', 'thinking'), streaming: true };
+  const items = observationTurnTimelineItems(
+    agentObservationCards(
+      [
+        event('turn-1-start', 'turn-start'),
+        streamingReasoning,
+        event('turn-1-end', 'turn-end'),
+        event('turn-2-start', 'turn-start'),
+        { ...event('turn-2-reasoning', 'reasoning', 'thinking again'), streaming: true }
+      ],
+      'openclaw'
+    ),
+    'openclaw',
+    true
+  );
+
+  expect(
+    items.map((item) => ({
+      id: item.id,
+      streaming: item.row.entries[0]?.kind === 'public' ? item.row.entries[0].card.streaming : undefined
+    }))
+  ).toEqual([
+    { id: 'turn-1-reasoning', streaming: false },
+    { id: 'turn-2-reasoning', streaming: true }
+  ]);
+});

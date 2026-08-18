@@ -9,7 +9,11 @@ import { join } from 'node:path';
 
 import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
 import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
-import { openClawInitialize, parseOpenClawFrame } from '../../src/agent-adapters/openclaw/gateway/index.ts';
+import {
+  echoOpenClawInput,
+  openClawInitialize,
+  parseOpenClawFrame
+} from '../../src/agent-adapters/openclaw/gateway/index.ts';
 import { openClawManagedMcpEnv, openClawMeshAgentAdapter } from '../../src/agent-adapters/openclaw/index.ts';
 import { monadMcpToolView } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-projection.ts';
 
@@ -467,6 +471,70 @@ test('OpenClaw projects only the target chat stream and deduplicates its paralle
   ]);
 });
 
+test('OpenClaw closes an errored turn and preserves the provider error message', () => {
+  const events = openClawMeshAgentAdapter.events.projectLive({
+    id: 'mesh-openclaw-error',
+    mode: 'events',
+    output: [
+      {
+        type: 'event',
+        event: 'agent',
+        payload: {
+          runId: 'error-run',
+          sessionKey: 'agent:main:dashboard:error',
+          stream: 'lifecycle',
+          data: { phase: 'start' }
+        }
+      },
+      {
+        type: 'event',
+        event: 'agent',
+        payload: {
+          runId: 'error-run',
+          sessionKey: 'agent:main:dashboard:error',
+          stream: 'reasoning',
+          data: { delta: 'Checking the project.' }
+        }
+      },
+      {
+        type: 'event',
+        event: 'agent',
+        payload: {
+          runId: 'error-run',
+          sessionKey: 'agent:main:dashboard:error',
+          stream: 'lifecycle',
+          data: { phase: 'error', stopReason: 'stop', error: 'Agent could not generate a response.' }
+        }
+      },
+      {
+        type: 'event',
+        event: 'chat',
+        payload: {
+          runId: 'error-run',
+          sessionKey: 'agent:main:dashboard:error',
+          state: 'error',
+          errorMessage: 'Agent could not generate a response.',
+          message: { role: 'assistant', content: [{ type: 'text', text: 'Agent could not generate a response.' }] }
+        }
+      }
+    ]
+      .map((frame) => JSON.stringify(frame))
+      .join('')
+  }).events;
+
+  expect(
+    events.map((event) => {
+      const neutral = toAgentObservationEvent(event, openClawMeshAgentAdapter.observation);
+      return neutral ? { kind: neutral.kind, streaming: neutral.streaming, text: neutral.text } : null;
+    })
+  ).toEqual([
+    { kind: 'turn-start', streaming: false, text: 'Message started' },
+    { kind: 'reasoning', streaming: true, text: 'Checking the project.' },
+    { kind: 'turn-end', streaming: false, text: 'Agent could not generate a response.' },
+    { kind: 'assistant-message', streaming: false, text: 'Agent could not generate a response.' }
+  ]);
+});
+
 test('OpenClaw history maps user, reasoning blocks, and assistant text separately', () => {
   const events = openClawMeshAgentAdapter.events.projectLive({
     id: 'stored-openclaw',
@@ -590,4 +658,28 @@ test('OpenClaw history pairs Monad tool calls and results into the semantic chat
       attachments: []
     }
   });
+});
+
+test('OpenClaw turn echo projects the accepted user message the gateway never sends back', () => {
+  const events = openClawMeshAgentAdapter.events.projectLive({
+    id: 'live-openclaw',
+    output: [
+      echoOpenClawInput('run the tests'),
+      JSON.stringify({
+        type: 'message',
+        id: 'assistant-1',
+        message: { role: 'assistant', timestamp: 1_786_281_671_507, content: [{ type: 'text', text: 'Done.' }] }
+      })
+    ].join('')
+  }).events;
+
+  expect(
+    events.map((event) => {
+      const neutral = toAgentObservationEvent(event, openClawMeshAgentAdapter.observation);
+      return neutral ? { kind: neutral.kind, text: neutral.text } : null;
+    })
+  ).toEqual([
+    { kind: 'user-message', text: 'run the tests' },
+    { kind: 'assistant-message', text: 'Done.' }
+  ]);
 });

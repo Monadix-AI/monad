@@ -8,6 +8,7 @@ import type {
   WorkplaceProjectMemberTemplate
 } from '@monad/protocol';
 import type { SessionContext } from '#/handlers/session/context.ts';
+import type { SessionMembersDeps } from '#/handlers/session/handlers/session-members.ts';
 
 import { expect, test } from 'bun:test';
 import { newId } from '@monad/protocol';
@@ -71,6 +72,8 @@ function buildHarness(
     | MeshAgentConfig[]
     | {
         stop?: (id: string) => void;
+        paths?: unknown;
+        spawnManagedSessionMember?: SessionMembersDeps['spawnManagedSessionMember'];
       } = [
     {
       name: 'codex',
@@ -107,7 +110,7 @@ function buildHarness(
   const ctx = {
     deps: {
       store,
-      paths: undefined,
+      paths: options.paths,
       configManager: {
         get: () => ({ cfg: { meshAgents, agent: { agents: monadAgents } } })
       },
@@ -122,7 +125,7 @@ function buildHarness(
   // paths is undefined, so spawnIfManaged no-ops after the insert — these tests assert the CRUD/guard
   // behavior of the handlers themselves.
   const handlers = createSessionMembersHandlers(ctx, {
-    spawnManagedSessionMember: async () => ({ started: false })
+    spawnManagedSessionMember: options.spawnManagedSessionMember ?? (async () => ({ started: false }))
   });
   return { handlers, stopCalls };
 }
@@ -813,4 +816,37 @@ test('listProjectRoster allows an HTTP read of a channel-owned Project Session',
   const result = await handlers.listProjectRoster({ sessionId: session.id });
 
   expect({ result, membersListed }).toEqual({ result: { members: [] }, membersListed: 1 });
+});
+
+test('spawnSessionMember answers with the member while the runtime is still starting', async () => {
+  const store = createStore();
+  try {
+    const project = fixtureProject(store);
+    const session = fixtureSession(store, { projectId: project.id });
+    let started = 0;
+    const { handlers } = buildHarness(store, {
+      paths: { home: '/tmp/monad-test-home' },
+      // A real managed start runs provider preflight and an opening turn; this one never settles, which
+      // is the case the handler must not wait for.
+      spawnManagedSessionMember: () => {
+        started += 1;
+        return new Promise(() => {});
+      }
+    });
+
+    const { member, binding } = await handlers.spawnSessionMember({
+      sessionId: session.id,
+      type: 'mesh-agent',
+      name: 'codex'
+    });
+
+    expect({
+      started,
+      lifecycle: binding.lifecycle,
+      profileId: member.profileId,
+      memberCount: store.listSessionMembers(session.id).length
+    }).toEqual({ started: 1, lifecycle: 'active', profileId: 'codex', memberCount: 1 });
+  } finally {
+    store.close();
+  }
 });

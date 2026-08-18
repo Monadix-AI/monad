@@ -42,11 +42,31 @@ function cardsWithTurnMessageTimestamps(group: ObservationTurnGroup): AgentObser
   });
 }
 
+/**
+ * A delta-derived card carries `streaming: true` for as long as the projector sees it as a streaming
+ * fragment — the provider never sends a "that run ended" frame, so the flag alone never clears. The
+ * timeline settles it positionally, but it does so per turn group, which leaves a finished turn's
+ * trailing reasoning card running forever while a LATER turn is active. Anything a card produced
+ * before the newest one is finished by definition, so settle it here, across the whole timeline.
+ */
+function settleSupersededStreams(cards: readonly AgentObservationCard[]): readonly AgentObservationCard[] {
+  const settleable = (card: AgentObservationCard) => card.kind === 'reasoning' || card.kind === 'message';
+  let lastStreamable = -1;
+  for (const [index, card] of cards.entries()) {
+    if (card.kind !== 'system' && card.kind !== 'unknown') lastStreamable = index;
+  }
+  if (!cards.some((card, index) => index !== lastStreamable && card.streaming && settleable(card))) return cards;
+  return cards.map((card, index) =>
+    index !== lastStreamable && card.streaming && settleable(card) ? { ...card, streaming: false } : card
+  );
+}
+
 export function observationTurnTimelineItems(
-  cards: readonly AgentObservationCard[],
+  allCards: readonly AgentObservationCard[],
   provider: string,
   active = false
 ): ObservationTurnTimelineItem[] {
+  const cards = settleSupersededStreams(allCards);
   const items: ObservationTurnTimelineItem[] = [];
   let ungrouped: AgentObservationCard[] = [];
   let current: ObservationTurnGroup | undefined;

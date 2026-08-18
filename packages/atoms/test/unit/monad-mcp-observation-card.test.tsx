@@ -1231,10 +1231,21 @@ test('renders project-read messages with friendly identity, body, and reusable a
     output: {
       messages: [
         {
+          id: 'message_pending',
+          role: 'assistant',
+          text: '',
+          data: {
+            memberId: 'pmem_openclaw',
+            agentName: 'pmem_openclaw',
+            agentDisplayName: 'OpenClaw'
+          }
+        },
+        {
           id: 'message_44',
           role: 'assistant',
           text: 'Ask @[name="Reviewer" id="pmid_reviewer"] to review the release notes before publishing.',
           data: {
+            memberId: 'pmem_claude',
             agentName: 'claude-code',
             agentDisplayName: 'Claude',
             attachments: [
@@ -1257,13 +1268,27 @@ test('renders project-read messages with friendly identity, body, and reusable a
   const view = monadMcpToolView(call, result, []);
   if (!view) throw new Error('Expected Monad project_read view');
 
+  let identityReference: { id?: string; name?: string } | undefined;
+  const host = {
+    ...experienceHost,
+    resolveAgentIdentity: (reference: { id?: string; name?: string }) => {
+      identityReference = reference;
+      return {
+        id: reference.id ?? 'unknown',
+        name: 'Claude',
+        avatarUrl: '/shared-room-avatar.png',
+        providerIcon: { path: 'M2 2h20v20H2z', title: 'Claude Code' }
+      };
+    }
+  } satisfies WorkplaceExperienceHost;
+
   const markup = renderToStaticMarkup(
-    React.createElement(
-      'div',
-      undefined,
-      React.createElement(MonadMcpToolHeader, { view }),
-      React.createElement(MonadMcpToolCard, { view })
-    )
+    <WorkplaceExperienceHostProvider value={host}>
+      <div>
+        <MonadMcpToolHeader view={view} />
+        <MonadMcpToolCard view={view} />
+      </div>
+    </WorkplaceExperienceHostProvider>
   );
 
   expect({
@@ -1274,8 +1299,10 @@ test('renders project-read messages with friendly identity, body, and reusable a
     attachmentMeta: markup.includes('data-slot="monad-mcp-attachment-meta"'),
     body: markup.includes('data-slot="monad-mcp-message-body"'),
     identity: markup.includes('data-slot="monad-mcp-message-header"') && markup.includes('aria-label="Claude Code"'),
+    identityReference,
     mentionChip: markup.includes('data-composer-chip="mention"'),
     message: markup.includes('data-slot="monad-mcp-message"'),
+    messageCount: markup.match(/data-slot="monad-mcp-message"/g)?.length,
     text:
       visibleText(markup).includes('Claude') &&
       visibleText(markup).includes('Ask Reviewer to review the release notes before publishing.')
@@ -1285,8 +1312,10 @@ test('renders project-read messages with friendly identity, body, and reusable a
     attachmentMeta: true,
     body: true,
     identity: true,
+    identityReference: { id: 'pmem_claude', name: 'claude-code' },
     mentionChip: true,
     message: true,
+    messageCount: 1,
     text: true
   });
 });

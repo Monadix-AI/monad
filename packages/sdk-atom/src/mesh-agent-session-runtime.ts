@@ -125,6 +125,15 @@ export interface ResidentProviderDriver extends ProviderDriverBase {
   processModel: 'resident';
   attachChannel(channel: SessionEventChannel, context: SessionEventChannelContext): Promise<DriverReady | undefined>;
   sendTurn(input: MeshAgentTurnInput): Promise<void>;
+  /**
+   * The transcript line the provider WOULD have emitted for the turn it was just sent, in that
+   * provider's own record vocabulary. Some resident providers stream generated output only and never
+   * echo what they were asked, so their observation timeline shows answers with no question until the
+   * session is re-read from the provider's own transcript on disk. A driver that knows its provider is
+   * output-only returns the missing record here and the host captures it as an observed frame; a
+   * provider that echoes its own input returns nothing (returning one would double the message).
+   */
+  echoTurnInput?(input: MeshAgentTurnInput): string | undefined;
 }
 
 export interface PerTurnProviderDriver extends ProviderDriverBase {

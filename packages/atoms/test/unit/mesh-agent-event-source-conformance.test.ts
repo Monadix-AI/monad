@@ -447,3 +447,34 @@ test('Codex live and history message envelopes share semantic dedupe identities'
     historyUser: 'codex:turn:turn_2:message:user:ae2abba7:user:item/userMessage'
   });
 });
+
+test('a coalesced streaming run keeps one identity as further deltas arrive', () => {
+  const deltaProjection: MeshAgentObservationProjector = {
+    isStreamingFragment: (event) => event.providerEventType === 'reasoning.delta',
+    recordProjectors: [
+      {
+        parse: ({ id, record, recordIndex }) =>
+          observation({
+            id: `${id}:${recordIndex}`,
+            role: 'agent',
+            text: typeof record.delta === 'string' ? record.delta : undefined,
+            source: 'unknown',
+            providerEventType: 'reasoning.delta',
+            raw: record
+          })
+      }
+    ]
+  };
+  const source = createProjectedEventSource({ provider: 'openclaw', projection: deltaProjection });
+  const delta = (text: string) => JSON.stringify({ type: 'reasoning', delta: text });
+  const project = (...deltas: string[]) => source.projectLive({ id: 'live', output: deltas.join('\n') }).events;
+
+  const first = project(delta('Chec'));
+  const second = project(delta('Chec'), delta('king the repo'));
+
+  const runIdentity = 'openclaw:e4e60836:reasoning:agent:reasoning.delta';
+  expect([
+    first.map((event) => ({ dedupeKey: event.dedupeKey, text: event.text })),
+    second.map((event) => ({ dedupeKey: event.dedupeKey, text: event.text }))
+  ]).toEqual([[{ dedupeKey: runIdentity, text: 'Chec' }], [{ dedupeKey: runIdentity, text: 'Checking the repo' }]]);
+});

@@ -361,9 +361,15 @@ export class MeshAgentHost {
       this.events.publish(live.transcriptTargetId, 'mesh.turn_started', { meshSessionId: id });
     }
     try {
-      const completion = live.sessionEventRuntime.input({ text: req.input, attachments: [] });
+      const completion = live.sessionEventRuntime.input(
+        { text: req.input, attachments: [] },
+        { waitForSettlement: live.runtimeRole === 'managed-project-agent' }
+      );
       options?.onAccepted?.();
       await completion;
+      if (live.runtimeRole === 'managed-project-agent') {
+        this.events.publish(live.transcriptTargetId, 'mesh.turn_settled', { meshSessionId: id });
+      }
     } catch (error) {
       if (live.runtimeRole === 'managed-project-agent') {
         this.events.publish(live.transcriptTargetId, 'mesh.turn_settled', { meshSessionId: id, error: true });

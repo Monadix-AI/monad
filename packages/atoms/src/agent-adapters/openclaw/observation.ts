@@ -94,11 +94,11 @@ export function openClawRecordEvents(
         raw: record
       });
     }
-    if (stream === 'lifecycle' && phase === 'end') {
+    if (stream === 'lifecycle' && (phase === 'end' || phase === 'error' || phase === 'aborted')) {
       return observation({
         id: `${id}:json:${recordIndex}:turn-end`,
         role: 'system',
-        text: 'complete',
+        text: textValue(data?.error) ?? (phase === 'end' ? 'complete' : phase),
         source: 'unknown',
         providerEventType: 'turn-end',
         createdAt,
@@ -209,7 +209,9 @@ export const openClawObservationProjection = {
       const payload = recordValue(record.payload);
       const sessionKey = textValue(payload?.sessionKey);
       if (context?.providerSessionRef && sessionKey && sessionKey !== context.providerSessionRef) return false;
-      if (record.event === 'chat') return payload?.state === 'delta' || payload?.state === 'final';
+      if (record.event === 'chat') {
+        return payload?.state === 'delta' || payload?.state === 'final' || payload?.state === 'error';
+      }
       if (record.event !== 'agent') {
         return (
           record.event !== 'connect.challenge' &&
@@ -221,7 +223,8 @@ export const openClawObservationProjection = {
       const stream = textValue(payload?.stream);
       const phase = textValue(recordValue(payload?.data)?.phase);
       if (
-        (stream === 'lifecycle' && (phase === 'start' || phase === 'end')) ||
+        (stream === 'lifecycle' &&
+          (phase === 'start' || phase === 'end' || phase === 'error' || phase === 'aborted')) ||
         stream === 'reasoning' ||
         stream === 'thinking'
       )
@@ -236,9 +239,9 @@ export const openClawObservationProjection = {
       state.raw.push(entry.record);
       state.createdAt = openClawCreatedAt(entry.record, recordValue(payload?.message)) ?? state.createdAt;
       if (payload?.state === 'delta' && typeof payload.deltaText === 'string') state.deltas.push(payload.deltaText);
-      if (payload?.state === 'final') {
+      if (payload?.state === 'final' || payload?.state === 'error') {
         const message = recordValue(payload.message);
-        state.finalText = textFromContent(message?.content);
+        state.finalText = textFromContent(message?.content) ?? textValue(payload.errorMessage);
       }
     },
     create(record) {

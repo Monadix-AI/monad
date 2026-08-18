@@ -813,6 +813,106 @@ describe('generic session-event runtime executor', () => {
     await executor.close();
   });
 
+  test('captures a driver-supplied turn echo as an observed frame, and only after the send lands', async () => {
+    const residentDriver = driver('resident');
+    const sends: string[] = [];
+    residentDriver.sendTurn = async (input) => {
+      sends.push(input.text);
+      if (input.text === 'rejected turn') throw new Error('send failed');
+    };
+    residentDriver.echoTurnInput = (input) => `{"role":"user","text":"${input.text}"}`;
+    const captured: Array<{ epoch: string; payload: string }> = [];
+    const executor = new SessionEventRuntimeExecutor({
+      definition: {
+        plan: {
+          processModel: 'resident',
+          launch: { args: ['serve'], cwd: '/workspace' },
+          channel: { kind: 'child-stdio' },
+          startup: { timeoutMs: 1_000 },
+          suspend: { idleTimeoutMs: 60_000 }
+        },
+        driver: residentDriver
+      },
+      executable: '/bin/provider',
+      allowedWorkingRoot: '/workspace',
+      workingPath: '/workspace',
+      resourceFactory: {
+        async start() {
+          return activation({ pending: true });
+        }
+      },
+      createObservationEpoch: () => 'epoch-1',
+      captureRaw: async (packet, epoch) => {
+        captured.push({ epoch, payload: new TextDecoder().decode(packet.bytes) });
+      },
+      consumeEvent: async () => {}
+    });
+
+    await executor.open();
+    await executor.input({ text: 'accepted turn', attachments: [] });
+    await expect(executor.input({ text: 'rejected turn', attachments: [] })).rejects.toThrow('send failed');
+
+    expect({ sends, captured }).toEqual({
+      sends: ['accepted turn', 'rejected turn'],
+      captured: [{ epoch: 'epoch-1', payload: '{"role":"user","text":"accepted turn"}' }]
+    });
+    await executor.close();
+  });
+
+  test('waits for a resident turn terminal event when settlement is requested', async () => {
+    let releaseFinal = () => {};
+    const finalPacket = new Promise<void>((resolve) => {
+      releaseFinal = resolve;
+    });
+    const residentDriver = driver('resident');
+    residentDriver.accept = async (_packet, sink) => {
+      await sink.emit({ type: 'agent_message', payload: { text: 'done', final: true } });
+    };
+    const executor = new SessionEventRuntimeExecutor({
+      definition: {
+        plan: {
+          processModel: 'resident',
+          launch: { args: ['serve'], cwd: '/workspace' },
+          channel: { kind: 'child-stdio' },
+          startup: { timeoutMs: 1_000 }
+        },
+        driver: residentDriver
+      },
+      executable: '/bin/provider',
+      allowedWorkingRoot: '/workspace',
+      workingPath: '/workspace',
+      resourceFactory: {
+        async start() {
+          const runtime = activation({ pending: true });
+          runtime.packets = async function* () {
+            await finalPacket;
+            yield {
+              bytes: new TextEncoder().encode('completed'),
+              source: 'provider-channel',
+              receivedAt: '2026-08-18T00:00:00.000Z'
+            };
+          };
+          return runtime;
+        }
+      },
+      createObservationEpoch: () => 'epoch-1',
+      captureRaw: async () => {},
+      consumeEvent: async () => {}
+    });
+
+    await executor.open();
+    let settled = false;
+    const input = executor.input({ text: 'wait for me', attachments: [] }, { waitForSettlement: true }).then(() => {
+      settled = true;
+    });
+    await Bun.sleep(0);
+    expect({ settled, activity: executor.snapshot().activity.state }).toEqual({ settled: false, activity: 'running' });
+    releaseFinal();
+    await input;
+    expect({ settled, activity: executor.snapshot().activity.state }).toEqual({ settled: true, activity: 'idle' });
+    await executor.close();
+  });
+
   test('treats an unexpected resident process exit as a terminal failure even with exit code zero', async () => {
     const executor = new SessionEventRuntimeExecutor({
       definition: {

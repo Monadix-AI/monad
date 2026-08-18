@@ -74,6 +74,10 @@ export class GatewayDriver implements ResidentProviderDriver {
     return undefined;
   }
 
+  echoTurnInput(input: MeshAgentTurnInput): string | undefined {
+    return this.options.hooks.echoInput?.(input.text);
+  }
+
   async sendTurn(input: MeshAgentTurnInput): Promise<void> {
     await this.requireReady();
     if (!this.handle) throw new Error('provider gateway channel is not attached');

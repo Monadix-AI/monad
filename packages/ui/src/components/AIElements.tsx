@@ -243,21 +243,18 @@ function useReasoning() {
 
 export type ReasoningProps = ComponentProps<typeof Collapsible> & {
   isStreaming?: boolean;
-  autoCloseOnComplete?: boolean;
   open?: boolean;
   defaultOpen?: boolean;
   onOpenChange?: (open: boolean) => void;
   duration?: number;
 };
 
-const AUTO_CLOSE_DELAY = 1000;
 const MS_IN_S = 1000;
 
 export const Reasoning = memo(
   ({
     className,
     isStreaming = false,
-    autoCloseOnComplete = true,
     open,
     defaultOpen,
     onOpenChange,
@@ -265,11 +262,11 @@ export const Reasoning = memo(
     children,
     ...props
   }: ReasoningProps) => {
-    const resolvedDefaultOpen = defaultOpen ?? isStreaming;
-    const isExplicitlyClosed = defaultOpen === false;
-
+    // Reasoning stays collapsed until the reader opens it, streaming or not. Auto-expanding on a
+    // stream hijacks the transcript: the card grows and pushes the answer the reader is waiting for
+    // off-screen, and any collapse they perform is undone by the next token.
     const [isOpen, setIsOpen] = useControllableState<boolean>({
-      defaultProp: resolvedDefaultOpen,
+      defaultProp: defaultOpen ?? false,
       onChange: onOpenChange,
       prop: open
     });
@@ -279,13 +276,10 @@ export const Reasoning = memo(
     });
     const [liveDuration, setLiveDuration] = useState(0);
 
-    const hasEverStreamedRef = useRef(isStreaming);
-    const [hasAutoClosed, setHasAutoClosed] = useState(false);
     const startTimeRef = useRef<number | null>(null);
 
     useEffect(() => {
       if (isStreaming) {
-        hasEverStreamedRef.current = true;
         if (startTimeRef.current === null) {
           startTimeRef.current = Date.now();
           setLiveDuration(0);
@@ -303,23 +297,6 @@ export const Reasoning = memo(
       }, MS_IN_S);
       return () => clearInterval(timer);
     }, [isStreaming]);
-
-    useEffect(() => {
-      if (isStreaming && !isOpen && !isExplicitlyClosed) {
-        setIsOpen(true);
-      }
-    }, [isStreaming, isOpen, setIsOpen, isExplicitlyClosed]);
-
-    useEffect(() => {
-      if (autoCloseOnComplete && hasEverStreamedRef.current && !isStreaming && isOpen && !hasAutoClosed) {
-        const timer = setTimeout(() => {
-          setIsOpen(false);
-          setHasAutoClosed(true);
-        }, AUTO_CLOSE_DELAY);
-
-        return () => clearTimeout(timer);
-      }
-    }, [autoCloseOnComplete, isStreaming, isOpen, setIsOpen, hasAutoClosed]);
 
     const handleOpenChange = useCallback(
       (newOpen: boolean) => {

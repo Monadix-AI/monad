@@ -36,6 +36,7 @@ export type MonadMcpAttachment = {
 
 export type MonadMcpMessage = {
   id: string;
+  agentId?: string;
   agentName?: string;
   attachments: MonadMcpAttachment[];
   createdAt?: string;
@@ -366,17 +367,23 @@ function projectMessages(value: unknown): MonadMcpMessage[] | undefined {
     const name = [data?.agentDisplayName, data?.displayName, data?.agentName, message.name].find(
       (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
     );
+    const agentId = [data?.memberId, message.memberId].find(
+      (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
+    );
     const agentName = [data?.agentName, message.agentName].find(
       (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
     );
     const id = [message.id, message.messageId].find(
       (candidate): candidate is string => typeof candidate === 'string' && candidate.trim().length > 0
     );
+    const messageAttachments = attachments(data?.attachments ?? message.attachments);
+    if (!message.text.trim() && messageAttachments.length === 0) return [];
     return [
       {
         id: id ?? `message-${index}`,
+        ...(agentId ? { agentId } : {}),
         ...(agentName ? { agentName } : {}),
-        attachments: attachments(data?.attachments ?? message.attachments),
+        attachments: messageAttachments,
         ...optionalString('createdAt', message.createdAt),
         ...(name ? { name } : {}),
         ...optionalString('role', message.role),

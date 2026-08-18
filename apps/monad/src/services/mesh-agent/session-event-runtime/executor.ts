@@ -40,6 +40,11 @@ interface SessionEventRuntimeExecutorOptions extends SessionEventRuntimeCallback
   createObservationEpoch(): string;
 }
 
+type ResidentTurnSettlement = {
+  promise: Promise<void>;
+  resolve(): void;
+};
+
 function runtimeFailure(message: string, retryable: boolean) {
   return { code: 'session_event_runtime_failed', message, retryable };
 }
@@ -67,6 +72,8 @@ export class SessionEventRuntimeExecutor {
   private disposed = false;
   private turnSequence = 0;
   private residentActivationPromise?: Promise<void>;
+  private residentObservationEpoch?: string;
+  private readonly residentTurnSettlements: ResidentTurnSettlement[] = [];
   private idleTimer?: ReturnType<typeof setTimeout>;
   private readonly intentionallyClosedActivations = new WeakSet<SessionEventRuntimeActivation>();
 
@@ -99,7 +106,10 @@ export class SessionEventRuntimeExecutor {
     };
   }
 
-  async open(initialTurn?: MeshAgentTurnInput): Promise<SessionEventRuntimeSnapshot> {
+  async open(
+    initialTurn?: MeshAgentTurnInput,
+    options?: { waitForInitialTurnSettlement?: boolean }
+  ): Promise<SessionEventRuntimeSnapshot> {
     if (this.lifecycle.state !== 'starting') throw new Error('MeshAgent session runtime has already been opened');
     if (this.definition.plan.processModel === 'per-turn') {
       const ready = await this.definition.driver.openSession({
@@ -126,7 +136,7 @@ export class SessionEventRuntimeExecutor {
       }
       this.lifecycle = { state: 'active' };
       this.publishSnapshot();
-      if (initialTurn) await this.input(initialTurn);
+      if (initialTurn) await this.input(initialTurn, { waitForSettlement: options?.waitForInitialTurnSettlement });
       else this.armIdleTimer();
       return this.snapshot();
     } catch (error) {
@@ -136,7 +146,7 @@ export class SessionEventRuntimeExecutor {
     }
   }
 
-  input(input: MeshAgentTurnInput): Promise<void> {
+  input(input: MeshAgentTurnInput, options?: { waitForSettlement?: boolean }): Promise<void> {
     if (this.lifecycle.state !== 'active') return Promise.reject(new Error('MeshAgent session is not active'));
     const parsed = meshAgentTurnInputSchema.parse(input);
     if (this.definition.plan.processModel === 'resident') {
@@ -150,12 +160,16 @@ export class SessionEventRuntimeExecutor {
           queuedTurnCount: this.queuedTurnCount
         };
         this.publishSnapshot();
+        const settlement = this.createResidentTurnSettlement();
         try {
           await this.residentDriver().sendTurn(parsed);
+          await this.captureTurnInputEcho(parsed);
         } catch (error) {
+          this.removeResidentTurnSettlement(settlement);
           this.settleResidentActivity();
           throw error;
         }
+        if (options?.waitForSettlement) await settlement.promise;
       });
     }
     this.queuedTurnCount += 1;
@@ -257,6 +271,23 @@ export class SessionEventRuntimeExecutor {
     }
   }
 
+  // A provider that never echoes an accepted turn leaves its observation timeline with answers and no
+  // questions. The driver supplies the record the provider omitted and it is captured on the same path
+  // as a received frame, AFTER the send succeeds — a turn that never reached the provider must not
+  // leave a question in the transcript.
+  private async captureTurnInputEcho(input: MeshAgentTurnInput): Promise<void> {
+    if (this.definition.plan.processModel !== 'resident') return;
+    const epoch = this.residentObservationEpoch;
+    const echo = epoch === undefined ? undefined : this.residentDriver().echoTurnInput?.(input);
+    if (!echo || epoch === undefined) return;
+    // The turn itself already succeeded; a rotated epoch (the observation window this echo belongs to
+    // is gone) must not surface as a failed send.
+    await this.captureRaw(
+      { bytes: new TextEncoder().encode(echo), source: 'provider-channel', receivedAt: new Date().toISOString() },
+      epoch
+    ).catch(() => undefined);
+  }
+
   private async pumpPackets(
     activation: SessionEventRuntimeActivation,
     epoch: string,
@@ -292,6 +323,7 @@ export class SessionEventRuntimeExecutor {
           error: result.failure ?? runtimeFailure(`resident process exited with code ${result.exitCode}`, false)
         }
       };
+      this.resolveResidentTurnSettlements();
       this.publishSnapshot();
     } catch (error) {
       if (!this.closePromise && !this.intentionallyClosedActivations.has(activation)) this.failSession(error);
@@ -316,6 +348,7 @@ export class SessionEventRuntimeExecutor {
 
   private settleResidentActivity(): void {
     if (this.definition.plan.processModel !== 'resident' || this.lifecycle.state !== 'active') return;
+    this.residentTurnSettlements.shift()?.resolve();
     this.activity = { state: 'idle', pid: null, queuedTurnCount: 0 };
     this.publishSnapshot();
     this.armIdleTimer();
@@ -347,11 +380,13 @@ export class SessionEventRuntimeExecutor {
     };
     this.activity = { state: 'idle', pid: null, queuedTurnCount: 0 };
     this.connection = { state: 'inactive' };
+    this.resolveResidentTurnSettlements();
     this.publishSnapshot();
   }
 
   private async closeOnce(): Promise<void> {
     this.clearIdleTimer();
+    this.resolveResidentTurnSettlements();
     const activation = this.activation;
     this.activation = undefined;
     const activationPromise = this.residentActivationPromise;
@@ -390,6 +425,25 @@ export class SessionEventRuntimeExecutor {
     this.activity = { state: 'idle', pid: null, queuedTurnCount: 0 };
     this.connection = { state: 'inactive' };
     this.publishSnapshot();
+  }
+
+  private createResidentTurnSettlement(): ResidentTurnSettlement {
+    let resolve = () => {};
+    const promise = new Promise<void>((settled) => {
+      resolve = settled;
+    });
+    const settlement = { promise, resolve };
+    this.residentTurnSettlements.push(settlement);
+    return settlement;
+  }
+
+  private removeResidentTurnSettlement(settlement: ResidentTurnSettlement): void {
+    const index = this.residentTurnSettlements.indexOf(settlement);
+    if (index >= 0) this.residentTurnSettlements.splice(index, 1);
+  }
+
+  private resolveResidentTurnSettlements(): void {
+    for (const settlement of this.residentTurnSettlements.splice(0)) settlement.resolve();
   }
 
   private residentDriver(): Extract<SessionEventRuntimeDefinition, { plan: { processModel: 'resident' } }>['driver'] {
@@ -434,6 +488,7 @@ export class SessionEventRuntimeExecutor {
       plan: validateProcessLaunchPlan(processPlan)
     });
     const epoch = this.createObservationEpoch();
+    this.residentObservationEpoch = epoch;
     const abort = new AbortController();
     let activation: SessionEventRuntimeActivation | undefined;
     try {

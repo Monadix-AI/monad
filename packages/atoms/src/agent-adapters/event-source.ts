@@ -98,13 +98,13 @@ function eventDedupeKey(
     return discriminator ? `${provider}:${semanticIdentity}:${discriminator}` : `${provider}:${semanticIdentity}`;
   }
   const rawEvents = event.provenance.rawEvents;
-  const recordIds = providerRecordIds(rawEvents);
-  const recordIdentity =
-    recordIds.length > 0
-      ? recordIds.length === 1
-        ? (recordIds[0] ?? '')
-        : contentHash(recordIds.join(':'))
-      : contentHash(canonicalJson(rawEvents.length === 1 ? rawEvents[0] : rawEvents));
+  // Anchor identity on the FIRST raw record, never on the whole set. A coalesced event (a streaming
+  // run, a message group) absorbs one more record per delta, so a set-derived identity changes on
+  // every token: the consumer keys a new row, remounts it, and anything the row was measuring — an
+  // elapsed-time readout, a scroll position, a disclosure — restarts. The first record is also the
+  // one both planes agree on, so a partially-streamed live run still joins its earlier-events twin.
+  const firstRaw = rawEvents[0];
+  const recordIdentity = providerRecordIdentity(firstRaw) ?? contentHash(canonicalJson(firstRaw ?? null));
   const discriminator = eventDedupeDiscriminator(event, recordIdentity);
   return discriminator ? `${provider}:${recordIdentity}:${discriminator}` : `${provider}:${recordIdentity}`;
 }

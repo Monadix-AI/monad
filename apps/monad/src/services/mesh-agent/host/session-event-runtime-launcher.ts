@@ -477,7 +477,7 @@ export class MeshSessionEventRuntimeLauncher {
         managedOwnershipEstablished = true;
       }
       await args.beforeInitialTurn?.(id);
-      await runtime.open(startInput?.initialTurn);
+      await runtime.open(startInput?.initialTurn, { waitForInitialTurnSettlement: willBeManaged });
       const snapshot = runtime.snapshot();
       const terminal = snapshot.lifecycle.state === 'terminal' ? snapshot.lifecycle.termination : undefined;
       const pid = snapshot.activity.state === 'running' ? snapshot.activity.pid : null;

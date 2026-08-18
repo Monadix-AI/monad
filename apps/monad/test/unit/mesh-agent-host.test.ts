@@ -401,7 +401,7 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
   const bus = new EventBus();
   const turnEvents: Array<{ type: string; payload: unknown }> = [];
   const dispose = bus.subscribe('ses_01KWRUNTIME0', (event) => {
-    if (event.type === 'mesh.turn_started') {
+    if (event.type === 'mesh.turn_started' || event.type === 'mesh.turn_settled') {
       turnEvents.push({ type: event.type, payload: event.payload });
     }
   });
@@ -441,7 +441,10 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
     expect({ accepted, turns, turnEvents }).toEqual({
       accepted: ['structured-event', 'structured-event'],
       turns: [0, 0],
-      turnEvents: [{ type: 'mesh.turn_started', payload: { meshSessionId: view.id } }]
+      turnEvents: [
+        { type: 'mesh.turn_started', payload: { meshSessionId: view.id } },
+        { type: 'mesh.turn_settled', payload: { meshSessionId: view.id } }
+      ]
     });
     await host.stop(view.id);
     expect(store.getMeshSession(view.id)?.state).toBe('stopped');

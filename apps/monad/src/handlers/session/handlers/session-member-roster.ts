@@ -239,5 +239,5 @@ export function createSessionMemberRoster(ctx: SessionContext, deps: SessionMemb
     return minted;
   }
 
-  return { addProjectSessionMemberBinding };
+  return { addProjectSessionMemberBinding, spawnIfManaged };
 }
