@@ -6,6 +6,7 @@ import { checkInitialized } from '../../lib/init-flow.ts';
 import { bold, cyan, dim, green } from '../../lib/output.ts';
 import { CliError, EXIT, FLAG_COL } from '../types.ts';
 import { command as abort } from './abort.ts';
+import { command as archive } from './archive.ts';
 import { command as branch } from './branch.ts';
 import { command as list } from './list.ts';
 import { command as messages } from './messages.ts';
@@ -17,6 +18,7 @@ import { command as rm } from './rm.ts';
 import { command as search } from './search.ts';
 import { command as send } from './send.ts';
 import { command as show } from './show.ts';
+import { command as unarchive } from './unarchive.ts';
 import { command as watch } from './watch.ts';
 
 const sessionCommands: SessionCommandDef[] = [
@@ -32,6 +34,8 @@ const sessionCommands: SessionCommandDef[] = [
   restore,
   reset,
   abort,
+  archive,
+  unarchive,
   rm
 ];
 

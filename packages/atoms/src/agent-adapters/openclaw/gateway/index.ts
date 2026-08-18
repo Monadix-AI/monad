@@ -56,8 +56,8 @@ const CONNECT_ROLE = 'operator';
 /** `operator.write` is what `sessions.create`/`sessions.send` require; the gateway only grants it to a
  *  connection carrying a valid device signature (a token-only connect is granted an empty scope set). */
 const CONNECT_SCOPES = ['operator.read', 'operator.write'];
-// OpenClaw leaves `sessions.patch` unclassified, so its gateway policy requires admin even though Monad
-// only uses it to pin the managed prompt workspace and cwd. Keep that scope off ordinary chat sessions.
+// Managed prompt workspace fields require admin. Archive state and archive-then-delete stay on the
+// ordinary operator.write surface, so lifecycle controls do not widen ordinary chat-session scopes.
 const MANAGED_CONNECT_SCOPES = [...CONNECT_SCOPES, 'operator.admin'];
 
 interface OpenClawConnectState {
@@ -77,6 +77,10 @@ interface OpenClawConnectState {
 // request can't be sent until then). Keyed by handle so a reconnect — which re-invokes `initialize`
 // with a fresh identity — is naturally independent. A WeakMap avoids widening the runtime-handle type.
 const connectStates = new WeakMap<MeshAgentRuntimeHandle, OpenClawConnectState>();
+const lifecycleRequests = new WeakMap<
+  MeshAgentRuntimeHandle,
+  Map<string, { reject(error: Error): void; resolve(): void; timeout: ReturnType<typeof setTimeout> }>
+>();
 
 let nextFrameSeq = 0;
 /** Frame ids must be strings (`RequestFrameSchema.id: TString`); `handle.nextRequestId()` returns a
@@ -199,6 +203,22 @@ function responseEvents(frame: OpenClawEnvelope, handle?: MeshAgentRuntimeHandle
   const idKey = typeof frame.id === 'string' ? frame.id : undefined;
   const kind = idKey !== undefined ? handle?.pendingRequests?.get(idKey) : undefined;
   if (idKey !== undefined && kind !== undefined) handle?.pendingRequests?.delete(idKey);
+  const lifecycleRequest = idKey !== undefined && handle ? lifecycleRequests.get(handle)?.get(idKey) : undefined;
+  if (lifecycleRequest && idKey !== undefined && handle) {
+    lifecycleRequests.get(handle)?.delete(idKey);
+    clearTimeout(lifecycleRequest.timeout);
+    if (frame.ok === false) {
+      const errorInfo = recordValue(frame.error) ?? recordValue(frame.payload);
+      lifecycleRequest.reject(
+        new Error(
+          typeof errorInfo?.message === 'string' ? errorInfo.message : `OpenClaw ${kind ?? 'session lifecycle'} failed`
+        )
+      );
+    } else {
+      lifecycleRequest.resolve();
+    }
+    return [];
+  }
 
   if (frame.ok === false) {
     // ResponseFrameSchema puts rejection details in `error`, not `payload` (`payload` is absent/empty on
@@ -457,6 +477,57 @@ export function resolveOpenClawApproval(handle: MeshAgentRuntimeHandle, resoluti
   );
 }
 
+function requestOpenClawSessionLifecycle(
+  handle: MeshAgentRuntimeHandle,
+  method: 'sessions.patch' | 'sessions.delete',
+  params: Record<string, unknown>
+): Promise<void> {
+  if (!handle.gateway) throw new Error('MeshAgent session has no OpenClaw gateway lifecycle bridge');
+  const id = frameId(handle);
+  handle.pendingRequests?.set(id, `sessionLifecycle:${method}`);
+  return new Promise<void>((resolve, reject) => {
+    const requests = lifecycleRequests.get(handle) ?? new Map();
+    lifecycleRequests.set(handle, requests);
+    const timeout = setTimeout(() => {
+      requests.delete(id);
+      handle.pendingRequests?.delete(id);
+      reject(new Error(`OpenClaw ${method} timed out`));
+    }, 10_000);
+    requests.set(id, { reject, resolve, timeout });
+    try {
+      void Promise.resolve(handle.gateway?.send(req(method, id, params))).catch((error) => {
+        clearTimeout(timeout);
+        requests.delete(id);
+        handle.pendingRequests?.delete(id);
+        reject(error instanceof Error ? error : new Error(String(error)));
+      });
+    } catch (error) {
+      clearTimeout(timeout);
+      requests.delete(id);
+      handle.pendingRequests?.delete(id);
+      reject(error instanceof Error ? error : new Error(String(error)));
+    }
+  });
+}
+
+export async function runOpenClawSessionLifecycle(
+  handle: MeshAgentRuntimeHandle,
+  action: 'archive' | 'unarchive' | 'delete'
+): Promise<void> {
+  const key = handle.providerSessionRef;
+  if (!key) throw new Error('OpenClaw gateway session is not ready');
+  if (action === 'delete') {
+    await requestOpenClawSessionLifecycle(handle, 'sessions.patch', { key, archived: true });
+    await requestOpenClawSessionLifecycle(handle, 'sessions.delete', {
+      key,
+      archivedOnly: true,
+      deleteTranscript: true
+    });
+    return;
+  }
+  await requestOpenClawSessionLifecycle(handle, 'sessions.patch', { key, archived: action === 'archive' });
+}
+
 export const openClawGatewayHooks: GatewayHooks = {
   initialize: openClawInitialize,
   parseOutput: parseOpenClawOutput,
@@ -464,5 +535,6 @@ export const openClawGatewayHooks: GatewayHooks = {
   echoInput: echoOpenClawInput,
   steer: steerOpenClawInput,
   interrupt: interruptOpenClaw,
-  resolveApproval: resolveOpenClawApproval
+  resolveApproval: resolveOpenClawApproval,
+  sessionLifecycle: runOpenClawSessionLifecycle
 };

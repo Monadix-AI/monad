@@ -203,6 +203,13 @@ export class SessionEventRuntimeExecutor {
     await control.resolve(resolution);
   }
 
+  async runProviderSessionLifecycle(action: 'archive' | 'unarchive' | 'delete'): Promise<boolean> {
+    const control = this.definition.driver.controls.sessionLifecycle;
+    if (!control) return false;
+    await control.run(action);
+    return true;
+  }
+
   private async runTurn(input: MeshAgentTurnInput): Promise<void> {
     if (this.definition.plan.processModel !== 'per-turn') return;
     const { plan } = this.definition;

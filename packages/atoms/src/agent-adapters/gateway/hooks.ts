@@ -11,4 +11,5 @@ export interface GatewayHooks {
   steer(handle: GatewayRuntimeHandle, input: string): void;
   interrupt(handle: GatewayRuntimeHandle): void;
   resolveApproval(handle: GatewayRuntimeHandle, resolution: GatewayApprovalResolution): void;
+  sessionLifecycle?(handle: GatewayRuntimeHandle, action: 'archive' | 'unarchive' | 'delete'): Promise<void>;
 }

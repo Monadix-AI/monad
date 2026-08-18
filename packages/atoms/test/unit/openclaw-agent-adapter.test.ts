@@ -12,7 +12,8 @@ import { agentObservationCards } from '../../src/agent-adapters/observation-card
 import {
   echoOpenClawInput,
   openClawInitialize,
-  parseOpenClawFrame
+  parseOpenClawFrame,
+  runOpenClawSessionLifecycle
 } from '../../src/agent-adapters/openclaw/gateway/index.ts';
 import { openClawManagedMcpEnv, openClawMeshAgentAdapter } from '../../src/agent-adapters/openclaw/index.ts';
 import { monadMcpToolView } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-projection.ts';
@@ -183,6 +184,44 @@ test('OpenClaw patches a managed session to load AGENTS.md as system context whi
   ]);
 });
 
+test('OpenClaw live delete archives and deletes the same gateway session generation', async () => {
+  const sent: string[] = [];
+  let nextId = 0;
+  const handle: GatewayRuntimeHandle = {
+    providerSessionRef: 'agent:work:target',
+    gateway: {
+      send: (frame) => {
+        sent.push(frame);
+      },
+      close: () => {}
+    },
+    nextRequestId: () => nextId++,
+    pendingRequests: new Map()
+  };
+
+  const deletion = runOpenClawSessionLifecycle(handle, 'delete');
+  expect(JSON.parse(sent[0] as string)).toEqual({
+    type: 'req',
+    id: '0',
+    method: 'sessions.patch',
+    params: { key: 'agent:work:target', archived: true }
+  });
+  parseOpenClawFrame({ type: 'res', id: '0', ok: true, payload: { ok: true } }, handle);
+  await Bun.sleep(0);
+  expect(JSON.parse(sent[1] as string)).toEqual({
+    type: 'req',
+    id: '1',
+    method: 'sessions.delete',
+    params: {
+      key: 'agent:work:target',
+      archivedOnly: true,
+      deleteTranscript: true
+    }
+  });
+  parseOpenClawFrame({ type: 'res', id: '1', ok: true, payload: { ok: true } }, handle);
+  await deletion;
+});
+
 test('OpenClaw retries a transient startup rejection on the connected gateway', async () => {
   const sent: string[] = [];
   let nextId = 0;
@@ -275,7 +314,8 @@ test('OpenClaw exposes its signed gateway as a resident session-event runtime', 
   expect(definition.driver.controls).toMatchObject({
     approvalResolution: { resolve: expect.any(Function) },
     steer: { send: expect.any(Function) },
-    interrupt: { run: expect.any(Function) }
+    interrupt: { run: expect.any(Function) },
+    sessionLifecycle: { run: expect.any(Function) }
   });
 });
 

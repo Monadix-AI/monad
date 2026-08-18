@@ -190,6 +190,8 @@
   "cli.session.restore.desc": "rewind a session to a message checkpoint",
   "cli.session.reset.desc": "clear all messages from a session, keeping the session itself",
   "cli.session.abort.desc": "cancel an in-flight run for a session",
+  "cli.session.archive.desc": "archive a session",
+  "cli.session.unarchive.desc": "restore an archived session",
   "cli.session.rm.desc": "delete a session and its data",
   "cli.session.plan.desc": "view and edit the shared durable session to-do plan",
   "cli.session.plan.empty": "No to-dos yet. Add one with: monad session plan add <sessionId> <text>",

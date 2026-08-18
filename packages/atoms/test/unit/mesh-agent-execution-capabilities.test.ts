@@ -32,3 +32,19 @@ test('built-in adapters declare the execution modes their managed runtime implem
     ['monad', { autopilot: true, fastMode: false }]
   ]);
 });
+
+test('Gemini detection advertises the approval proxy implemented by its ACP runtime', () => {
+  const preset = geminiMeshAgentAdapter.detect({
+    which: (command) => (command === 'gemini' ? '/opt/bin/gemini' : undefined),
+    exists: () => false
+  });
+
+  expect(preset.capabilities).toEqual({
+    auth: 'pty',
+    events: 'provider-owned',
+    resume: 'pty',
+    approval: 'provider-owned',
+    approvalProxy: true,
+    settingsImport: true
+  });
+});

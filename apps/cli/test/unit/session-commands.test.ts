@@ -1,6 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { command as abort } from '../../src/commands/session/abort.ts';
+import { command as archive } from '../../src/commands/session/archive.ts';
 import { command as branch } from '../../src/commands/session/branch.ts';
 import { command as list } from '../../src/commands/session/list.ts';
 import { command as newSession } from '../../src/commands/session/new.ts';
@@ -9,6 +10,7 @@ import { command as restore } from '../../src/commands/session/restore.ts';
 import { command as rm } from '../../src/commands/session/rm.ts';
 import { command as search } from '../../src/commands/session/search.ts';
 import { command as show } from '../../src/commands/session/show.ts';
+import { command as unarchive } from '../../src/commands/session/unarchive.ts';
 import { CliError, type CommandContext, EXIT } from '../../src/commands/types.ts';
 
 // ── helpers ────────────────────────────────────────────────────────────────────
@@ -184,6 +186,27 @@ test('session rm: throws usage error when session id is missing', async () => {
     treaty: { v1: { sessions: (_: unknown) => ({ delete: async () => ok({}) }) } }
   };
   await expect(silently(() => rm.run(ctx([], {}, client)))).rejects.toBeInstanceOf(CliError);
+});
+
+test('session archive and unarchive patch the exact lifecycle state', async () => {
+  const patches: unknown[] = [];
+  const client = {
+    treaty: {
+      v1: {
+        sessions: (_: unknown) => ({
+          patch: async (body: unknown) => {
+            patches.push(body);
+            return ok({ session: { id: 'ses_100000000000', archived: (body as { archived: boolean }).archived } });
+          }
+        })
+      }
+    }
+  };
+
+  await silently(() => archive.run(ctx(['ses_100000000000'], {}, client)));
+  await silently(() => unarchive.run(ctx(['ses_100000000000'], {}, client)));
+
+  expect(patches).toEqual([{ archived: true }, { archived: false }]);
 });
 
 // ── session reset ────────────────────────────────────────────────────────────────

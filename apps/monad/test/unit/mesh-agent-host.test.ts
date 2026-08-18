@@ -37,6 +37,7 @@ test('MeshAgent auth status probes use the bounded host timeout', async () => {
   expect(AUTH_STATUS_TIMEOUT_MS).toBe(20_000);
   const provider = `auth-timeout-${Date.now()}`;
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Auth Timeout', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
@@ -83,6 +84,7 @@ test('MeshAgent session usage is rebuilt by the adapter for every request', asyn
   const runtimeAgentName = `pmem_${provider}`;
   let reads = 0;
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Session Usage', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
@@ -157,6 +159,7 @@ test('MeshAgent session usage returns no data before the provider session refere
   const provider = `session-usage-absent-${Date.now()}`;
   let reads = 0;
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Session Usage Absent', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
@@ -310,6 +313,7 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
     async dispose() {}
   };
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Session Event Test', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
@@ -459,6 +463,7 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
 test('MeshAgent host rejects providers without a resumable structured session-event runtime', async () => {
   const provider = `no-session-events-${Date.now()}`;
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'No Session Events', path: 'M4 4h16v16H4z' },
     productIcon: 'terminal',

@@ -276,11 +276,13 @@ export class MeshAgentHost {
 
   private async applyProviderSessionLifecycle(
     transcriptTargetId: MeshAgentTargetId,
-    action: 'archive' | 'unarchive' | 'delete'
+    action: 'archive' | 'unarchive' | 'delete',
+    handledLiveSessions: ReadonlySet<string> = new Set()
   ): Promise<void> {
+    const agents = await this.deps.agents();
     await Promise.all(
       this.deps.store.listMeshSessionsForTranscriptTarget(transcriptTargetId).map(async (row) => {
-        if (!row.providerSessionRef) return;
+        if (!row.providerSessionRef || handledLiveSessions.has(row.id)) return;
         const adapter = getMeshAgentProviderAdapter(row.provider);
         const hook =
           action === 'archive'
@@ -289,28 +291,46 @@ export class MeshAgentHost {
               ? adapter.unarchiveSession
               : adapter.deleteSession;
         if (!hook) return;
-        try {
-          await hook({
-            meshSessionId: row.id,
-            transcriptTargetId: row.transcriptTargetId,
-            agentName: row.agentName,
-            providerSessionRef: row.providerSessionRef,
-            workingPath: row.workingPath
-          });
-        } catch (error) {
-          this.log.warn(
-            {
-              event: 'mesh.provider_session_lifecycle_failed',
-              action,
-              meshSessionId: row.id,
+        const configuredAgent: MeshAgentView =
+          agents.find((agent) => agent.name === row.agentName) ??
+          (() => {
+            const preset = adapter.detect();
+            return {
+              name: row.agentName,
               provider: row.provider,
-              err: error instanceof Error ? { message: error.message } : String(error)
-            },
-            'provider session lifecycle hook failed'
-          );
-        }
+              productIcon: adapter.productIcon,
+              command: preset.command,
+              args: preset.args,
+              modelOptions: preset.modelOptions,
+              enabled: true,
+              allowAutopilot: false,
+              approvalOwnership: 'provider-owned' as const
+            };
+          })();
+        const resolvedEnv = await this.deps.resolveAgentEnv?.(configuredAgent.env);
+        const agent = resolvedEnv ? { ...configuredAgent, env: resolvedEnv } : configuredAgent;
+        await hook({
+          meshSessionId: row.id,
+          transcriptTargetId: row.transcriptTargetId,
+          agentName: row.agentName,
+          agent,
+          providerSessionRef: row.providerSessionRef,
+          workingPath: row.workingPath
+        });
       })
     );
+  }
+
+  private async applyLiveProviderSessionLifecycle(
+    transcriptTargetId: MeshAgentTargetId,
+    action: 'archive' | 'delete'
+  ): Promise<Set<string>> {
+    const handled = new Set<string>();
+    for (const live of this.live.values()) {
+      if (live.transcriptTargetId !== transcriptTargetId || !live.sessionEventRuntime) continue;
+      if (await live.sessionEventRuntime.runProviderSessionLifecycle(action)) handled.add(live.id);
+    }
+    return handled;
   }
 
   reconcileOrphanedSessions(): Promise<number> {
@@ -599,16 +619,20 @@ export class MeshAgentHost {
     );
   }
 
-  archiveSession(sessionId: MeshAgentTargetId): Promise<void> {
-    return this.applyProviderSessionLifecycle(sessionId, 'archive');
+  async archiveSession(sessionId: MeshAgentTargetId): Promise<void> {
+    const handled = await this.applyLiveProviderSessionLifecycle(sessionId, 'archive');
+    await this.stopSession(sessionId);
+    await this.applyProviderSessionLifecycle(sessionId, 'archive', handled);
   }
 
   unarchiveSession(sessionId: MeshAgentTargetId): Promise<void> {
     return this.applyProviderSessionLifecycle(sessionId, 'unarchive');
   }
 
-  deleteSession(sessionId: MeshAgentTargetId): Promise<void> {
-    return this.applyProviderSessionLifecycle(sessionId, 'delete');
+  async deleteSession(sessionId: MeshAgentTargetId): Promise<void> {
+    const handled = await this.applyLiveProviderSessionLifecycle(sessionId, 'delete');
+    await this.stopSession(sessionId);
+    await this.applyProviderSessionLifecycle(sessionId, 'delete', handled);
   }
 
   async stopAll(): Promise<void> {

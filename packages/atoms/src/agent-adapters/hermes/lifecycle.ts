@@ -1,10 +1,10 @@
 import type { MeshAgentProviderSessionLifecycleContext } from '@monad/sdk-atom';
 
-interface GeminiLifecycleProcess {
+interface HermesLifecycleProcess {
   exited: Promise<number>;
 }
 
-type GeminiLifecycleSpawn = (
+type HermesLifecycleSpawn = (
   argv: string[],
   options: {
     cwd: string;
@@ -13,28 +13,27 @@ type GeminiLifecycleSpawn = (
     stdout: 'ignore';
     stderr: 'ignore';
   }
-) => GeminiLifecycleProcess;
+) => HermesLifecycleProcess;
 
-export interface GeminiLifecycleOptions {
-  env?: Record<string, string | undefined>;
-  spawn?: GeminiLifecycleSpawn;
+export interface HermesLifecycleOptions {
+  spawn?: HermesLifecycleSpawn;
 }
 
-export async function deleteGeminiSession(
+export async function deleteHermesSession(
   context: MeshAgentProviderSessionLifecycleContext,
-  options: GeminiLifecycleOptions = {}
+  options: HermesLifecycleOptions = {}
 ): Promise<void> {
   const spawn = options.spawn ?? ((argv, spawnOptions) => Bun.spawn(argv, spawnOptions));
   const proc = spawn(
-    [context.agent.command, ...(context.agent.args ?? []), '--delete-session', context.providerSessionRef],
+    [context.agent.command, ...(context.agent.args ?? []), 'sessions', 'delete', context.providerSessionRef, '--yes'],
     {
       cwd: context.workingPath,
-      env: { ...process.env, ...(context.agent.env ?? {}), ...(options.env ?? {}) },
+      env: { ...process.env, ...(context.agent.env ?? {}) },
       stdin: 'ignore',
       stdout: 'ignore',
       stderr: 'ignore'
     }
   );
   const exitCode = await proc.exited;
-  if (exitCode !== 0) throw new Error(`gemini --delete-session failed with exit code ${exitCode}`);
+  if (exitCode !== 0) throw new Error(`hermes sessions delete failed with exit code ${exitCode}`);
 }

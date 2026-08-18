@@ -168,6 +168,8 @@
   "cli.session.restore.desc": "将 session 回退到某个消息检查点",
   "cli.session.reset.desc": "清除 session 的全部消息，但保留 session 本身",
   "cli.session.abort.desc": "取消 session 中正在进行的运行",
+  "cli.session.archive.desc": "归档 session",
+  "cli.session.unarchive.desc": "恢复已归档的 session",
   "cli.session.rm.desc": "删除 session 及其数据",
   "cli.session.plan.desc": "查看和编辑 session 共享的持久待办计划",
   "cli.session.plan.empty": "还没有待办。用 monad session plan add <sessionId> <text> 添加一条",

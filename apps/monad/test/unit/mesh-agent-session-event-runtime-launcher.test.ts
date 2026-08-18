@@ -56,6 +56,7 @@ test('session-event launcher derives provider approval behavior from runtime rol
     async dispose() {}
   });
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Approval Mode Test', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',

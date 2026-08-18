@@ -19,10 +19,10 @@ import {
   requireManagedMcpConfigCommand,
   runManagedMcpConfigCommand
 } from '../managed-mcp-config.ts';
-import { noopProviderSessionLifecycle } from '../provider-session-lifecycle.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { openClawHistoryRecords } from './event-pages.ts';
 import { openClawGatewayHooks } from './gateway/index.ts';
+import { archiveOpenClawSession, deleteOpenClawSession, unarchiveOpenClawSession } from './lifecycle.ts';
 import { openClawObservationProjection } from './observation.ts';
 
 // OpenClaw ships no models-list command; these are the models its docs advertise for `--model`.
@@ -247,7 +247,9 @@ export const openClawMeshAgentAdapter: MeshAgentProviderAdapter = {
     usesManagedMcpBridge: true
   },
   createSessionRuntime: createOpenClawSessionRuntime,
-  unarchiveSession: noopProviderSessionLifecycle,
+  archiveSession: archiveOpenClawSession,
+  unarchiveSession: unarchiveOpenClawSession,
+  deleteSession: deleteOpenClawSession,
   // OpenClaw's gateway projects and resolves provider approvals, so managed sessions can delegate
   // approval decisions to the human.
   detect(probes) {

@@ -17,10 +17,9 @@ import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
 import { readProviderEventFile } from '../event-files.ts';
 import { createOutputEventSource } from '../event-source.ts';
 import { agentAdapterIcons } from '../icons.ts';
-import { noopProviderSessionLifecycle } from '../provider-session-lifecycle.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createBasicSettingsImport } from '../settings-import/index.ts';
-import { archiveGeminiSession, deleteGeminiSession } from './lifecycle.ts';
+import { deleteGeminiSession } from './lifecycle.ts';
 import { discoverGeminiModelOptions, GEMINI_SUPPORTED_MODELS } from './model-options.ts';
 import { geminiObservationProjection } from './observation.ts';
 import { GeminiAcpSessionDriver } from './session-runtime.ts';
@@ -223,6 +222,7 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
         events: 'provider-owned',
         resume: 'pty',
         approval: 'provider-owned',
+        approvalProxy: true,
         settingsImport: true
       }
     };
@@ -233,8 +233,6 @@ export const geminiMeshAgentAdapter: MeshAgentProviderAdapter = {
   listSupportedModels(agent) {
     return agent?.modelOptions?.length ? agent.modelOptions : GEMINI_SUPPORTED_MODELS;
   },
-  archiveSession: archiveGeminiSession,
-  unarchiveSession: noopProviderSessionLifecycle,
   deleteSession: deleteGeminiSession,
   modelOptions(agent) {
     return {

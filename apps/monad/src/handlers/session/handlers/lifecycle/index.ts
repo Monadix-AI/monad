@@ -126,8 +126,7 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     disposeRuntime(id);
     clearProcessesForSession(id);
     clearAcpDelegatesForSession(id); // kill any reused external ACP adapters held for this session
-    if (session.projectId) await ctx.deps.meshAgentHost?.deleteSession(id);
-    await ctx.deps.meshAgentHost?.stopSession(id);
+    await ctx.deps.meshAgentHost?.deleteSession(id);
     oversight?.cancelSession(id, 'session_deleted');
     delegation?.cancelSession(id, 'session_deleted');
     // SessionEnd fires before teardown (abort only pauses a turn, so it does not end the session).
@@ -316,21 +315,37 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       if (resolvedAgentId !== undefined && (resolvedAgentId ?? undefined) !== current.agentIds[0]) {
         await terminateProcessesForSessionAgentChange(id);
       }
-      const session = store.updateSession(id, {
-        title,
-        state,
-        archived,
-        ...(resolvedAgentId !== undefined ? { agentIds: resolvedAgentId ? [resolvedAgentId] : [] } : {}),
-        origin,
-        ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {})
-      });
-      if (!session) throw new HandlerError('internal', 'update failed');
-      if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
-      if (current.projectId && archived === true && current.archived !== true) {
-        await ctx.deps.meshAgentHost?.archiveSession(id);
-      } else if (archived === false && current.archived === true) {
-        await ctx.deps.meshAgentHost?.unarchiveSession(id);
+      const archiveAction =
+        archived === true && current.archived !== true
+          ? 'archive'
+          : archived === false && current.archived === true
+            ? 'unarchive'
+            : undefined;
+      if (archiveAction === 'archive') await ctx.deps.meshAgentHost?.archiveSession(id);
+      if (archiveAction === 'unarchive') await ctx.deps.meshAgentHost?.unarchiveSession(id);
+      const rollbackProviderArchive = async (): Promise<void> => {
+        if (archiveAction === 'archive') await ctx.deps.meshAgentHost?.unarchiveSession(id).catch(() => {});
+        if (archiveAction === 'unarchive') await ctx.deps.meshAgentHost?.archiveSession(id).catch(() => {});
+      };
+      let session: ReturnType<typeof store.updateSession>;
+      try {
+        session = store.updateSession(id, {
+          title,
+          state,
+          archived,
+          ...(resolvedAgentId !== undefined ? { agentIds: resolvedAgentId ? [resolvedAgentId] : [] } : {}),
+          origin,
+          ...(resolvedCwd !== undefined ? { cwd: resolvedCwd } : {})
+        });
+      } catch (error) {
+        await rollbackProviderArchive();
+        throw error;
       }
+      if (!session) {
+        await rollbackProviderArchive();
+        throw new HandlerError('internal', 'update failed');
+      }
+      if (resolvedCwd !== undefined) await applyWorkspaceRuntime(id, resolvedCwd ?? undefined);
       emitLifecycle(id, 'session.updated', {
         title,
         state,

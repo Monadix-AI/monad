@@ -144,6 +144,7 @@ function buildManagedHost(opts: {
     }
   };
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Ownership Test', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',
@@ -465,6 +466,7 @@ function buildResidentTerminalHost(): {
     async dispose() {}
   };
   const adapter: MeshAgentProviderAdapter = {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Launcher Ownership Test', path: 'M4 4h16v16H4z' },
     productIcon: 'codex',

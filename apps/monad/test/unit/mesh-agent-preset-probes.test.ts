@@ -18,6 +18,7 @@ const probeLaunch = {
 
 function adapter(options: { directModels?: boolean; throwInModelParser?: boolean } = {}): MeshAgentProviderAdapter {
   return {
+    deleteSession: async () => {},
     provider,
     icon: { title: 'Async Probe Test', path: 'M4 4h16v16H4z' },
     productIcon: provider,

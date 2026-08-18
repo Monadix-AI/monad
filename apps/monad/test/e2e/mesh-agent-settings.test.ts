@@ -43,6 +43,7 @@ const agentView = () => ({
 const THIRD_PARTY_IMPORT_PATH = join(tmpdir(), 'monad-third-party-migrator-settings');
 
 const thirdPartyMigrationAdapter: MeshAgentProviderAdapter = {
+  deleteSession: async () => {},
   events: { projectLive: () => ({ events: [] }) },
   provider: 'third-party-migrator',
   icon: { title: 'Third Party Migrator', path: 'M4 4h16v16H4z' },

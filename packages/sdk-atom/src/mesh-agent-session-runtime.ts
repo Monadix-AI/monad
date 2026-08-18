@@ -112,6 +112,7 @@ export interface ProviderDriverControls {
   approvalResolution: false | { resolve(resolution: MeshAgentApprovalResolutionRequest): Promise<void> };
   steer: false | { send(input: MeshAgentTurnInput): Promise<void> };
   interrupt: false | { run(): Promise<void> };
+  sessionLifecycle?: false | { run(action: 'archive' | 'unarchive' | 'delete'): Promise<void> };
 }
 
 export interface ProviderDriverBase {

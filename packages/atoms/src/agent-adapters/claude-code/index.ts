@@ -29,11 +29,10 @@ import {
 } from '../adapter-shared.ts';
 import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
 import { agentAdapterIcons } from '../icons.ts';
-import { noopProviderSessionLifecycle } from '../provider-session-lifecycle.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import { claudeTranscriptFallback, createClaudeEventSource } from './event-pages.ts';
-import { archiveClaudeCodeSession, deleteClaudeCodeSession } from './lifecycle.ts';
+import { deleteClaudeCodeSession } from './lifecycle.ts';
 
 export { createClaudeSdkEventPageReader, createClaudeSdkHistoryOutputReader } from './event-pages.ts';
 
@@ -393,8 +392,6 @@ export const claudeCodeMeshAgentAdapter: MeshAgentProviderAdapter = {
   listSupportedModels(agent) {
     return agent?.modelOptions?.length ? agent.modelOptions : CLAUDE_CODE_SUPPORTED_MODELS;
   },
-  archiveSession: archiveClaudeCodeSession,
-  unarchiveSession: noopProviderSessionLifecycle,
   deleteSession: deleteClaudeCodeSession,
   modelOptions(agent) {
     return {

@@ -367,13 +367,18 @@ async function configureMockMeshAgent(
       '  });',
       '  await new Promise(() => {});',
       '} else {',
+      'let initialized = false;',
       'const completeTurn = () => {',
       '  const resume = process.argv.indexOf("--resume");',
       '  const sessionId = resume >= 0 ? process.argv[resume + 1] : "claude-session-" + process.pid;',
-      '  process.stdout.write(JSON.stringify({ type: "system", subtype: "init", session_id: sessionId }) + "\\n");',
+      '  if (!initialized) {',
+      '    initialized = true;',
+      '    process.stdout.write(JSON.stringify({ type: "system", subtype: "init", session_id: sessionId }) + "\\n");',
+      '  }',
+      '  appendFileSync(lifecycleLog, "turn:" + process.pid + "\\n");',
       '  process.stdout.write(JSON.stringify({ type: "result", subtype: "success", result: "", permission_denials: [] }) + "\\n");',
       '};',
-      'process.stdin.on("end", () => {',
+      'process.stdin.on("data", () => {',
       '  if (turnDelayMs > 0) setTimeout(completeTurn, turnDelayMs);',
       '  else completeTurn();',
       '});',
@@ -1000,11 +1005,15 @@ for (const kind of TRANSPORTS) {
 
       const args = await waitForFile(argsLog, '--resume claude-session-resume');
       expect(args).toContain('--append-system-prompt-file');
-      const resumed = handlers.store
-        .listMeshSessionsForTranscriptTarget(sessionId)
-        .find((candidate) => candidate.agentName === member.id && candidate.state === 'running');
+      const resumed = await waitForValue(
+        () =>
+          handlers.store
+            .listMeshSessionsForTranscriptTarget(sessionId)
+            .find((candidate) => candidate.agentName === member.id && candidate.state === 'running'),
+        'resumed Claude session to reach running state'
+      );
       expect(resumed?.providerSessionRef).toBe('claude-session-resume');
-      if (resumed) await t.fetch(`/v1/mesh/sessions/${resumed.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      await t.fetch(`/v1/mesh/sessions/${resumed.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
     });
 
     test('managed member autopilot controls native provider approval flags', async () => {
@@ -1159,11 +1168,12 @@ for (const kind of TRANSPORTS) {
 
       await t.fetch(`/v1/mesh/sessions/${claudeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       await t.fetch(`/v1/mesh/sessions/${reviewerSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
-      await configureMockMeshAgent(t, dir, {
+      const { lifecycleLog: delayedClaudeLifecycleLog } = await configureMockMeshAgent(t, dir, {
         agentName: 'claude',
-        turnDelayMs: 15_000
+        turnDelayMs: 3_000
       });
       const claudeInputBeforePost = await readLogIfExists(claudeStdinLog);
+      const claudeLifecycleBeforePost = await readLogIfExists(delayedClaudeLifecycleLog);
       const reviewerInputBeforePost = await readLogIfExists(reviewerStdinLog);
 
       const mentionedText = '@[name="Claude" id="claude"] please inspect this';
@@ -1205,6 +1215,7 @@ for (const kind of TRANSPORTS) {
           createdAt: expect.any(String)
         }
       });
+      expect(await readLogIfExists(delayedClaudeLifecycleLog)).toBe(claudeLifecycleBeforePost);
 
       const claudeInput = await waitForFile(claudeStdinLog, 'please inspect this');
       expect(

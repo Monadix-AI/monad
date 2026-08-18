@@ -8,9 +8,9 @@ import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 import { z } from 'zod';
 
 import { agentAdapterIcons } from '../icons.ts';
-import { noopProviderSessionLifecycle } from '../provider-session-lifecycle.ts';
 import { MonadSessionEventDriver } from './driver.ts';
 import { createMonadEventSource } from './event-pages.ts';
+import { archiveMonadSession, deleteMonadSession, unarchiveMonadSession } from './lifecycle.ts';
 import { monadObservationProjection } from './observation.ts';
 
 const discoveredAgentsSchema = z.object({
@@ -119,5 +119,7 @@ export const monadMeshAgentAdapter: MeshAgentProviderAdapter = {
     };
   },
   createSessionRuntime: createMonadSessionRuntime,
-  unarchiveSession: noopProviderSessionLifecycle
+  archiveSession: archiveMonadSession,
+  unarchiveSession: unarchiveMonadSession,
+  deleteSession: deleteMonadSession
 };

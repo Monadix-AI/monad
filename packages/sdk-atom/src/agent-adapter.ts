@@ -458,6 +458,7 @@ export interface MeshAgentProviderSessionLifecycleContext {
   meshSessionId: string;
   transcriptTargetId: string;
   agentName: string;
+  agent: MeshAgentView;
   providerSessionRef: string;
   workingPath: string;
 }
@@ -545,7 +546,7 @@ export interface MeshAgentProviderAdapter {
   sessionUsage?: MeshAgentSessionUsageSource;
   archiveSession?(context: MeshAgentProviderSessionLifecycleContext): void | Promise<void>;
   unarchiveSession?(context: MeshAgentProviderSessionLifecycleContext): void | Promise<void>;
-  deleteSession?(context: MeshAgentProviderSessionLifecycleContext): void | Promise<void>;
+  deleteSession(context: MeshAgentProviderSessionLifecycleContext): void | Promise<void>;
   /** Return the first provider-specific argv token that enables an unsafe/unattended mode. The daemon
    *  owns the `allowAutopilot` decision, while each adapter owns its CLI vocabulary. */
   unsafeArgument?(args: string[]): string | undefined;

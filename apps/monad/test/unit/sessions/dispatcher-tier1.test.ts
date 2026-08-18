@@ -153,38 +153,41 @@ test('project session archive, unarchive, and delete apply provider lifecycle ho
     await d.session.update({ id: sessionId, archived: true });
     await d.session.update({ id: sessionId, archived: true });
     expect(archiveCalls).toEqual([
-      {
+      expect.objectContaining({
         meshSessionId: 'mesh_lifecycle000',
         transcriptTargetId: sessionId,
         agentName: 'pmem_codex',
+        agent: expect.objectContaining({ name: 'pmem_codex', provider: 'codex' }),
         providerSessionRef: 'thread_codex_123',
         workingPath: '/tmp/project'
-      }
+      })
     ]);
 
     await d.session.update({ id: sessionId, archived: false });
     await d.session.update({ id: sessionId, archived: false });
     expect(unarchiveCalls).toEqual([
-      {
+      expect.objectContaining({
         meshSessionId: 'mesh_lifecycle000',
         transcriptTargetId: sessionId,
         agentName: 'pmem_codex',
+        agent: expect.objectContaining({ name: 'pmem_codex', provider: 'codex' }),
         providerSessionRef: 'thread_codex_123',
         workingPath: '/tmp/project'
-      }
+      })
     ]);
 
     await d.session.delete({ id: sessionId });
     expect(deleteCalls).toEqual([]);
     await new Promise((resolve) => setTimeout(resolve, 20));
     expect(deleteCalls).toEqual([
-      {
+      expect.objectContaining({
         meshSessionId: 'mesh_lifecycle000',
         transcriptTargetId: sessionId,
         agentName: 'pmem_codex',
+        agent: expect.objectContaining({ name: 'pmem_codex', provider: 'codex' }),
         providerSessionRef: 'thread_codex_123',
         workingPath: '/tmp/project'
-      }
+      })
     ]);
   } finally {
     adapter.archiveSession = originalArchiveSession;
@@ -194,14 +197,24 @@ test('project session archive, unarchive, and delete apply provider lifecycle ho
   }
 });
 
-test('non-project session unarchive applies the matching native provider lifecycle hook once', async () => {
+test('non-project session archive, unarchive, and delete apply matching provider lifecycle hooks', async () => {
   const store = createStore();
-  const d = buildHandlers(mockModel(['hi']), undefined, { store });
+  const d = buildHandlers(mockModel(['hi']), undefined, { store, sessionDeleteGraceMs: 1 });
   const adapter = getMeshAgentProviderAdapter('codex');
+  const originalArchiveSession = adapter.archiveSession;
   const originalUnarchiveSession = adapter.unarchiveSession;
+  const originalDeleteSession = adapter.deleteSession;
+  const archiveCalls: MeshAgentProviderSessionLifecycleContext[] = [];
   const unarchiveCalls: MeshAgentProviderSessionLifecycleContext[] = [];
+  const deleteCalls: MeshAgentProviderSessionLifecycleContext[] = [];
+  adapter.archiveSession = async (context) => {
+    archiveCalls.push(context);
+  };
   adapter.unarchiveSession = async (context) => {
     unarchiveCalls.push(context);
+  };
+  adapter.deleteSession = async (context) => {
+    deleteCalls.push(context);
   };
 
   try {
@@ -232,17 +245,83 @@ test('non-project session unarchive applies the matching native provider lifecyc
     await d.session.update({ id: sessionId, archived: false });
     await d.session.update({ id: sessionId, archived: false });
 
-    expect(unarchiveCalls).toEqual([
-      {
+    expect(archiveCalls).toEqual([
+      expect.objectContaining({
         meshSessionId: 'mesh_chatunarchive',
         transcriptTargetId: sessionId,
         agentName: 'pmem_codex_chat',
+        agent: expect.objectContaining({ name: 'pmem_codex_chat', provider: 'codex' }),
         providerSessionRef: 'thread_codex_chat',
         workingPath: '/tmp/native-chat'
-      }
+      })
+    ]);
+    expect(unarchiveCalls).toEqual([
+      expect.objectContaining({
+        meshSessionId: 'mesh_chatunarchive',
+        transcriptTargetId: sessionId,
+        agentName: 'pmem_codex_chat',
+        agent: expect.objectContaining({ name: 'pmem_codex_chat', provider: 'codex' }),
+        providerSessionRef: 'thread_codex_chat',
+        workingPath: '/tmp/native-chat'
+      })
+    ]);
+    await d.session.delete({ id: sessionId });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(deleteCalls).toEqual([
+      expect.objectContaining({
+        meshSessionId: 'mesh_chatunarchive',
+        transcriptTargetId: sessionId,
+        agentName: 'pmem_codex_chat',
+        agent: expect.objectContaining({ name: 'pmem_codex_chat', provider: 'codex' }),
+        providerSessionRef: 'thread_codex_chat',
+        workingPath: '/tmp/native-chat'
+      })
     ]);
   } finally {
+    adapter.archiveSession = originalArchiveSession;
     adapter.unarchiveSession = originalUnarchiveSession;
+    adapter.deleteSession = originalDeleteSession;
+    store.close();
+  }
+});
+
+test('session archive preserves local state when the provider transition fails', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store });
+  const adapter = getMeshAgentProviderAdapter('codex');
+  const originalArchiveSession = adapter.archiveSession;
+  adapter.archiveSession = async () => {
+    throw new Error('provider archive failed');
+  };
+
+  try {
+    const { sessionId } = await d.session.create({ title: 'native chat' });
+    const now = '2026-07-23T00:00:00.000Z';
+    store.upsertMeshSession({
+      id: 'mesh_archivefail0',
+      transcriptTargetId: sessionId,
+      agentName: 'pmem_codex_chat',
+      provider: 'codex',
+      workingPath: '/tmp/native-chat',
+      runtimeRole: 'interactive',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'stopped',
+      pid: null,
+      providerSessionRef: 'thread_archive_failure',
+      outputSnapshot: '',
+      exitCode: null,
+      startedAt: now,
+      updatedAt: now,
+      exitedAt: now
+    });
+
+    await expect(d.session.update({ id: sessionId, archived: true })).rejects.toThrow('provider archive failed');
+    expect(store.getSession(sessionId)?.archived).toBe(false);
+  } finally {
+    adapter.archiveSession = originalArchiveSession;
     store.close();
   }
 });
@@ -285,17 +364,63 @@ test('project deletion applies provider deletion before removing project session
     await d.session.deleteProject({ id: projectId });
 
     expect(deleteCalls).toEqual([
-      {
+      expect.objectContaining({
         meshSessionId: 'mesh_projectdel00',
         transcriptTargetId: sessionId,
         agentName: 'pmem_codex',
+        agent: expect.objectContaining({ name: 'pmem_codex', provider: 'codex' }),
         providerSessionRef: 'thread_project_delete',
         workingPath: '/tmp/project'
-      }
+      })
     ]);
     expect({ project: store.getWorkplaceProject(projectId), session: store.getSession(sessionId) }).toEqual({
       project: null,
       session: null
+    });
+  } finally {
+    adapter.deleteSession = originalDeleteSession;
+    store.close();
+  }
+});
+
+test('project deletion preserves local storage when provider deletion fails', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store });
+  const adapter = getMeshAgentProviderAdapter('codex');
+  const originalDeleteSession = adapter.deleteSession;
+  adapter.deleteSession = async () => {
+    throw new Error('provider delete failed');
+  };
+
+  try {
+    const { projectId } = await d.session.createProject({ title: 'p' });
+    const { sessionId } = await d.session.createProjectSession({ projectId, title: 'project session' });
+    const now = '2026-07-20T00:00:00.000Z';
+    store.upsertMeshSession({
+      id: 'mesh_deletefail00',
+      transcriptTargetId: sessionId,
+      agentName: 'pmem_codex',
+      provider: 'codex',
+      workingPath: '/tmp/project',
+      runtimeRole: 'managed-project-agent',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'stopped',
+      pid: null,
+      providerSessionRef: 'thread_delete_failure',
+      outputSnapshot: '',
+      exitCode: null,
+      startedAt: now,
+      updatedAt: now,
+      exitedAt: now
+    });
+
+    await expect(d.session.deleteProject({ id: projectId })).rejects.toThrow('provider delete failed');
+    expect({ project: store.getWorkplaceProject(projectId)?.id, session: store.getSession(sessionId)?.id }).toEqual({
+      project: projectId,
+      session: sessionId
     });
   } finally {
     adapter.deleteSession = originalDeleteSession;

@@ -32,7 +32,7 @@ interface MakeGatewayAdapterOptions {
   skipApprovalFlag?: string;
 }
 
-type GatewayAdapter = Omit<MeshAgentProviderAdapter, 'events'> & {
+type GatewayAdapter = Omit<MeshAgentProviderAdapter, 'deleteSession' | 'events'> & {
   buildGatewayLaunch(
     agent: MeshAgentView,
     options: { workingPath: string; skipProviderApprovals?: boolean }

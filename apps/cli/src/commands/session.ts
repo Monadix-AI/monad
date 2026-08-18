@@ -20,6 +20,8 @@ export const command: CommandDef = {
     'restore',
     'reset',
     'abort',
+    'archive',
+    'unarchive',
     'rm'
   ],
   description: 'session operations (create, list, chat, search, branch, restore, …)',

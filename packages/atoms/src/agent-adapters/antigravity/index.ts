@@ -19,6 +19,7 @@ import { agentAdapterIcons } from '../icons.ts';
 import { writeManagedMcpConfigFile } from '../managed-mcp-config.ts';
 import { SessionEventJsonlDriver } from '../session-event-jsonl-driver.ts';
 import { meshAgentAdapterSettings } from '../settings.ts';
+import { deleteAntigravitySession } from './lifecycle.ts';
 import { listAntigravityModelOptions, parseAntigravityModelOptions } from './model-options.ts';
 import { antigravityObservationProjection } from './observation.ts';
 import { parseAntigravityStreamJson } from './stream-json.ts';
@@ -147,6 +148,7 @@ export const antigravityMeshAgentAdapter: MeshAgentProviderAdapter = {
     };
   },
   createSessionRuntime: createAntigravitySessionRuntime,
+  deleteSession: deleteAntigravitySession,
   buildAuthLaunch(agent) {
     return authLaunch(agent, ['models']);
   },

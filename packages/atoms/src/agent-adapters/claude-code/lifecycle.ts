@@ -3,12 +3,14 @@ import type { MeshAgentProviderSessionLifecycleContext } from '@monad/sdk-atom';
 
 import { readdir, readFile, rm } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 
 type ClaudeLifecycleEnvironment = Record<string, string | undefined>;
 
 interface ClaudeLifecycleProcess {
   exited: Promise<number>;
+  stdout: ReadableStream<Uint8Array>;
+  stderr: ReadableStream<Uint8Array>;
 }
 
 type ClaudeLifecycleSpawn = (
@@ -17,14 +19,12 @@ type ClaudeLifecycleSpawn = (
     cwd: string;
     env: Record<string, string | undefined>;
     stdin: 'ignore';
-    stdout: 'ignore';
-    stderr: 'ignore';
+    stdout: 'pipe';
+    stderr: 'pipe';
   }
 ) => ClaudeLifecycleProcess;
 
 export interface ClaudeLifecycleOptions {
-  command?: string;
-  commandArgs?: string[];
   env?: ClaudeLifecycleEnvironment;
   spawn?: ClaudeLifecycleSpawn;
 }
@@ -37,6 +37,10 @@ function claudeProjectsRoots(env: ClaudeLifecycleEnvironment): string[] {
   const configuredDir = env.CLAUDE_CONFIG_DIR?.trim();
   const defaultDir = join(homedir(), '.claude');
   return uniquePaths([join(configuredDir || defaultDir, 'projects')]);
+}
+
+function claudeRoot(env: ClaudeLifecycleEnvironment): string {
+  return env.CLAUDE_CONFIG_DIR?.trim() || join(homedir(), '.claude');
 }
 
 function recordSessionId(record: unknown): string | undefined {
@@ -85,29 +89,56 @@ async function findClaudeTranscriptFiles(root: string, sessionId: string): Promi
   return matches;
 }
 
-export async function archiveClaudeCodeSession(
-  context: MeshAgentProviderSessionLifecycleContext,
-  options: ClaudeLifecycleOptions = {}
-): Promise<void> {
-  const spawn = options.spawn ?? ((argv, spawnOptions) => Bun.spawn(argv, spawnOptions));
-  const proc = spawn([options.command ?? 'claude', ...(options.commandArgs ?? []), 'rm', context.providerSessionRef], {
-    cwd: context.workingPath,
-    env: { ...process.env, ...(options.env ?? {}) },
-    stdin: 'ignore',
-    stdout: 'ignore',
-    stderr: 'ignore'
-  });
-  const exitCode = await proc.exited;
-  if (exitCode !== 0) throw new Error(`claude rm failed with exit code ${exitCode}`);
+async function findClaudeSidecars(root: string, sessionId: string, transcripts: string[]): Promise<string[]> {
+  const matches = transcripts.map((transcript) => join(dirname(transcript), sessionId));
+  await Promise.all(
+    ['file-history', 'session-env', 'tasks', 'debug'].map(async (name) => {
+      const parent = join(root, name);
+      let entries: Dirent<string>[];
+      try {
+        entries = await readdir(parent, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name === sessionId || entry.name.startsWith(`${sessionId}.`)) matches.push(join(parent, entry.name));
+      }
+    })
+  );
+  return uniquePaths(matches);
 }
 
 export async function deleteClaudeCodeSession(
   context: MeshAgentProviderSessionLifecycleContext,
   options: ClaudeLifecycleOptions = {}
 ): Promise<void> {
-  const roots = claudeProjectsRoots({ ...process.env, ...(options.env ?? {}) });
-  const files = (
-    await Promise.all(roots.map((root) => findClaudeTranscriptFiles(root, context.providerSessionRef)))
+  const spawn = options.spawn ?? ((argv, spawnOptions) => Bun.spawn(argv, spawnOptions));
+  const proc = spawn([context.agent.command, ...(context.agent.args ?? []), 'rm', context.providerSessionRef], {
+    cwd: context.workingPath,
+    env: { ...process.env, ...(context.agent.env ?? {}), ...(options.env ?? {}) },
+    stdin: 'ignore',
+    stdout: 'pipe',
+    stderr: 'pipe'
+  });
+  const [exitCode, stdout, stderr] = await Promise.all([
+    proc.exited,
+    new Response(proc.stdout).text(),
+    new Response(proc.stderr).text()
+  ]);
+  const diagnostic = `${stdout}\n${stderr}`.trim();
+  if (exitCode !== 0 && !/No job matching\b/.test(diagnostic)) {
+    throw new Error(`claude rm failed: ${diagnostic || `exit code ${exitCode}`}`);
+  }
+  const env = { ...process.env, ...(context.agent.env ?? {}), ...(options.env ?? {}) };
+  const root = claudeRoot(env);
+  const transcripts = (
+    await Promise.all(
+      claudeProjectsRoots(env).map((projects) => findClaudeTranscriptFiles(projects, context.providerSessionRef))
+    )
   ).flat();
-  await Promise.all(files.map((file) => rm(file, { force: true })));
+  const sidecars = await findClaudeSidecars(root, context.providerSessionRef, transcripts);
+  await Promise.all([
+    ...transcripts.map((file) => rm(file, { force: true })),
+    ...sidecars.map((path) => rm(path, { force: true, recursive: true }))
+  ]);
 }

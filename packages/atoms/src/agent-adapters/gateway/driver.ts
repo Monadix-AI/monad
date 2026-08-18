@@ -27,11 +27,8 @@ interface GatewayDriverOptions {
 
 export class GatewayDriver implements ResidentProviderDriver {
   readonly processModel = 'resident' as const;
-  readonly controls = {
-    approvalResolution: { resolve: (resolution) => this.resolveApproval(resolution) },
-    steer: { send: (input) => this.steer(input) },
-    interrupt: { run: () => this.interrupt() }
-  } as ResidentProviderDriver['controls'];
+  readonly controls: ResidentProviderDriver['controls'];
+  private readonly options: GatewayDriverOptions;
   private channel?: SessionEventChannel;
   private handle?: GatewayRuntimeHandle;
   private requestSequence = 0;
@@ -44,7 +41,17 @@ export class GatewayDriver implements ResidentProviderDriver {
     this.releaseReady = resolve;
   });
 
-  constructor(private readonly options: GatewayDriverOptions) {}
+  constructor(options: GatewayDriverOptions) {
+    this.options = options;
+    this.controls = {
+      approvalResolution: { resolve: (resolution) => this.resolveApproval(resolution) },
+      steer: { send: (input) => this.steer(input) },
+      interrupt: { run: () => this.interrupt() },
+      ...(options.hooks.sessionLifecycle
+        ? { sessionLifecycle: { run: (action) => this.runSessionLifecycle(action) } }
+        : {})
+    };
+  }
 
   async openSession() {
     return {
@@ -137,6 +144,16 @@ export class GatewayDriver implements ResidentProviderDriver {
     if (!this.handle) throw new Error('provider gateway channel is not attached');
     this.options.hooks.interrupt(this.handle);
     await this.waitForSends();
+  }
+
+  private async runSessionLifecycle(action: 'archive' | 'unarchive' | 'delete'): Promise<void> {
+    await this.requireReady();
+    if (!this.handle || !this.options.hooks.sessionLifecycle) {
+      throw new Error('provider gateway does not support session lifecycle mutations');
+    }
+    const completed = this.options.hooks.sessionLifecycle(this.handle, action);
+    await this.waitForSends();
+    await completed;
   }
 
   private enqueueSend(value: string): void {

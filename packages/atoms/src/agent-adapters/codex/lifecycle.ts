@@ -23,8 +23,6 @@ type CodexLifecycleSpawn = (
 ) => CodexLifecycleProcess;
 
 export interface CodexLifecycleOptions {
-  command?: string;
-  commandArgs?: string[];
   env?: CodexLifecycleEnvironment;
   timeoutMs?: number;
   spawn?: CodexLifecycleSpawn;
@@ -77,9 +75,9 @@ async function runCodexThreadLifecycle(
   options: CodexLifecycleOptions = {}
 ): Promise<void> {
   const spawn = options.spawn ?? ((argv, spawnOptions) => Bun.spawn(argv, spawnOptions));
-  const proc = spawn([options.command ?? 'codex', ...(options.commandArgs ?? []), 'app-server', '--stdio'], {
+  const proc = spawn([context.agent.command, ...(context.agent.args ?? []), 'app-server', '--stdio'], {
     cwd: context.workingPath,
-    env: { ...process.env, ...(options.env ?? {}) },
+    env: { ...process.env, ...(context.agent.env ?? {}), ...(options.env ?? {}) },
     stdin: 'pipe',
     stdout: 'pipe',
     stderr: 'ignore'

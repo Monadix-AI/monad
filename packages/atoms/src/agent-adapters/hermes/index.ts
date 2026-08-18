@@ -21,10 +21,10 @@ import {
   requireManagedMcpConfigCommand,
   runManagedMcpConfigCommand
 } from '../managed-mcp-config.ts';
-import { noopProviderSessionLifecycle } from '../provider-session-lifecycle.ts';
 import { createFrameworkSettingsImport } from '../settings-import/index.ts';
 import { hermesEventPage, hermesEventPageOutput } from './event-pages.ts';
 import { hermesGatewayHooks } from './gateway/index.ts';
+import { deleteHermesSession } from './lifecycle.ts';
 import { hermesObservationProjection } from './observation.ts';
 
 const HERMES_SUPPORTED_MODELS: string[] = [];
@@ -243,7 +243,7 @@ export const hermesMeshAgentAdapter: MeshAgentProviderAdapter = {
     usesManagedMcpBridge: true
   },
   createSessionRuntime: createHermesSessionRuntime,
-  unarchiveSession: noopProviderSessionLifecycle,
+  deleteSession: deleteHermesSession,
   detect(probes) {
     const preset = baseHermesMeshAgentAdapter.detect(probes);
     return {
