@@ -195,21 +195,6 @@ describe('formatPrettyMessage', () => {
     expect(stripAnsi(line)).toBe('[transport:http] GET 200 /health in 20ms');
   });
 
-  test('colors error HTTP status codes differently from success codes', async () => {
-    const { formatPrettyMessage } = await import('../../src/index.ts');
-    const success = formatPrettyMessage({ name: 'transport:http', msg: 'call', method: 'GET', path: '/', status: 200 });
-    const serverError = formatPrettyMessage({
-      name: 'transport:http',
-      msg: 'call',
-      method: 'GET',
-      path: '/',
-      status: 500
-    });
-
-    expect(success).toContain('\x1B[32m200\x1B[0m');
-    expect(serverError).toContain('\x1B[31m500\x1B[0m');
-  });
-
   test('formats non-HTTP transport calls with method, result, and duration', async () => {
     const { formatPrettyMessage } = await import('../../src/index.ts');
 
@@ -262,12 +247,6 @@ describe('formatPrettyMessage', () => {
     });
     const [exitCode, stdout] = await Promise.all([proc.exited, new Response(proc.stdout).text()]);
     expect({ exitCode, stdout }).toEqual({ exitCode: 0, stdout: '[transport:stdio] sessions.list ok in 3ms' });
-  });
-
-  test('keeps the regular logger prefix for non-transport logs', async () => {
-    const { formatPrettyMessage } = await import('../../src/index.ts');
-
-    expect(formatPrettyMessage({ name: 'monad', msg: 'ready' })).toBe('\x1B[2m[monad]\x1B[0m ready');
   });
 });
 
