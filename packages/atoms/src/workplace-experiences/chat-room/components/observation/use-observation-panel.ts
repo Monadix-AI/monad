@@ -312,11 +312,16 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
   useEffect(() => {
     if (!state.panelOpen || !state.connected) return;
     setEventPages((current) => {
-      if (current.convenience.nextCursor === eventsBefore && current.raw.nextCursor === snapshotEventsBefore)
-        return current;
+      const convenienceCursor =
+        current.convenience.loading || current.convenience.settledCount > 0
+          ? current.convenience.nextCursor
+          : eventsBefore;
+      const rawCursor =
+        current.raw.loading || current.raw.settledCount > 0 ? current.raw.nextCursor : snapshotEventsBefore;
+      if (current.convenience.nextCursor === convenienceCursor && current.raw.nextCursor === rawCursor) return current;
       return {
-        convenience: { ...current.convenience, nextCursor: eventsBefore },
-        raw: { ...current.raw, nextCursor: snapshotEventsBefore }
+        convenience: { ...current.convenience, nextCursor: convenienceCursor },
+        raw: { ...current.raw, nextCursor: rawCursor }
       };
     });
   }, [dataScopeKey, eventsBefore, snapshotEventsBefore, state.connected, state.panelOpen]);

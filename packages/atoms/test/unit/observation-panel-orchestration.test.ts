@@ -337,6 +337,31 @@ test('a completed history turn replaces the partial live prefix loaded after it'
   ]);
 });
 
+test('a settled history turn removes the matching Hermes live replay appended after it', () => {
+  const historical = [
+    { ...observationEvent('history-user', 'join the project'), kind: 'user-message' as const },
+    observationEvent('history-final', 'Posted!')
+  ];
+  const lifecycle = { ...observationEvent('live-lifecycle', 'session changed'), kind: 'unknown' as const };
+  const replay = [
+    { ...observationEvent('live-start', 'Message started'), kind: 'turn-start' as const },
+    { ...observationEvent('live-final', '\n\nPosted!'), streaming: true },
+    { ...observationEvent('live-end', 'complete'), kind: 'turn-end' as const },
+    lifecycle
+  ];
+  const frames: MeshConvenienceFrame[] = [
+    {
+      kind: 'patch',
+      cursor: 'provider:',
+      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
+    }
+  ];
+
+  expect(
+    foldConvenienceEvents({ ...emptyObservationTimeline, events: [...historical, ...replay] }, frames).events
+  ).toEqual([...historical, lifecycle]);
+});
+
 test('convenience history preserves a tool call and result that share a provider record dedupe key', () => {
   const call: AgentObservationEvent = {
     ...observationEvent('mesh:json:item_1:tool-call', 'Tool call command_execution'),
