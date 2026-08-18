@@ -222,6 +222,10 @@ test('every caller of release.yml grants the permissions its publish job declare
 test('the installer and upgrade path is gated before main, not only during a release', () => {
   const distTail = ci.jobs?.['dist-tail'];
   const gateStep = ci.jobs?.gate?.steps?.find((step) => step.name === 'Verify required jobs');
+  const releaseInstallCommands = ['build', 'installers', 'upgrade-test'].map(
+    (job) => namedStep(job, 'Install dist')?.run
+  );
+  const ciInstallCommand = namedCiStep('dist-tail', 'Install dist')?.run;
 
   // The explicit input covers pull requests and merge queues while release.yml supplies real artifact coverage.
   expect({
@@ -231,7 +235,9 @@ test('the installer and upgrade path is gated before main, not only during a rel
     ),
     exercisesInstaller: namedCiStep('dist-tail', 'Test shell installer')?.run?.includes('Checksum verified'),
     requiredByGate: gateStep?.run?.includes('test "$DIST_TAIL_RESULT" = success'),
-    distVersionMatchesRelease: distTail?.env?.DIST_VERSION === releaseEnv.DIST_VERSION
+    distVersionMatchesRelease: distTail?.env?.DIST_VERSION === releaseEnv.DIST_VERSION,
+    installerPinMatchesRelease: distTail?.env?.DIST_INSTALLER_SHA256 === releaseEnv.DIST_INSTALLER_SHA256,
+    installCommands: [...releaseInstallCommands, ciInstallCommand]
   }).toEqual({
     // Covers pull_request and merge_group alike; gating on either alone would be dead code today or
     // a silently dropped gate once a merge queue is enabled.
@@ -239,7 +245,12 @@ test('the installer and upgrade path is gated before main, not only during a rel
     exercisesUpgrade: true,
     exercisesInstaller: true,
     requiredByGate: true,
-    distVersionMatchesRelease: true
+    distVersionMatchesRelease: true,
+    installerPinMatchesRelease: true,
+    installCommands: Array.from(
+      { length: 4 },
+      () => 'bun scripts/install-cargo-dist.ts "$DIST_VERSION" "$DIST_INSTALLER_SHA256"'
+    )
   });
 });
 
