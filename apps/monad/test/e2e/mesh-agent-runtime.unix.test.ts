@@ -63,6 +63,30 @@ async function waitFor<T>(read: () => T | undefined | Promise<T | undefined>, ti
   throw new Error('timed out waiting for condition');
 }
 
+type MeshSessionUpsert = Parameters<ReturnType<typeof buildHandlers>['store']['upsertMeshSession']>[0];
+
+function waitForMeshSessionSnapshot(
+  handlers: ReturnType<typeof buildHandlers>,
+  meshSessionId: string,
+  matches: (row: MeshSessionUpsert) => boolean
+): { result: Promise<void>; restore: () => void } {
+  const original = handlers.store.upsertMeshSession.bind(handlers.store);
+  let resolve!: () => void;
+  const result = new Promise<void>((res) => {
+    resolve = res;
+  });
+  handlers.store.upsertMeshSession = (row: MeshSessionUpsert): void => {
+    original(row);
+    if (row.id === meshSessionId && matches(row)) resolve();
+  };
+  return {
+    result,
+    restore: () => {
+      handlers.store.upsertMeshSession = original;
+    }
+  };
+}
+
 async function createSession(call: Call, cwd: string): Promise<SessionId> {
   const response = await call('POST', '/v1/sessions', { title: 'session-event runtime', cwd });
   expect(response.status).toBe(201);
@@ -156,14 +180,20 @@ for (const kind of TRANSPORTS) {
           connection: { state: 'connected' }
         });
 
-        const input = await call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
-          input: 'hello session events'
-        });
+        const completedSnapshot = waitForMeshSessionSnapshot(
+          handlers,
+          meshSession.id,
+          (row) => row.providerSessionRef === 'mock-session-1' && row.pid === null
+        );
+        const [input] = await Promise.all([
+          call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
+            input: 'hello session events'
+          }),
+          completedSnapshot.result
+        ]);
+        completedSnapshot.restore();
         expect(input.status).toBe(200);
-        const completed = await waitFor(() => {
-          const row = handlers.store.getMeshSession(meshSession.id);
-          return row?.providerSessionRef === 'mock-session-1' && row.pid === null ? row : undefined;
-        });
+        const completed = handlers.store.getMeshSession(meshSession.id);
         expect({
           providerSessionRef: completed?.providerSessionRef,
           state: completed?.state,

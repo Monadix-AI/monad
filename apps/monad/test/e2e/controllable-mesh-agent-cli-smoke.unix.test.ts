@@ -52,16 +52,6 @@ const jsonInit = (method: string, body?: unknown): RequestInit => ({
   body: body === undefined ? undefined : JSON.stringify(body)
 });
 
-async function waitFor<T>(read: () => T | undefined, timeoutMs = 2_000): Promise<T> {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const value = read();
-    if (value !== undefined) return value;
-    await Bun.sleep(25);
-  }
-  throw new Error('timed out waiting for condition');
-}
-
 /** No daemon event marks "providerSessionRef was just persisted". Rather than poll, wrap the exact
  *  store call the daemon makes when it persists the ref
  *  (`store.updateMeshSessionRef`, called from session-event-runtime-launcher.ts's `consumeEvent`
@@ -155,17 +145,21 @@ for (const kind of TRANSPORTS) {
         expect(started.status).toBe(200);
         const meshSession = ((await started.json()) as { session: { id: string } }).session;
 
-        const input = await call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
-          input: 'trigger a failing turn'
-        });
+        const settledSnapshot = waitForMeshSessionSnapshot(
+          handlers,
+          meshSession.id,
+          (row) => row.providerSessionRef === 'ref-nonzero' && row.pid === null && row.state === 'failed'
+        );
+        const [input] = await Promise.all([
+          call('POST', `/v1/mesh/sessions/${meshSession.id}/input?transcriptTargetId=${sessionId}`, {
+            input: 'trigger a failing turn'
+          }),
+          settledSnapshot.result
+        ]);
+        settledSnapshot.restore();
         expect(input.status).toBe(200);
 
-        const settled = await waitFor(() => {
-          const row = handlers.store.getMeshSession(meshSession.id);
-          return row?.providerSessionRef === 'ref-nonzero' && row.pid === null && row.state === 'failed'
-            ? row
-            : undefined;
-        });
+        const settled = handlers.store.getMeshSession(meshSession.id);
         expect({ state: settled?.state, providerSessionRef: settled?.providerSessionRef, pid: settled?.pid }).toEqual({
           state: 'failed',
           providerSessionRef: 'ref-nonzero',
