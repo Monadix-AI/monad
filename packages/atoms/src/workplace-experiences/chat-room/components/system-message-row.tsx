@@ -77,7 +77,7 @@ export function SystemMessageRow({
             </button>
           </TooltipTrigger>
           <TooltipContent
-            className="max-h-72 max-w-md overflow-y-auto whitespace-pre-wrap break-words text-left text-sm"
+            className="wrap-break-word max-h-72 max-w-md overflow-y-auto whitespace-pre-wrap text-left text-sm"
             side="top"
             sideOffset={6}
           >
@@ -212,7 +212,7 @@ export function SystemMessageRow({
                   </button>
                 </TooltipTrigger>
                 <TooltipContent
-                  className="max-h-[min(18rem,var(--radix-tooltip-content-available-height))] max-w-[min(24rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain whitespace-pre-wrap break-words text-left text-sm"
+                  className="wrap-break-word max-h-[min(18rem,var(--radix-tooltip-content-available-height))] max-w-[min(24rem,calc(100vw-2rem))] overflow-y-auto overscroll-contain whitespace-pre-wrap text-left text-sm"
                   side="top"
                   sideOffset={6}
                 >

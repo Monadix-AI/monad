@@ -107,7 +107,7 @@ export function MentionText({
   const segments = linkify ? messageTextSegments(text) : mentionSegments(text);
   return (
     <span
-      className={cn('whitespace-pre-wrap break-words [overflow-wrap:anywhere]', className)}
+      className={cn('wrap-anywhere whitespace-pre-wrap', className)}
       style={style}
     >
       {segments.map((segment) => {
@@ -128,7 +128,7 @@ export function MentionText({
           </InlineLink>
         ) : (
           <span
-            className="[overflow-wrap:anywhere]"
+            className="wrap-anywhere"
             key={key}
           >
             {segment.text}

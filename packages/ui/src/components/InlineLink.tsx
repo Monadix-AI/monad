@@ -67,7 +67,7 @@ export function LinkPathPopover({ children, href }: { children: ReactElement; hr
       <HoverCardPrimitive.Portal>
         <HoverCardPrimitive.Content
           align="start"
-          className="popup-surface fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 z-50 max-w-[min(24em,calc(100vw-2rem))] origin-(--radix-hover-card-content-transform-origin) animate-in rounded-md px-3 py-2 font-mono text-popover-foreground text-xs leading-relaxed outline-hidden [overflow-wrap:anywhere] data-[state=closed]:animate-out"
+          className="popup-surface fade-in-0 zoom-in-95 data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[side=bottom]:slide-in-from-top-2 data-[side=top]:slide-in-from-bottom-2 wrap-anywhere z-50 max-w-[min(24em,calc(100vw-2rem))] origin-(--radix-hover-card-content-transform-origin) animate-in rounded-md px-3 py-2 font-mono text-popover-foreground text-xs leading-relaxed outline-hidden data-[state=closed]:animate-out"
           side="top"
           sideOffset={6}
         >
@@ -112,7 +112,7 @@ export function InlineLink({
       ) : (
         <FaviconIcon href={href} />
       )}
-      <span className="min-w-0 border-transparent border-b border-dashed [overflow-wrap:anywhere] group-hover/inline-link:border-current group-focus-visible/inline-link:border-current">
+      <span className="wrap-anywhere min-w-0 underline decoration-1 decoration-transparent decoration-dotted underline-offset-2 group-hover/inline-link:decoration-current group-focus-visible/inline-link:decoration-current">
         {children}
       </span>
     </>
@@ -178,7 +178,7 @@ function FaviconIcon({ href }: { href: string | undefined }) {
     <img
       alt=""
       aria-hidden="true"
-      className="size-3.5 shrink-0 self-center rounded-[2px]"
+      className="size-3.5 shrink-0 self-center rounded-2xs"
       data-inline-favicon="true"
       ref={iconRef}
       src={FALLBACK_FAVICON_HREF}

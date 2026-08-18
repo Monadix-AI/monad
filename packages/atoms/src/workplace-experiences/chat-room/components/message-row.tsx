@@ -350,7 +350,7 @@ export function MarkdownWithMentions({
     <>
       <style>{MESSAGE_MARKDOWN_CSS}</style>
       <Markdown
-        className="workplace-message-markdown !text-current"
+        className="workplace-message-markdown text-current!"
         components={components}
         streaming={streaming}
         text={markdownText}
@@ -570,7 +570,7 @@ export const MessageRow = memo(function MessageRow({
         >
           {!agent && msg.time ? (
             <span
-              className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+              className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media_(hover:none),(pointer:coarse)]:opacity-100"
               style={TIME_STYLE}
             >
               {msg.time}
@@ -579,7 +579,7 @@ export const MessageRow = memo(function MessageRow({
           {canReply ? (
             <button
               aria-label={labels?.reply}
-              className="workplace-action flex h-6 items-center gap-1 rounded-md px-1.5 font-ui text-[11px] text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+              className="workplace-action flex h-6 items-center gap-1 rounded-md px-1.5 font-ui text-[11px] text-muted-foreground opacity-0 hover:bg-accent hover:text-foreground focus-visible:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring group-hover:opacity-100 [@media_(hover:none),(pointer:coarse)]:opacity-100"
               onClick={() => onReply?.(msg)}
               title={labels?.reply}
               type="button"
@@ -595,7 +595,7 @@ export const MessageRow = memo(function MessageRow({
           {sentFrom ? (
             <ChannelOriginBadge
               ariaLabel={`${labels?.sentFrom ?? ''} ${sentFrom.name}`.trim()}
-              className="opacity-0 transition-none focus-visible:opacity-100 group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+              className="opacity-0 transition-none focus-visible:opacity-100 group-hover:opacity-100 [@media_(hover:none),(pointer:coarse)]:opacity-100"
               details={sentFrom.details}
               icon={sentFrom.icon}
               name={sentFrom.name}
@@ -603,7 +603,7 @@ export const MessageRow = memo(function MessageRow({
           ) : null}
           {agent && msg.time ? (
             <span
-              className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+              className="opacity-0 group-focus-within:opacity-100 group-hover:opacity-100 [@media_(hover:none),(pointer:coarse)]:opacity-100"
               style={TIME_STYLE}
             >
               {msg.time}

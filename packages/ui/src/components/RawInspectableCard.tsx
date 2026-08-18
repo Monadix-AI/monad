@@ -69,7 +69,7 @@ export function RawInspectableCard({
       data-slot="raw-inspectable-card"
     >
       <div
-        className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-focus-within/raw-card:opacity-100 group-hover/raw-card:opacity-100 data-[open=true]:opacity-100 [@media_(hover:none),_(pointer:coarse)]:opacity-100"
+        className="absolute top-2 right-2 z-10 flex items-center gap-1 opacity-0 transition-opacity group-focus-within/raw-card:opacity-100 group-hover/raw-card:opacity-100 data-[open=true]:opacity-100 [@media_(hover:none),(pointer:coarse)]:opacity-100"
         data-open={open}
         data-slot="raw-inspectable-card-actions"
       >

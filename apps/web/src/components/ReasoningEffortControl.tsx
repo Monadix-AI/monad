@@ -309,7 +309,7 @@ export function ReasoningEffortControl({
           <span
             aria-hidden="true"
             className={cn(
-              'absolute inset-y-0 z-30 w-[18px] -translate-x-1/2 rounded-[10.5px] transition-[background-color,border-color,box-shadow] duration-150 ease-out',
+              'absolute inset-y-0 z-30 w-4.5 -translate-x-1/2 rounded-[10.5px] transition-[background-color,border-color,box-shadow] duration-150 ease-out',
               interacting && 'brightness-110'
             )}
             style={{
