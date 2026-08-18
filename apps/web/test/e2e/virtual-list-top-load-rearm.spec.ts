@@ -48,6 +48,39 @@ test('content that underfills the viewport pages older rows on a wheel-up gestur
   await expect.poll(async () => firstRowId(page)).toBe('row_-2');
 });
 
+test('an opted-in underfilled viewport automatically loads earlier rows until it can scroll', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 320 });
+  await page.goto(`${HARNESS}?topPaging=1&rows=2&smallRows=1&autoFillStart=1`);
+  await page.locator('[role="log"] [data-index]').first().waitFor();
+
+  await expect.poll(async () => (await state(page)).topLoadCount).toBeGreaterThan(0);
+  await expect
+    .poll(async () => {
+      const before = await state(page);
+      await page.waitForTimeout(250);
+      const after = await state(page);
+      return {
+        exhausted: after.topLoadCount === 5,
+        scrollable: after.scrollHeight > 320,
+        stable: !after.topLoading && before.topLoadCount === after.topLoadCount
+      };
+    })
+    .toEqual({ exhausted: false, scrollable: true, stable: true });
+  const settledLoadCount = (await state(page)).topLoadCount;
+  await page.waitForTimeout(400);
+  expect((await state(page)).topLoadCount).toBe(settledLoadCount);
+});
+
+test('automatic underfill loading stops when earlier history is exhausted', async ({ page }) => {
+  await page.setViewportSize({ width: 800, height: 1200 });
+  await page.goto(`${HARNESS}?topPaging=1&rows=2&smallRows=1&autoFillStart=1`);
+  await page.locator('[role="log"] [data-index]').first().waitFor();
+
+  await expect.poll(async () => (await state(page)).topLoadCount).toBe(5);
+  await page.waitForTimeout(400);
+  expect((await state(page)).topLoadCount).toBe(5);
+});
+
 test('a failed page load is retried by wheeling up at the loaded top', async ({ page }) => {
   await page.goto(`${HARNESS}?topPaging=1&failFirstTopLoad=1`);
   await page.locator('[role="log"] [data-index]').first().waitFor();

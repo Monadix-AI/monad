@@ -36,6 +36,12 @@ export interface VirtualListProps<T> {
   settleAtBottomOnLoad?: boolean;
   /** Follow new/growing content while the user is parked at the bottom (chat behaviour). */
   stickToBottom?: boolean;
+  /**
+   * While the loaded rows do not fill the viewport, keep requesting older rows until the viewport
+   * can scroll or the caller reports that no earlier page remains. Observation timelines use this
+   * so opening a short latest page does not require an impossible scroll-up gesture.
+   */
+  autoLoadStartWhenUnderfilled?: { canLoad: boolean; loading: boolean };
   /** Rendered after the rows, inside the scroll area (e.g. a typing indicator). */
   footer?: ReactNode;
   /** Rendered before the rows, inside the scroll area. */
@@ -135,6 +141,7 @@ export function VirtualList<T>({
   estimateRowHeight,
   settleAtBottomOnLoad = false,
   stickToBottom = false,
+  autoLoadStartWhenUnderfilled,
   footer,
   header,
   viewportOverlay,
@@ -162,6 +169,9 @@ export function VirtualList<T>({
   const lastAtEndRef = useRef<boolean | null>(null);
   const lastTotalSizeRef = useRef<number | null>(null);
   const startArmedRef = useRef(!stickToBottom);
+  const autoStartLoadPendingRef = useRef(false);
+  const autoStartLoadWasLoadingRef = useRef(false);
+  const previousAutoStartItemsRef = useRef(items);
   const endArmedRef = useRef(true);
   const initialEndScrollDoneRef = useRef(!stickToBottom);
   const reachedBottomOnceRef = useRef(!settleAtBottomOnLoad);
@@ -222,6 +232,11 @@ export function VirtualList<T>({
     onRangeChange,
     onStartReached
   };
+  if (autoLoadStartWhenUnderfilled?.loading) autoStartLoadPendingRef.current = true;
+  else if (autoStartLoadWasLoadingRef.current || previousAutoStartItemsRef.current !== items)
+    autoStartLoadPendingRef.current = false;
+  autoStartLoadWasLoadingRef.current = autoLoadStartWhenUnderfilled?.loading ?? false;
+  previousAutoStartItemsRef.current = items;
 
   const hasFooter = footer !== undefined && footer !== null;
   const lastItem = items.at(-1);
@@ -295,13 +310,27 @@ export function VirtualList<T>({
       if (knownScrollOffset !== null && knownScrollOffset !== undefined) {
         const scrollOffset = Math.max(knownScrollOffset, 0);
         const atStart = scrollOffset <= START_REACHED_THRESHOLD;
+        const underfilled = Boolean(
+          autoLoadStartWhenUnderfilled?.canLoad &&
+            !autoLoadStartWhenUnderfilled.loading &&
+            !autoStartLoadPendingRef.current &&
+            metrics &&
+            metrics.scrollHeight <= metrics.clientHeight + 1
+        );
+        if (underfilled) {
+          initialEndScrollDoneRef.current = true;
+          startArmedRef.current = true;
+        }
         if (!initialEndScrollDoneRef.current) {
           if (stickToBottom && atStart) return;
           initialEndScrollDoneRef.current = true;
         }
         if (atStart && startArmedRef.current && initialEndScrollDoneRef.current) {
           const handled = latestRef.current.onStartReached?.();
-          if (handled !== false) startArmedRef.current = false;
+          if (handled !== false) {
+            startArmedRef.current = false;
+            if (underfilled) autoStartLoadPendingRef.current = true;
+          }
         } else if (
           scrollOffset > START_REARM_THRESHOLD &&
           !(scrollbarPointerRowAnchorRef.current && scrollbarPointerTopOffsetRef.current !== null)
@@ -372,7 +401,7 @@ export function VirtualList<T>({
         previousScrollTopRef.current = scroller.scrollTop;
       }
     },
-    [emitRange, settleAtBottomOnLoad, stickToBottom]
+    [autoLoadStartWhenUnderfilled, emitRange, settleAtBottomOnLoad, stickToBottom]
   );
 
   // Re-arm the start edge for a reader who is already parked at the loaded top, where no scroll

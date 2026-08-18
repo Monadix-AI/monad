@@ -550,6 +550,10 @@ export function MeshAgentObservationPanel({
         ) : hasItems ? (
           <VirtualList
             ariaLive="polite"
+            autoLoadStartWhenUnderfilled={{
+              canLoad: Boolean(canLoadOlderEvents),
+              loading: Boolean(loadingOlderEvents)
+            }}
             className="scwf-scroll"
             controlRef={listRef}
             footer={listFooter}

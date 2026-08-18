@@ -87,7 +87,7 @@ export function ObservationMessageCard({
   const reasoningTitle = observationReasoningTitle(reasoningState?.summary);
   const reasoningTokenCount = observationReasoningTokenCount(reasoningState?.summary);
   const reasoningContent = observationReasoningContent(reasoningState?.summary, reasoningState?.text ?? '');
-  const [reasoningOpen, setReasoningOpen] = useObservationDisclosure('reasoning');
+  const [reasoningOpen, setReasoningOpen] = useObservationDisclosure('reasoning', reasoningState?.streaming === true);
   const hasReasoningContent = observationReasoningHasContent(
     reasoningState?.summary,
     reasoningState?.text ?? '',
@@ -95,6 +95,7 @@ export function ObservationMessageCard({
   );
   const reasoningBody = reasoningState ? (
     <Reasoning
+      autoCloseOnComplete={false}
       className={messageRole === 'reasoning' ? 'mb-0 w-full' : 'mb-2 w-full'}
       defaultOpen={false}
       duration={reasoningState.durationMs === undefined ? undefined : Math.ceil(reasoningState.durationMs / 1000)}

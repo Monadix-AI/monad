@@ -325,6 +325,7 @@ export function RawObservationList({
           onLoadOlderEvents
         })}
         ariaLive="polite"
+        autoLoadStartWhenUnderfilled={{ canLoad: canLoadOlderEvents, loading: loadingOlderEvents }}
         className="scwf-scroll monad-selectable"
         controlRef={listRef}
         footer={listFooter}

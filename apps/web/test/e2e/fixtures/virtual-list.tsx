@@ -107,6 +107,7 @@ function Harness(): React.ReactElement {
   const [viewportOverlayVisible, setViewportOverlayVisible] = useState(false);
   const anchorRef = useRef<{ id: string; offset: number; scrollTop: number } | null>(null);
   const topPagingMode = new URLSearchParams(window.location.search).get('topPaging');
+  const autoFillStart = new URLSearchParams(window.location.search).get('autoFillStart') === '1';
   const [topCanLoad, setTopCanLoad] = useState(topPagingMode !== 'deferred');
   const topPaging =
     topPagingMode === '1' ||
@@ -309,6 +310,9 @@ function Harness(): React.ReactElement {
     <div style={{ display: 'flex', flexDirection: 'column', height: '100vh' }}>
       <div style={{ flex: 1, minHeight: 0, position: 'relative' }}>
         <VirtualList
+          autoLoadStartWhenUnderfilled={
+            autoFillStart ? { canLoad: topCanLoad && topLoadCountRef.current < 5, loading: topLoading } : undefined
+          }
           controlRef={listRef}
           getKey={(row) => row.id}
           header={

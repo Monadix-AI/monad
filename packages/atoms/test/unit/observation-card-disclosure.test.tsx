@@ -3,8 +3,8 @@ import type { ReactElement } from 'react';
 import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
 import type { ObservationTimelineRow } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 
-import { expect, test } from 'bun:test';
-import { fireEvent, render } from '@testing-library/react';
+import { expect, jest, test } from 'bun:test';
+import { act, fireEvent, render } from '@testing-library/react';
 
 import {
   createObservationDisclosureStore,
@@ -34,14 +34,15 @@ function tree(store: ReturnType<typeof createObservationDisclosureStore>, scope:
 
 function observationEntry(
   kind: 'assistant-message' | 'reasoning',
-  text: string
+  text: string,
+  streaming = true
 ): ObservationTimelineRow['entries'][number] {
   const rawEvent = { id: 'raw-reasoning-response', type: 'provider-message' };
   const event: AgentObservationEvent = {
     id: `event-${kind}`,
     kind,
     provenance: { contractEvents: [{ provenance: { rawEvents: [rawEvent] } }] },
-    streaming: true,
+    streaming,
     text
   };
   const card: AgentObservationCard = {
@@ -49,7 +50,7 @@ function observationEntry(
     kind: kind === 'reasoning' ? 'reasoning' : 'message',
     payload: { event },
     provenance: event.provenance,
-    streaming: true
+    streaming
   };
   return {
     card,
@@ -62,10 +63,11 @@ function observationEntry(
 function reasoningTree(
   store: ReturnType<typeof createObservationDisclosureStore>,
   reasoningText: string,
-  responseText?: string
+  responseText?: string,
+  streaming = true
 ): ReactElement {
-  const reasoning = observationEntry('reasoning', reasoningText);
-  const response = responseText ? observationEntry('assistant-message', responseText) : undefined;
+  const reasoning = observationEntry('reasoning', reasoningText, streaming);
+  const response = responseText ? observationEntry('assistant-message', responseText, streaming) : undefined;
   return (
     <ObservationDisclosureProvider store={store}>
       <ObservationTimelineRowView
@@ -106,6 +108,8 @@ test('expanding one row leaves another row collapsed', async () => {
 test('expanded reasoning remains open when streaming adds content and pairs the response', () => {
   const store = createObservationDisclosureStore();
   const mounted = render(reasoningTree(store, 'First reasoning update'));
+  expect(mounted.getByRole('button').getAttribute('aria-expanded')).toBe('true');
+  fireEvent.click(mounted.getByRole('button'));
   fireEvent.click(mounted.getByRole('button'));
   mounted.unmount();
 
@@ -122,4 +126,21 @@ test('expanded reasoning remains open when streaming adds content and pairs the 
     reasoning: 'First reasoning update and another one',
     response: 'The response has started streaming'
   });
+});
+
+test('expanded observation reasoning stays open when history loading recomputes it as complete', () => {
+  jest.useFakeTimers();
+  try {
+    const store = createObservationDisclosureStore();
+    const mounted = render(reasoningTree(store, 'Inspecting the loaded history'));
+    fireEvent.click(mounted.getByRole('button'));
+    fireEvent.click(mounted.getByRole('button'));
+
+    mounted.rerender(reasoningTree(store, 'Inspecting the loaded history', undefined, false));
+    act(() => jest.advanceTimersByTime(1_100));
+
+    expect(mounted.getByRole('button').getAttribute('aria-expanded')).toBe('true');
+  } finally {
+    jest.useRealTimers();
+  }
 });
