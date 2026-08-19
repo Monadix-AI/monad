@@ -752,3 +752,12 @@ export async function loadManifestAtomPack(
   };
   await pack.register(ctx);
 }
+
+export type { LiveProjectionAdapter, LiveProjectionRow } from './live-projection.ts';
+
+export {
+  advanceConvenienceRows,
+  createConvenienceLiveProjector,
+  projectConvenienceRows,
+  toConvenienceEvents
+} from './live-projection.ts';
