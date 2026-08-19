@@ -47,6 +47,16 @@ export interface LiveMeshSession {
   adapter: MeshAgentProviderAdapter;
   sessionEventRuntime?: SessionEventRuntimeExecutor;
   providerSessionRef?: string | null;
+  /** Provider-transcript position (`line:N`) at which this runtime's epoch began. The events/history
+   *  pages are bounded by it so the transcript rows this epoch itself writes are never served as
+   *  "earlier events" — the live plane is the sole authority for the epoch. Only set when the
+   *  adapter's page cursors are actually line-formatted; absent otherwise (pages stay unbounded and
+   *  the first-input trim below carries correctness). */
+  providerEventsBoundary?: string;
+  /** When this runtime's FIRST turn input was delivered. Transcript rows are stamped by the provider
+   *  at accept time — always at/after delivery — so any history event from the first user prompt at
+   *  or after this instant is the live epoch's own content and is dropped from history pages. */
+  epochFirstInputAt?: string;
   pendingApprovals: Map<string, Record<string, unknown>>;
   liveRawStore: Pick<LiveRawStore, 'append' | 'closeAndDelete' | 'cursorBefore' | 'epoch' | 'page'>;
   observationEpoch: string;

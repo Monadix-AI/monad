@@ -20,7 +20,11 @@ import {
   observationCursorSchema,
   parseObservationPageBefore
 } from '@monad/protocol';
-import { toFallbackAgentObservationEvent } from '@monad/sdk-atom';
+import {
+  advanceConvenienceRows,
+  createConvenienceLiveProjector,
+  toFallbackAgentObservationEvent
+} from '@monad/sdk-atom';
 
 import { MeshAgentError } from '#/services/mesh-agent/errors.ts';
 import {
@@ -62,6 +66,23 @@ class ProviderEventsUnavailableError extends Error {
     super(`provider events unavailable: ${reason}`);
     this.name = 'ProviderEventsUnavailableError';
   }
+}
+
+// The provider stamps transcript rows at ACCEPT time — always at or after the daemon delivered the
+// input — so once the live plane exists, every history event from the first user prompt at/after the
+// epoch's first input delivery is the live epoch's own content: the live stream already carries it
+// (or will), and serving it as "earlier events" would render the turn twice. There is no shared
+// per-event id between the two planes for prompt/reasoning/message rows (the wire carries only
+// text), so this delivery-instant cut at the prompt anchor is the stable rule.
+function withoutLiveCoveredTail(
+  events: AgentObservationEvent[],
+  epochFirstInputAt: string | undefined
+): AgentObservationEvent[] {
+  if (!epochFirstInputAt) return events;
+  const cut = events.findIndex(
+    (event) => event.kind === 'user-message' && event.at !== undefined && event.at >= epochFirstInputAt
+  );
+  return cut < 0 ? events : events.slice(0, cut);
 }
 
 function unavailableConveniencePage(reason: string): MeshConvenienceEventPage {
@@ -125,7 +146,7 @@ export class MeshAgentEventPages {
           ...(page.nextBefore !== undefined
             ? { nextCursor: liveRawStore.cursorBefore(page.nextBefore) }
             : providerSessionRef
-              ? { nextCursor: encodeEventCursor('') }
+              ? { nextCursor: encodeEventCursor(live.providerEventsBoundary ?? '') }
               : {})
         };
       }
@@ -216,11 +237,14 @@ export class MeshAgentEventPages {
     }
     const adapter = getMeshAgentProviderAdapter(provider);
     const runtime = adapter.observationRuntime;
-    const events = page.events
-      .map((event) =>
-        runtime ? runtime.toAgentObservationEvent(event) : toFallbackAgentObservationEvent(event, adapter.observation)
-      )
-      .filter((event): event is AgentObservationEvent => event !== null);
+    const events = withoutLiveCoveredTail(
+      page.events
+        .map((event) =>
+          runtime ? runtime.toAgentObservationEvent(event) : toFallbackAgentObservationEvent(event, adapter.observation)
+        )
+        .filter((event): event is AgentObservationEvent => event !== null),
+      this.context.live.get(id)?.epochFirstInputAt
+    );
     // An event page is request/response, so its patch carries the provider position the page was
     // taken at (an absent `before` being the latest page) rather than a live row sequence.
     const requestedCursor = eventCursorFromPosition(beforePosition);
@@ -250,31 +274,20 @@ export class MeshAgentEventPages {
         limit: req.limit,
         sortDirection: 'desc'
       });
-      const projector = live.adapter.events.createLiveProjector?.({
+      const projector = createConvenienceLiveProjector(live.adapter, {
         id: livePageProjectionId(id, beforePosition.observationEpoch, beforePosition.seq),
         ...(live.providerSessionRef ? { providerSessionRef: live.providerSessionRef } : {})
       });
-      let projection: MeshAgentProjectionPage = { events: [] };
-      if (projector) {
-        for (const row of page.rows) {
-          if (row.stream === 'stdout') projection = projector.advance(row.payload, row.observedAt);
-        }
-      } else {
-        const stdout = page.rows.filter((row) => row.stream === 'stdout');
-        const output = stdout.map((row) => row.payload).join('');
-        projection = live.adapter.events.projectLive({
-          id: livePageProjectionId(id, beforePosition.observationEpoch, beforePosition.seq),
-          output,
-          mode: 'events',
-          ...(stdout.at(-1)?.observedAt ? { observedAt: stdout.at(-1)?.observedAt } : {})
-        });
-      }
+      const projection = advanceConvenienceRows(
+        projector,
+        page.rows.filter((row) => row.stream === 'stdout')
+      );
       return {
         events: projection.events,
         ...(page.nextBefore !== undefined
           ? { nextCursor: liveRawStore.cursorBefore(page.nextBefore) }
           : live.providerSessionRef
-            ? { nextCursor: encodeEventCursor('') }
+            ? { nextCursor: encodeEventCursor(live.providerEventsBoundary ?? '') }
             : {})
       };
     }

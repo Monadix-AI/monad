@@ -446,6 +446,10 @@ test('MeshAgent host runs only the provider session-event runtime', async () => 
       accepted: ['structured-event', 'structured-event'],
       turns: [0, 0],
       turnEvents: [
+        // The opening managed turn publishes the same activity pair host.input does — without it a
+        // member's presence stays idle for its entire join turn.
+        { type: 'mesh.turn_started', payload: { meshSessionId: view.id } },
+        { type: 'mesh.turn_settled', payload: { meshSessionId: view.id } },
         { type: 'mesh.turn_started', payload: { meshSessionId: view.id } },
         { type: 'mesh.turn_settled', payload: { meshSessionId: view.id } }
       ]

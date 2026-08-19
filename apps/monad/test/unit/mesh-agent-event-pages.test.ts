@@ -188,6 +188,55 @@ test('provider event pages receive the resolved agent environment', async () => 
   ]);
 });
 
+test('a history page drops everything from the first live-covered user prompt onward', async () => {
+  const mkEvent = (index: number, role: 'agent' | 'user', text: string, createdAt: string) => ({
+    id: `ref:json:${index}:message`,
+    projection: 'normalized' as const,
+    role,
+    text,
+    source: 'json' as const,
+    createdAt,
+    provenance: { rawEvents: [{ text }] }
+  });
+  const eventAdapter = {
+    ...adapter,
+    events: {
+      ...adapter.events,
+      readPage: async () => ({
+        state: 'available' as const,
+        view: 'convenience' as const,
+        events: [
+          mkEvent(0, 'user', 'old prompt', '2026-08-19T02:40:00.000Z'),
+          mkEvent(1, 'agent', 'old reply', '2026-08-19T02:40:05.000Z'),
+          mkEvent(2, 'user', 'join now', '2026-08-19T02:53:20.905Z'),
+          mkEvent(3, 'agent', 'joined!', '2026-08-19T02:53:35.152Z')
+        ]
+      })
+    }
+  } as unknown as MeshAgentProviderAdapter;
+  const live = {
+    id: 'mesh_pages',
+    agentName: 'hermes-main',
+    provider: 'event-pages-fixture',
+    adapter: eventAdapter,
+    observationEpoch: 'oep_pages',
+    providerSessionRef: 'ref',
+    workingPath: '/tmp/project',
+    epochFirstInputAt: '2026-08-19T02:53:15.057Z'
+  } as unknown as LiveMeshSession;
+  const pages = new MeshAgentEventPages({
+    live: new Map([[live.id, live]]),
+    resolveAgentEnv: async () => ({}),
+    store: { getMeshSession: () => undefined }
+  } as never);
+
+  const page = await pages.convenienceEventsPage(live.id, { limit: 20 });
+  const frame = page.frames[0];
+  const texts = frame?.kind === 'patch' ? frame.operations.map((op) => (op.op === 'upsert' ? op.event.text : '')) : [];
+
+  expect(texts).toEqual(['old prompt', 'old reply']);
+});
+
 test('a transient live raw reader failure remains retryable instead of becoming an exhausted page', async () => {
   const eventAdapter = {
     ...adapter,

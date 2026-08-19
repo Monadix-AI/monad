@@ -242,6 +242,33 @@ export class MeshSessionEventRuntimeLauncher {
     let previousActivityState: MeshSessionView['activity']['state'] | undefined;
     let lastPid: number | null = null;
     let resumePending = false;
+    let startedEmitted = false;
+    // A managed start waits for the whole opening turn to settle, so emitting this only after
+    // `runtime.open` resolves would leave every client's mesh-session cache stale — and the member
+    // rendered idle — for the entire first turn. Fire it the moment the runtime is active instead.
+    const emitStarted = (pid: number | null) => {
+      if (startedEmitted) return;
+      startedEmitted = true;
+      this.ctx.log.debug(
+        {
+          event: 'mesh.runtime.started',
+          sessionId: args.transcriptTargetId,
+          memberId: args.projectMemberId ?? null,
+          meshSessionId: id,
+          runtimeGeneration: id,
+          pid
+        },
+        'native cli started'
+      );
+      this.ctx.events.emit(args.transcriptTargetId, 'mesh.started', {
+        meshSessionId: id,
+        agentName: args.agentName,
+        provider: agent.provider,
+        productIcon: adapter.productIcon,
+        workingPath,
+        pid
+      });
+    };
     const live: LiveMeshSession = {
       id,
       transcriptTargetId: args.transcriptTargetId,
@@ -328,6 +355,9 @@ export class MeshSessionEventRuntimeLauncher {
       consumeEvent: async (event) => {
         if (event.type === 'provider_session_identified') {
           live.providerSessionRef = event.payload.providerSessionRef;
+          // A freshly identified session file belongs wholly to this epoch — its transcript rows are
+          // live-covered from row zero. A resume start computed the real boundary before open.
+          live.providerEventsBoundary ??= 'line:0';
           this.ctx.deps.store.updateMeshSessionRef(id, event.payload.providerSessionRef);
           return;
         }
@@ -419,6 +449,9 @@ export class MeshSessionEventRuntimeLauncher {
             at: updatedAt
           });
         }
+        if (snapshot.lifecycle.state === 'active' && !terminal) {
+          emitStarted(snapshot.activity.state === 'running' ? snapshot.activity.pid : null);
+        }
         if (snapshot.connection.state === 'connected' && !live.connectionOpen) {
           live.connectionOpen = true;
           this.ctx.events.publish(args.transcriptTargetId, 'mesh.session.connection.opened', {
@@ -476,8 +509,39 @@ export class MeshSessionEventRuntimeLauncher {
         this.establishManagedRuntimeOwnership(args, id);
         managedOwnershipEstablished = true;
       }
+      // Epoch boundary in the provider transcript: everything already in the session file predates
+      // this runtime. Computed BEFORE the first turn can append rows, and only trusted when the
+      // adapter's page cursors are line-formatted; otherwise pages stay unbounded and the
+      // first-input trim in event-pages carries correctness.
+      if (args.providerSessionRef) {
+        live.providerEventsBoundary = await this.providerEventsBoundaryAtOpen(
+          adapter,
+          args.providerSessionRef,
+          workingPath,
+          agent.env,
+          managed ?? undefined
+        );
+      }
+      if (startInput?.initialTurn) live.epochFirstInputAt = new Date().toISOString();
       await args.beforeInitialTurn?.(id);
-      await runtime.open(startInput?.initialTurn, { waitForInitialTurnSettlement: willBeManaged });
+      // The opening turn never passes through MeshAgentHost.input, which is where the
+      // turn_started/turn_settled activity pair is normally published — without this pair a member's
+      // presence stays idle for its entire join turn on every subscribed client.
+      const managedInitialTurn = willBeManaged && startInput?.initialTurn !== undefined;
+      if (managedInitialTurn) {
+        this.ctx.events.publish(args.transcriptTargetId, 'mesh.turn_started', { meshSessionId: id });
+      }
+      try {
+        await runtime.open(startInput?.initialTurn, { waitForInitialTurnSettlement: willBeManaged });
+      } catch (error) {
+        if (managedInitialTurn) {
+          this.ctx.events.publish(args.transcriptTargetId, 'mesh.turn_settled', { meshSessionId: id, error: true });
+        }
+        throw error;
+      }
+      if (managedInitialTurn) {
+        this.ctx.events.publish(args.transcriptTargetId, 'mesh.turn_settled', { meshSessionId: id });
+      }
       const snapshot = runtime.snapshot();
       const terminal = snapshot.lifecycle.state === 'terminal' ? snapshot.lifecycle.termination : undefined;
       const pid = snapshot.activity.state === 'running' ? snapshot.activity.pid : null;
@@ -491,27 +555,7 @@ export class MeshSessionEventRuntimeLauncher {
         exitedAt: terminal?.at ?? null
       };
       this.ctx.deps.store.upsertMeshSession(row);
-      if (!terminal) {
-        this.ctx.log.debug(
-          {
-            event: 'mesh.runtime.started',
-            sessionId: args.transcriptTargetId,
-            memberId: args.projectMemberId ?? null,
-            meshSessionId: id,
-            runtimeGeneration: id,
-            pid
-          },
-          'native cli started'
-        );
-        this.ctx.events.emit(args.transcriptTargetId, 'mesh.started', {
-          meshSessionId: id,
-          agentName: args.agentName,
-          provider: agent.provider,
-          productIcon: adapter.productIcon,
-          workingPath,
-          pid
-        });
-      }
+      if (!terminal) emitStarted(pid);
       return toView(row, 0, snapshot);
     } catch (error) {
       this.ctx.live.delete(id);
@@ -528,7 +572,45 @@ export class MeshSessionEventRuntimeLauncher {
         exitedAt: failedAt
       });
       if (managedOwnershipEstablished) this.settleFailedManagedRuntime(args, id, failedAt);
+      // The active-runtime signal already told clients this session exists; without its terminal
+      // counterpart their cache would keep a session that never runs.
+      if (startedEmitted && !terminalHandled) {
+        terminalHandled = true;
+        this.ctx.events.emit(args.transcriptTargetId, 'mesh.exited', {
+          meshSessionId: id,
+          exitCode: null,
+          state: 'failed'
+        });
+      }
       throw error;
+    }
+  }
+
+  private async providerEventsBoundaryAtOpen(
+    adapter: MeshAgentProviderAdapter,
+    providerSessionRef: string,
+    workingPath: string,
+    launchEnv: Record<string, string> | undefined,
+    managed: { workspaces: { runtime: string } } | undefined
+  ): Promise<string | undefined> {
+    if (!adapter.events.readPage) return undefined;
+    try {
+      const env = await this.ctx.buildSpawnEnv(adapter, launchEnv);
+      const result = await adapter.events.readPage(
+        {
+          providerSessionRef,
+          workingPath,
+          env,
+          ...(managed ? { managedRuntimeWorkspace: managed.workspaces.runtime } : {})
+        },
+        { view: 'convenience', limit: 1 }
+      );
+      if (result.state !== 'available' || result.view !== 'convenience') return 'line:0';
+      const trailing = result.nextCursor?.match(/^line:(\d+)$/);
+      const total = trailing ? Number(trailing[1]) + 1 : result.events.length;
+      return `line:${total}`;
+    } catch {
+      return undefined;
     }
   }
 

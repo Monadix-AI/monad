@@ -367,6 +367,7 @@ export class MeshAgentHost {
   async input(id: string, req: MeshAgentInputRequest, options?: { onAccepted?: () => void }): Promise<void> {
     const live = this.live.get(id);
     if (!live) throw new Error(`MeshAgent session is not running: ${id}`);
+    live.epochFirstInputAt ??= new Date().toISOString();
     this.log.debug(
       {
         sessionId: live.transcriptTargetId,

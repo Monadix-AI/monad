@@ -12,7 +12,7 @@ import type { LiveMeshSession, MeshAgentHostDeps } from '#/services/mesh-agent/h
 import type { LiveRawRow } from '#/services/mesh-agent/live-raw-store.ts';
 
 import { MESH_AGENT_OUTPUT_SNAPSHOT_MAX } from '@monad/protocol';
-import { toFallbackAgentObservationEvent } from '@monad/sdk-atom';
+import { advanceConvenienceRows, createConvenienceLiveProjector, toConvenienceEvents } from '@monad/sdk-atom';
 
 import { diffObservationEvents } from '#/services/mesh-agent/host/convenience-projection.ts';
 import { encodeEventCursor } from '#/services/mesh-agent/host/event-cursor.ts';
@@ -121,56 +121,25 @@ export class MeshAgentObservationResolver {
   }
 
   private createConvenienceProjector(live: LiveMeshSession, id: string) {
-    const incremental = live.adapter.events.createLiveProjector?.({
+    return createConvenienceLiveProjector(live.adapter, {
       id,
       ...(live.providerSessionRef ? { providerSessionRef: live.providerSessionRef } : {})
     });
-    if (incremental) return incremental;
-    let output = '';
-    return {
-      advance: (delta: string, observedAt?: string) => {
-        output += delta;
-        const projected = live.adapter.events.projectLive({
-          id,
-          output,
-          ...(observedAt ? { observedAt } : {}),
-          ...(live.providerSessionRef ? { providerSessionRef: live.providerSessionRef } : {})
-        });
-        return {
-          ...projected,
-          events: projected.events.map((event) =>
-            event.createdAt || !observedAt ? event : { ...event, createdAt: observedAt }
-          )
-        };
-      }
-    };
   }
 
   private advanceConvenienceRows(
     projector: ReturnType<MeshAgentObservationResolver['createConvenienceProjector']>,
     rows: LiveRawRow[]
   ) {
-    let page = { events: [] } as ReturnType<typeof projector.advance>;
-    for (const row of rows) {
-      if (row.stream === 'stderr') continue;
-      try {
-        page = projector.advance(row.payload, row.observedAt);
-      } catch (error) {
-        throw new ConvenienceProjectionRowError(row, error);
-      }
-    }
-    return page;
+    return advanceConvenienceRows(
+      projector,
+      rows,
+      (row, cause) => new ConvenienceProjectionRowError(row as LiveRawRow, cause)
+    );
   }
 
   private toConvenienceEvents(live: LiveMeshSession, events: MeshAgentObservationEvent[]) {
-    const runtime = live.adapter.observationRuntime;
-    return events
-      .map((event) =>
-        runtime
-          ? runtime.toAgentObservationEvent(event)
-          : toFallbackAgentObservationEvent(event, live.adapter.observation)
-      )
-      .filter((event): event is AgentObservationEvent => event !== null);
+    return toConvenienceEvents(live.adapter, events);
   }
 
   private replayConvenienceThrough(live: LiveMeshSession, id: string, throughSeq: number) {
@@ -301,7 +270,7 @@ export class MeshAgentObservationResolver {
         frames: [
           readyFrame(
             live.observationEpoch,
-            live.providerSessionRef ? encodeEventCursor('') : undefined,
+            live.providerSessionRef ? encodeEventCursor(live.providerEventsBoundary ?? '') : undefined,
             liveObservationCursor(live.observationEpoch, afterSeq ?? 0)
           )
         ]
@@ -317,7 +286,9 @@ export class MeshAgentObservationResolver {
             ? current.events
             : this.replayConvenienceThrough(live, id, Math.min(afterSeq, current.seq));
     const operations = diffObservationEvents(baselineEvents, current.events);
-    const eventsBefore = current.eventsBefore ?? (live.providerSessionRef ? encodeEventCursor('') : undefined);
+    const eventsBefore =
+      current.eventsBefore ??
+      (live.providerSessionRef ? encodeEventCursor(live.providerEventsBoundary ?? '') : undefined);
     const readySeq = Math.min(afterSeq ?? 0, current.seq);
     const readyCursor = liveObservationCursor(live.observationEpoch, readySeq);
     const patchCursor = current.seq > readySeq ? liveObservationCursor(live.observationEpoch, current.seq) : undefined;
@@ -346,7 +317,7 @@ export class MeshAgentObservationResolver {
         page.nextBefore !== undefined && first
           ? live.liveRawStore.cursorBefore(first.seq)
           : live.providerSessionRef
-            ? encodeEventCursor('')
+            ? encodeEventCursor(live.providerEventsBoundary ?? '')
             : undefined;
       return {
         state: 'connected',
