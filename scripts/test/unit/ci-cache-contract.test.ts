@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 
 interface WorkflowStep {
   'continue-on-error'?: boolean | string;
+  'working-directory'?: string;
   if?: string;
   name?: string;
   run?: string;
@@ -367,4 +368,25 @@ test('daemon E2E uses the first-failure-preserving wrapper and one centralized f
   expect(runner).toContain("'../../scripts/bun-test.ts'");
   expect(runner).toContain('DAEMON_E2E_TIMEOUT_BUDGET.testCaseMs');
   expect(runner).not.toContain('--retry');
+});
+
+test('the Playwright browser cache survives an unrelated dependency bump', async () => {
+  const ci = (await workflows()).find(({ file }) => file === 'ci.yml')?.workflow;
+  const steps = ci?.jobs?.['web-e2e']?.steps ?? [];
+  const cacheStep = steps.find((step) => step.name === 'Cache Playwright browsers');
+  const versionStep = steps.find((step) => step.name === 'Resolve the Playwright version');
+
+  // The ~150 MB payload tracks the Playwright version, not the lockfile. Keying it on the lockfile
+  // evicted it on every dependency update and made both shards re-download the browser.
+  expect({
+    key: cacheStep?.with?.key,
+    path: cacheStep?.with?.path,
+    resolvesFromTheInstalledPackage: versionStep?.run?.includes('@playwright/test/package.json'),
+    resolvesWhereTheDependencyLives: versionStep?.['working-directory']
+  }).toEqual({
+    key: '$'.concat('{{ runner.os }}-playwright-$', '{{ steps.playwright-version.outputs.version }}'),
+    path: '~/.cache/ms-playwright',
+    resolvesFromTheInstalledPackage: true,
+    resolvesWhereTheDependencyLives: 'apps/web'
+  });
 });
