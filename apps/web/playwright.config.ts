@@ -96,7 +96,7 @@ export default defineConfig({
   shard: resolvePlaywrightShard(),
   reporter: process.env.CI ? [['list'], ['html', { open: 'never' }]] : 'list',
   use: {
-    baseURL: `http://localhost:${port}`,
+    baseURL: `http://127.0.0.1:${port}`,
     trace: resolvePlaywrightTrace()
   },
   webServer: {
@@ -108,13 +108,16 @@ export default defineConfig({
       // bottom-left daemon menu button — see __root.tsx's gate on this flag.
       VITE_PLAYWRIGHT_TEST: '1'
     },
-    url: `http://localhost:${port}`,
+    // 127.0.0.1, not localhost: the server binds 0.0.0.0, which is IPv4 only. A host that resolves
+    // localhost to ::1 first polls an address nobody listens on and fails on the deadline instead
+    // of on a refused connection, with a healthy server sitting right next to it.
+    url: `http://127.0.0.1:${port}`,
     reuseExistingServer: !process.env.CI,
-    // Piped, because Playwright discards the server's output by default: a cold CI runner that
-    // never reaches `url` otherwise fails with a bare timeout and no reason to act on.
+    // Piped, because Playwright discards the server's output by default, which leaves a startup
+    // failure indistinguishable from a slow start.
     stdout: 'pipe',
     stderr: 'pipe',
-    timeout: 240_000
+    timeout: 120_000
   },
   projects: [
     {
