@@ -285,6 +285,7 @@ async function configureMockMeshAgent(
     authState?: 'authenticated' | 'unauthenticated' | 'unknown';
     turnDelayMs?: number;
     turnGate?: string;
+    lifecycleLogName?: string;
     exitDelayMs?: number;
   } = {}
 ): Promise<{ argsLog: string; envLog: string; lifecycleLog: string; stdinLog: string }> {
@@ -294,7 +295,9 @@ async function configureMockMeshAgent(
   const argsLog = join(root, `mock-mesh-agent-${agentName}-args.log`);
   const envLog = join(root, `mock-mesh-agent-${agentName}-env.jsonl`);
   const stdinLog = join(root, `mock-mesh-agent-${agentName}-stdin.log`);
-  const lifecycleLog = join(root, `mock-mesh-agent-${agentName}-lifecycle.log`);
+  // Reconfiguring an agent leaves the previous process alive for a moment. A caller that asserts on
+  // lifecycle output gives that instance its own file, so the outgoing process cannot write into it.
+  const lifecycleLog = join(root, `${opts.lifecycleLogName ?? `mock-mesh-agent-${agentName}`}-lifecycle.log`);
   const bunCommand =
     process.platform === 'win32'
       ? [
@@ -1187,10 +1190,10 @@ for (const kind of TRANSPORTS) {
       const turnGate = join(dir, 'claude-turn-gate');
       const { lifecycleLog: delayedClaudeLifecycleLog } = await configureMockMeshAgent(t, dir, {
         agentName: 'claude',
+        lifecycleLogName: 'delayed-claude',
         turnGate
       });
       const claudeInputBeforePost = await readLogIfExists(claudeStdinLog);
-      const claudeLifecycleBeforePost = await readLogIfExists(delayedClaudeLifecycleLog);
       const reviewerInputBeforePost = await readLogIfExists(reviewerStdinLog);
 
       const mentionedText = '@[name="Claude" id="claude"] please inspect this';
@@ -1232,8 +1235,17 @@ for (const kind of TRANSPORTS) {
           createdAt: expect.any(String)
         }
       });
-      expect(await readLogIfExists(delayedClaudeLifecycleLog)).toBe(claudeLifecycleBeforePost);
+      // presence-ok: a completed turn is exactly the work the post must not have waited for, and this
+      // instance's own log cannot carry a completion written by the process it replaced.
+      expect(
+        (await readLogIfExists(delayedClaudeLifecycleLog)).split('\n').filter((line) => line.startsWith('turn:'))
+      ).toEqual([]);
       await writeFile(turnGate, '');
+      // Releasing the gate must produce the completion the assertion above denied, which is what
+      // proves that assertion reads a log this instance actually writes to.
+      await waitFor(async () => (await readLogIfExists(delayedClaudeLifecycleLog)).includes('turn:'), {
+        message: `released peer never completed a turn in ${delayedClaudeLifecycleLog}`
+      });
 
       const claudeInput = await waitForFile(claudeStdinLog, 'please inspect this');
       expect(
