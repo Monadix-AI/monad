@@ -86,7 +86,9 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     configureRuntime
   } = createWorkspaceHandlers(ctx);
 
-  const pendingSessionDeletes = new Map<SessionId, ReturnType<typeof setTimeout>>();
+  type PendingSessionDelete = { phase: 'grace'; timer: ReturnType<typeof setTimeout> } | { phase: 'deleting' };
+
+  const pendingSessionDeletes = new Map<SessionId, PendingSessionDelete>();
 
   const isPendingSessionDelete = (id: SessionId) => pendingSessionDeletes.has(id);
 
@@ -115,10 +117,12 @@ export function createLifecycleHandlers(ctx: SessionContext) {
     };
   };
 
-  const teardownSessionRuntime = async (id: SessionId): Promise<boolean> => {
-    const timer = pendingSessionDeletes.get(id);
-    if (timer) clearTimeout(timer);
-    pendingSessionDeletes.delete(id);
+  const teardownSessionRuntime = async (id: SessionId, preservePendingDelete = false): Promise<boolean> => {
+    if (!preservePendingDelete) {
+      const pendingDelete = pendingSessionDeletes.get(id);
+      if (pendingDelete?.phase === 'grace') clearTimeout(pendingDelete.timer);
+      pendingSessionDeletes.delete(id);
+    }
     const session = store.getSession(id);
     if (!session) return false;
     aborts.get(id)?.abort();
@@ -151,10 +155,14 @@ export function createLifecycleHandlers(ctx: SessionContext) {
 
   const hardDeleteSession = async (id: SessionId): Promise<boolean> => {
     const projectId = store.getSession(id)?.projectId;
-    if (!(await teardownSessionRuntime(id))) return false;
-    store.deleteSession(id);
-    emitLifecycle(id, 'session.deleted', {}, projectId ? { projectId } : undefined);
-    return true;
+    try {
+      if (!(await teardownSessionRuntime(id, true))) return false;
+      store.deleteSession(id);
+      emitLifecycle(id, 'session.deleted', {}, projectId ? { projectId } : undefined);
+      return true;
+    } finally {
+      pendingSessionDeletes.delete(id);
+    }
   };
 
   // SessionStart/SessionEnd are observe-only here: SessionStart's additionalContext is stashed by the
@@ -382,18 +390,19 @@ export function createLifecycleHandlers(ctx: SessionContext) {
       requireSession(id);
       if (!pendingSessionDeletes.has(id)) {
         const timer = setTimeout(() => {
+          pendingSessionDeletes.set(id, { phase: 'deleting' });
           void hardDeleteSession(id).catch((err) => log.warn({ err, sessionId: id }, 'pending session delete failed'));
         }, sessionDeleteGraceMs);
         (timer as { unref?: () => void }).unref?.();
-        pendingSessionDeletes.set(id, timer);
+        pendingSessionDeletes.set(id, { phase: 'grace', timer });
       }
       return { deleted: true as const };
     },
 
     async undoDelete({ id }: { id: SessionId }) {
-      const timer = pendingSessionDeletes.get(id);
-      if (!timer) return { undone: false };
-      clearTimeout(timer);
+      const pendingDelete = pendingSessionDeletes.get(id);
+      if (pendingDelete?.phase !== 'grace') return { undone: false };
+      clearTimeout(pendingDelete.timer);
       pendingSessionDeletes.delete(id);
       return { undone: true };
     },

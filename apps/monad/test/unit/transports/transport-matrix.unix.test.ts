@@ -1,7 +1,7 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createSessionResponseSchema, httpErrorSchema } from '@monad/protocol';
+import { createSessionResponseSchema, httpErrorSchema, listSessionsResponseSchema } from '@monad/protocol';
 
 import { registerMcpAppBridge, revokeMcpAppBridgesForServer } from '#/capabilities/tools/registry/mcp/app-bridge.ts';
 import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
@@ -186,7 +186,11 @@ describe('transport parity (TCP loopback ⇆ Unix socket)', () => {
   test('stopped native session deletion survives provider failure over both transports', async () => {
     const adapter = getMeshAgentProviderAdapter('codex');
     const originalDeleteSession = adapter.deleteSession;
+    let cleanupStarted = Promise.withResolvers<void>();
+    let releaseCleanup = Promise.withResolvers<void>();
     adapter.deleteSession = async () => {
+      cleanupStarted.resolve();
+      await releaseCleanup.promise;
       throw new Error('provider delete failed');
     };
 
@@ -201,6 +205,8 @@ describe('transport parity (TCP loopback ⇆ Unix socket)', () => {
           fetch: (path: string, init?: RequestInit) => fetch(`http://localhost${path}`, { ...init, unix: sockPath })
         }
       ]) {
+        const beforeRefresh = await transport.fetch('/v1/sessions?archived=false');
+        const beforeRefreshBody = listSessionsResponseSchema.parse(await beforeRefresh.json());
         const created = await transport.fetch('/v1/sessions', {
           method: 'POST',
           headers: { 'content-type': 'application/json' },
@@ -236,6 +242,21 @@ describe('transport parity (TCP loopback ⇆ Unix socket)', () => {
           status: 200,
           body: { deleted: true }
         });
+        await cleanupStarted.promise;
+        const refreshed = await transport.fetch('/v1/sessions?archived=false');
+        const refreshedBody = listSessionsResponseSchema.parse(await refreshed.json());
+        expect({
+          transport: transport.name,
+          status: refreshed.status,
+          sessionIds: refreshedBody.sessions.map((session) => session.id),
+          total: refreshedBody.total
+        }).toEqual({
+          transport: transport.name,
+          status: 200,
+          sessionIds: beforeRefreshBody.sessions.map((session) => session.id),
+          total: beforeRefreshBody.total
+        });
+        releaseCleanup.resolve();
         await new Promise((resolve) => setTimeout(resolve, 20));
         const fetched = await transport.fetch(`/v1/sessions/${sessionId}`);
         expect({
@@ -244,8 +265,11 @@ describe('transport parity (TCP loopback ⇆ Unix socket)', () => {
           meshSession: store.getMeshSession(meshSessionId),
           session: store.getSession(sessionId)
         }).toEqual({ transport: transport.name, status: 404, meshSession: null, session: null });
+        cleanupStarted = Promise.withResolvers<void>();
+        releaseCleanup = Promise.withResolvers<void>();
       }
     } finally {
+      releaseCleanup.resolve();
       adapter.deleteSession = originalDeleteSession;
     }
   });

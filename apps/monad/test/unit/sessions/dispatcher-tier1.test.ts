@@ -105,6 +105,59 @@ test('sessionDelete hides queued project sessions from project lists', async () 
   store.close();
 });
 
+test('sessionDelete keeps the session hidden while native cleanup is in progress', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store, sessionDeleteGraceMs: 1 });
+  const adapter = getMeshAgentProviderAdapter('codex');
+  const originalDeleteSession = adapter.deleteSession;
+  const cleanupStarted = Promise.withResolvers<void>();
+  const releaseCleanup = Promise.withResolvers<void>();
+  adapter.deleteSession = async () => {
+    cleanupStarted.resolve();
+    await releaseCleanup.promise;
+  };
+
+  try {
+    const { sessionId } = await d.session.create({ title: 'deleting native session' });
+    const now = '2026-08-19T00:00:00.000Z';
+    store.upsertMeshSession({
+      id: 'mesh_deletinghidden',
+      transcriptTargetId: sessionId,
+      agentName: 'pmem_codex_deleting',
+      provider: 'codex',
+      workingPath: '/tmp/deleting-native-session',
+      runtimeRole: 'interactive',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'stopped',
+      pid: null,
+      providerSessionRef: 'thread_deleting_hidden',
+      outputSnapshot: '',
+      exitCode: 0,
+      startedAt: now,
+      updatedAt: now,
+      exitedAt: now
+    });
+
+    await d.session.delete({ id: sessionId });
+    await cleanupStarted.promise;
+
+    expect(await d.session.list({})).toMatchObject({ sessions: [], total: 0 });
+    await expect(d.session.get({ id: sessionId })).rejects.toBeInstanceOf(HandlerError);
+    expect(await d.session.undoDelete({ id: sessionId })).toEqual({ undone: false });
+
+    releaseCleanup.resolve();
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    expect(store.getSession(sessionId)).toBeNull();
+  } finally {
+    releaseCleanup.resolve();
+    adapter.deleteSession = originalDeleteSession;
+    store.close();
+  }
+});
+
 test('project session archive, unarchive, and delete apply provider lifecycle hooks on transitions', async () => {
   const store = createStore();
   const d = buildHandlers(mockModel(['hi']), undefined, { store, sessionDeleteGraceMs: 1 });
