@@ -1,5 +1,5 @@
 import type { AgentObservationEvent } from '@monad/protocol';
-import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import type { Participant } from '../../src/workplace-experiences/experience/types.ts';
 import type { WorkplaceExperienceHost } from '../../src/workplace-experiences/host-context.tsx';
 
@@ -8,7 +8,7 @@ import React from 'react';
 import { renderToStaticMarkup as renderReactToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import {
   MonadMcpToolCard,
   MonadMcpToolHeader
@@ -65,12 +65,14 @@ function toolEvent(args: {
   status?: string;
   durationMs?: number;
   text?: string;
+  hasContent?: boolean;
 }): AgentObservationEvent {
   return {
     id: args.id,
     kind: args.kind,
     streaming: false,
     ...(args.text === undefined ? {} : { text: args.text }),
+    ...(args.hasContent === undefined ? {} : { hasContent: args.hasContent }),
     tool: {
       name: args.name,
       ...(args.callId === undefined ? {} : { callId: args.callId }),
@@ -1157,6 +1159,40 @@ test('rejects non-Monad and same-name non-Monad tools', () => {
   ).toEqual(null);
   expect(monadMcpToolView(sameNameCall, sameNameResult, codexMonadEvidence('agent_read'))).toEqual(null);
   expect(monadMcpToolView(unknownCall, unknownResult, [])).toEqual(null);
+});
+
+test('routes a prefixed Monad call with no arguments (live lifecycle wire) to the semantic card', () => {
+  const call = toolEvent({ id: 'live-call', kind: 'tool-call', name: 'monad__project_post', callId: 'call-9' });
+  const result = toolEvent({
+    id: 'live-result',
+    kind: 'tool-result',
+    name: 'monad__project_post',
+    callId: 'call-9',
+    status: 'completed',
+    text: 'monad__project_post idem_5f9b3c2a1e4d',
+    hasContent: false
+  });
+  const view = monadMcpToolView(call, result, []);
+  if (!view) throw new Error('Expected live Monad project_post view');
+  const markup = renderToStaticMarkup(
+    React.createElement(
+      'div',
+      undefined,
+      React.createElement(MonadMcpToolHeader, { view }),
+      React.createElement(MonadMcpToolCard, { view })
+    )
+  );
+  expect({
+    toolName: view.toolName,
+    action: view.action,
+    output: view.output,
+    text: visibleText(markup)
+  }).toEqual({
+    toolName: 'project_post',
+    action: 'project-post',
+    output: undefined,
+    text: 'Posted to project Completed'
+  });
 });
 
 test('falls back to the generic card when a recognized Monad call has malformed input', () => {

@@ -1,6 +1,7 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 
+/** Shared filesystem search boundary used by adapters with persisted event logs. */
 export interface MeshAgentEventFileSearch {
   roots: string[];
   providerSessionRef: string;

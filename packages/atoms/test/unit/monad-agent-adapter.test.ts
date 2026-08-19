@@ -7,8 +7,8 @@ import { MonadSessionEventDriver } from '../../src/agent-adapters/monad/driver.t
 import { createMonadEventSource } from '../../src/agent-adapters/monad/event-pages.ts';
 import { monadMeshAgentAdapter } from '../../src/agent-adapters/monad/index.ts';
 import { monadObservationProjection } from '../../src/agent-adapters/monad/observation.ts';
-import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/shared/observation/neutral-observation.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 
 const agent = {
   name: 'monad',

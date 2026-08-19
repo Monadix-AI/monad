@@ -21,7 +21,6 @@ import {
   renameMeshAgentProjectMemberDisplayName
 } from '@monad/protocol';
 
-import { agentObservationCards } from '../../../agent-adapters/observation-cards.ts';
 import { meshAgentNeutralStreamItems } from '../../experience/mesh-agent-observation/mesh-agent-observation.ts';
 import {
   meshAgentFacingCommandPhase,
@@ -38,6 +37,7 @@ import {
   meshAgentTag,
   projectParticipants
 } from '../../experience/project-projection.ts';
+import { agentObservationCards } from '../components/observation/card-projection.ts';
 
 const MESH_AGENT_FOLLOW_TEXT = 'CLI stream available';
 

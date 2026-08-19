@@ -36,7 +36,6 @@ import {
 } from '@monad/ui/components/AgentAvatar';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import { agentObservationCards } from '../../../agent-adapters/observation-cards.ts';
 import { AgentProviderBadge } from '../../components/agent-provider-badge.tsx';
 import { isMessageAttachmentRef } from '../../experience/types.ts';
 import { useOptionalWorkplaceExperienceHost } from '../../host-context.tsx';
@@ -66,6 +65,7 @@ import {
 } from '../utils/observation-events.ts';
 import { FilePreviewContext } from './file-preview-context.tsx';
 import { FilePreviewPanel } from './file-preview-panel.tsx';
+import { agentObservationCards } from './observation/card-projection.ts';
 import { DualObservationPanel } from './observation/dual-observation-panel.tsx';
 import { MeshAgentObservationPanel } from './observation/panel.tsx';
 import { RailAgentActivity } from './rail-agent-activity.tsx';

@@ -7,7 +7,7 @@ import {
   providerEpochSecondsTimestamp,
   textValue,
   turnEndReasonFromStopValue
-} from '../../observation-projection.ts';
+} from '../../shared/observation/observation-projection.ts';
 import { codexResponseItem, isCodexObservationResponseItem } from './observation-response-item.ts';
 
 export function codexExecRecordEvents(

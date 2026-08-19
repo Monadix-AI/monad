@@ -12,10 +12,10 @@ import {
   readCodexEventPage
 } from '../../src/agent-adapters/codex/event-pages.ts';
 import { codexObservationProjection } from '../../src/agent-adapters/codex/observation/index.ts';
-import { readProviderEventFile } from '../../src/agent-adapters/event-files.ts';
-import { createOutputEventSource } from '../../src/agent-adapters/event-source.ts';
-import { multiTurnObservationFixtureSchema } from '../../src/agent-adapters/observation-fixture.ts';
+import { multiTurnObservationFixtureSchema } from '../../src/agent-adapters/fixtures/observation-fixture.ts';
 import { openClawHistoryRecords } from '../../src/agent-adapters/openclaw/event-pages.ts';
+import { readProviderEventFile } from '../../src/agent-adapters/shared/events/event-files.ts';
+import { createOutputEventSource } from '../../src/agent-adapters/shared/events/event-source.ts';
 
 const directories: string[] = [];
 const projection = { recordProjectors: [] } as unknown as MeshAgentObservationProjector;

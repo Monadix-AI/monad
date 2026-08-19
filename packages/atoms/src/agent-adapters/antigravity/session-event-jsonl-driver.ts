@@ -68,7 +68,7 @@ export class SessionEventJsonlDriver implements PerTurnProviderDriver {
   }
 
   private async emitParsed(chunk: string): Promise<void> {
-    if (!this.sink) throw new Error('session-event JSONL driver has no active sink');
+    if (!this.sink) throw new Error('Antigravity session-event JSONL driver has no active sink');
     for (const event of this.options.parseOutput(chunk)) {
       if (event.type === 'session_ref') {
         const providerSessionRef = event.payload.providerSessionRef;

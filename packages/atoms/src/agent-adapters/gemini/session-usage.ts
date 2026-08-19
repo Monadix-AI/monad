@@ -4,7 +4,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { meshAgentSessionUsageSchema } from '@monad/protocol';
 
-import { readProviderEventFile } from '../event-files.ts';
+import { readProviderEventFile } from '../shared/events/event-files.ts';
 
 interface GeminiSessionUsageDeps {
   readSession(context: MeshAgentProviderSessionUsageContext): string | null;

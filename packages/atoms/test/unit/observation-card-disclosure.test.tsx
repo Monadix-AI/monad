@@ -1,6 +1,6 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 import type { ReactElement } from 'react';
-import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import type { ObservationTimelineRow } from '../../src/workplace-experiences/chat-room/components/observation/timeline.tsx';
 
 import { expect, jest, test } from 'bun:test';

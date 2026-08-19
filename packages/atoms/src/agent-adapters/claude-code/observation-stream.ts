@@ -1,6 +1,6 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
 
-import { numberValue, recordValue, textValue } from '../observation-projection.ts';
+import { numberValue, recordValue, textValue } from '../shared/observation/observation-projection.ts';
 
 type ClaudeBlock = {
   eventIndex: number;

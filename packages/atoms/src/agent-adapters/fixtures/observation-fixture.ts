@@ -9,6 +9,7 @@ import { z } from 'zod';
 
 import { ObservationSanitizer } from './observation-sanitize.ts';
 
+/** Sanitized provider observation fixture contract used by capture and replay tooling. */
 export const observationFixtureSchema = z
   .object({
     provider: meshAgentProviderSchema,

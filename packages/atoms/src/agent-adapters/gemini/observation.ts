@@ -1,5 +1,8 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
-import type { MeshAgentObservationJsonRecordEntry, MeshAgentObservationProjector } from '../observation-projection.ts';
+import type {
+  MeshAgentObservationJsonRecordEntry,
+  MeshAgentObservationProjector
+} from '../shared/observation/observation-projection.ts';
 
 import {
   classifyObservationActivity,
@@ -11,7 +14,8 @@ import {
   thinkingObservation,
   toolCategoryByName,
   turnEndReasonFromStopValue
-} from '../observation-projection.ts';
+} from '../shared/observation/observation-projection.ts';
+import { geminiToolRuns } from './tool-runs.ts';
 
 export function geminiRecordEvents(
   id: string,
@@ -168,6 +172,7 @@ export const geminiObservationProjection = {
   eventEntries: geminiHistoryEntries,
   classifyActivity: classifyObservationActivity,
   toolCategory: toolCategoryByName('shell', ['run_shell_command', 'shell']),
+  toolRuns: geminiToolRuns,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [{ parse: ({ id, record, recordIndex }) => geminiRecordEvents(id, record, recordIndex) }]
 } satisfies MeshAgentObservationProjector;

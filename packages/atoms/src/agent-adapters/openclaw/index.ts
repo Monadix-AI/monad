@@ -9,17 +9,17 @@ import { writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { createProjectedEventSource } from '../event-source.ts';
 import { makeGatewayAdapter } from '../gateway/adapter.ts';
 import { GatewayDriver } from '../gateway/driver.ts';
-import { agentAdapterIcons } from '../icons.ts';
+import { createFrameworkSettingsImport } from '../settings-import/index.ts';
+import { createProjectedEventSource } from '../shared/events/event-source.ts';
+import { agentAdapterIcons } from '../shared/icons.ts';
 import {
   copyManagedConfigFile,
   type ManagedMcpConfigRunner,
   requireManagedMcpConfigCommand,
   runManagedMcpConfigCommand
-} from '../managed-mcp-config.ts';
-import { createFrameworkSettingsImport } from '../settings-import/index.ts';
+} from '../shared/managed-mcp-config.ts';
 import { openClawHistoryRecords } from './event-pages.ts';
 import { openClawGatewayHooks } from './gateway/index.ts';
 import { archiveOpenClawSession, deleteOpenClawSession, unarchiveOpenClawSession } from './lifecycle.ts';

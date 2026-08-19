@@ -10,7 +10,7 @@ import {
   createClaudeSdkEventPageReader,
   createClaudeSdkHistoryOutputReader
 } from '../../src/agent-adapters/claude-code/index.ts';
-import { multiTurnObservationFixtureSchema } from '../../src/agent-adapters/observation-fixture.ts';
+import { multiTurnObservationFixtureSchema } from '../../src/agent-adapters/fixtures/observation-fixture.ts';
 
 const directories: string[] = [];
 

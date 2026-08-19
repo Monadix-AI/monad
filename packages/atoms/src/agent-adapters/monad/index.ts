@@ -7,7 +7,7 @@ import type {
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 import { z } from 'zod';
 
-import { agentAdapterIcons } from '../icons.ts';
+import { agentAdapterIcons } from '../shared/icons.ts';
 import { MonadSessionEventDriver } from './driver.ts';
 import { createMonadEventSource } from './event-pages.ts';
 import { archiveMonadSession, deleteMonadSession, unarchiveMonadSession } from './lifecycle.ts';

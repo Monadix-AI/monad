@@ -354,6 +354,13 @@ export type MeshAgentObservationActivity =
   | 'status'
   | 'turn-end';
 
+export interface MeshAgentObservationToolRun {
+  call: AgentObservationEvent;
+  consumed: readonly AgentObservationEvent[];
+  result?: AgentObservationEvent;
+  streaming: boolean;
+}
+
 export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector & {
   identity?(event: MeshAgentObservationEvent): string | undefined;
   checkpoint?(event: MeshAgentObservationEvent): string | undefined;
@@ -386,6 +393,9 @@ export type MeshAgentObservationProjector = MeshAgentObservationUsageProjector &
   mergeStreamingRun?(events: MeshAgentObservationEvent[]): MeshAgentObservationEvent | undefined;
   /** Reconcile provider lifecycle fragments after generic adjacent-delta merging. */
   reconcileEvents?(events: MeshAgentObservationEvent[]): MeshAgentObservationEvent[];
+  /** Declare this provider's tool-call/result relationships after neutral projection. Consumers must
+   *  not infer a run from shared field names; an adapter opts into and owns the correlation semantics. */
+  toolRuns?(events: readonly AgentObservationEvent[]): MeshAgentObservationToolRun[];
 };
 
 export interface MeshAgentObservationRuntime {

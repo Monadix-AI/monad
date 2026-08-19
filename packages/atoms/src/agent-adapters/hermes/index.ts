@@ -10,18 +10,18 @@ import { chmodSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 
-import { parseStructuredAuthState } from '../adapter-shared.ts';
-import { createProjectedEventSource, providerRecordIdentity } from '../event-source.ts';
 import { makeGatewayAdapter } from '../gateway/adapter.ts';
 import { GatewayDriver } from '../gateway/driver.ts';
-import { agentAdapterIcons } from '../icons.ts';
+import { createFrameworkSettingsImport } from '../settings-import/index.ts';
+import { parseStructuredAuthState } from '../shared/adapter-shared.ts';
+import { createProjectedEventSource, providerRecordIdentity } from '../shared/events/event-source.ts';
+import { agentAdapterIcons } from '../shared/icons.ts';
 import {
   type ManagedMcpConfigRunner,
   mirrorManagedConfigHome,
   requireManagedMcpConfigCommand,
   runManagedMcpConfigCommand
-} from '../managed-mcp-config.ts';
-import { createFrameworkSettingsImport } from '../settings-import/index.ts';
+} from '../shared/managed-mcp-config.ts';
 import { hermesEventPage, hermesEventPageOutput } from './event-pages.ts';
 import { hermesGatewayHooks } from './gateway/index.ts';
 import { deleteHermesSession } from './lifecycle.ts';

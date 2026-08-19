@@ -18,7 +18,8 @@ import {
   observation,
   recordValue,
   textValue
-} from '../observation-projection.ts';
+} from '../shared/observation/observation-projection.ts';
+import { monadToolRuns } from './tool-runs.ts';
 
 function isMonadEventNotification(record: Record<string, unknown>): boolean {
   return record.kind === 'notification' && record.method === 'session/event';
@@ -436,6 +437,7 @@ export const monadObservationProjection = {
     }
     return classifyObservationActivity(event);
   },
+  toolRuns: monadToolRuns,
   isStreamingFragment(event) {
     return (
       event.providerEventType?.startsWith('session.message.delta.appended') === true ||

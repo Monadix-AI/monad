@@ -9,15 +9,15 @@ import type {
   MeshRawEventPage,
   SessionId
 } from '@monad/protocol';
-import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
 import type { MeshAgentStreamView } from '../../../experience/types.ts';
+import type { AgentObservationCard } from './card-projection.ts';
 import type { ObservationMode } from './panel-state.ts';
 import type { RawFrameRow } from './raw-view.ts';
 
 import { observationCursorSchema } from '@monad/protocol';
 import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from 'react';
 
-import { agentObservationCards } from '../../../../agent-adapters/observation-cards.ts';
+import { agentObservationCards } from './card-projection.ts';
 import {
   connectionControlAction,
   convenienceEventsRequest,
@@ -325,16 +325,17 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
       };
     });
   }, [dataScopeKey, eventsBefore, snapshotEventsBefore, state.connected, state.panelOpen]);
+  // Connected sessions bootstrap their transcript page automatically too: loading history is the
+  // panel's job, not a scroll gesture — a short timeline can never reach the scroll trigger, which
+  // left the panel showing live-only events under a permanent "scroll up" hint.
   const eventBootstrap = useMemo(
     () =>
-      state.connected
-        ? null
-        : observationEventBootstrap({
-            panelOpen: state.panelOpen,
-            connectionKnown: snapshot !== undefined,
-            connected: false,
-            eventsBefore
-          }),
+      observationEventBootstrap({
+        panelOpen: state.panelOpen,
+        connectionKnown: snapshot !== undefined,
+        connected: state.connected,
+        eventsBefore
+      }),
     [state.connected, state.panelOpen, snapshot, eventsBefore]
   );
   const loadEventPage = useCallback(
@@ -519,7 +520,9 @@ export function useObservationPanel(args: UseObservationPanelArgs): ObservationP
     rawRows: visibleRawRows,
     loading,
     canLoadOlderEvents: eventPage.nextCursor !== null && !eventPage.failed,
-    loadingOlderEvents: eventPage.loading && eventPage.loadingKind === 'older',
+    // Any in-flight page fetch (bootstrap included) renders as loading — the scroll hint must never
+    // show while the panel is already fetching.
+    loadingOlderEvents: eventPage.loading,
     loadOlderEvents,
     retryOlderEvents,
     unavailableReason:

@@ -3,8 +3,8 @@ import type { MeshAgentProvider, MeshRawEventPage } from '@monad/protocol';
 import { expect, test } from 'bun:test';
 import { meshRawEventPageSchema } from '@monad/protocol';
 
+import { unsanitizedSemanticStrings } from '../../src/agent-adapters/fixtures/observation-sanitize.ts';
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { unsanitizedSemanticStrings } from '../../src/agent-adapters/observation-sanitize.ts';
 
 type MeshProvider = 'codex' | 'claude-code';
 

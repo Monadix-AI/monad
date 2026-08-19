@@ -12,7 +12,7 @@ import {
   textValue,
   thinkingObservation,
   turnEndReasonFromStopValue
-} from '../../observation-projection.ts';
+} from '../../shared/observation/observation-projection.ts';
 import {
   codexAppServerItemRecord,
   codexAppServerToolCallObservation,

@@ -1,5 +1,5 @@
-import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
 import type { MeshAgentStreamView, Participant } from '../../../experience/types.ts';
+import type { AgentObservationCard } from './card-projection.ts';
 import type { ObservationItem, ObservationTimelineEntry } from './types.ts';
 
 import { DefaultObservationToolPair, ObservationMeta, ObservationText } from '@monad/ui';
@@ -118,6 +118,10 @@ function toolResultArrived(previous: AgentObservationCard, next: AgentObservatio
   );
 }
 
+function progressCardCanUpdate(card: AgentObservationCard): boolean {
+  return card.kind === 'mcp-startup-progress' || card.kind === 'plan-progress';
+}
+
 export function reconcileObservationItems(
   previous: readonly AgentObservationCard[],
   next: readonly AgentObservationCard[]
@@ -135,7 +139,7 @@ export function reconcileObservationItems(
     }
     const atMutableBoundary = index === sharedLength - 1;
     if (
-      (atMutableBoundary || toolResultArrived(previousItem, nextItem)) &&
+      (atMutableBoundary || progressCardCanUpdate(previousItem) || toolResultArrived(previousItem, nextItem)) &&
       !sameObservationItem(previousItem, nextItem)
     ) {
       changed = true;

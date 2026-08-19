@@ -3,11 +3,11 @@ import type {
   MeshAgentObservationJsonRecordEntry,
   MeshAgentObservationProjector,
   ObservationRole
-} from '../observation-projection.ts';
+} from '../shared/observation/observation-projection.ts';
 
 import { z } from 'zod';
 
-import { anthropicTranscriptTool } from '../anthropic-transcript.ts';
+import { qwenTranscriptTool } from './tool-fields.ts';
 
 const looseRecordSchema = z.record(z.string(), z.unknown());
 
@@ -23,7 +23,8 @@ import {
   thinkingObservation,
   toolCategoryByName,
   turnEndReasonFromStopValue
-} from '../observation-projection.ts';
+} from '../shared/observation/observation-projection.ts';
+import { qwenToolRuns } from './tool-runs.ts';
 
 export type QwenObservationMessage = Record<string, unknown> & { type: string };
 type QwenTranscriptMessage = QwenObservationMessage & {
@@ -275,7 +276,8 @@ export const qwenObservationProjection = {
   eventEntries: qwenHistoryEntries,
   classifyActivity: classifyObservationActivity,
   toolCategory: toolCategoryByName('shell', ['Bash', 'run_shell_command', 'shell']),
-  toolFields: anthropicTranscriptTool,
+  toolFields: qwenTranscriptTool,
+  toolRuns: qwenToolRuns,
   isStreamingFragment: isStreamingObservationFragment,
   recordProjectors: [
     {

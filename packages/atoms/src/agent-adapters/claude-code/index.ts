@@ -20,17 +20,17 @@ import { join } from 'node:path';
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 import { defaultBinProbes, MeshAgentError, resolveBinary } from '@monad/sdk-atom';
 
+import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import {
   compactObject,
   hasFlag,
   parseJsonObject,
   parseStructuredAuthState,
   textFromContentParts
-} from '../adapter-shared.ts';
-import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
-import { agentAdapterIcons } from '../icons.ts';
-import { meshAgentAdapterSettings } from '../settings.ts';
-import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
+} from '../shared/adapter-shared.ts';
+import { parseMeshAgentArgumentSupport } from '../shared/argument-support.ts';
+import { agentAdapterIcons } from '../shared/icons.ts';
+import { meshAgentAdapterSettings } from '../shared/settings.ts';
 import { claudeTranscriptFallback, createClaudeEventSource } from './event-pages.ts';
 import { deleteClaudeCodeSession } from './lifecycle.ts';
 

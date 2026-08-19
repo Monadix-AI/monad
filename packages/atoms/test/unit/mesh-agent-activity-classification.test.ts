@@ -6,7 +6,7 @@ import '../../src/index.ts';
 import {
   classifyObservationActivity,
   isStreamingObservationFragment
-} from '../../src/agent-adapters/observation-projection.ts';
+} from '../../src/agent-adapters/shared/observation/observation-projection.ts';
 import {
   meshAgentEventsAreGenerating,
   meshAgentStreamItems

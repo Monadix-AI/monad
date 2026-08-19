@@ -1,5 +1,5 @@
 import type { AgentObservationEvent, SessionId } from '@monad/protocol';
-import type { AgentObservationCard } from '../../../../../packages/atoms/src/agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import type { RawFrameRow } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/raw-view.ts';
 import type { ObservationPanelHooks } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/use-observation-panel.ts';
 import type { Presence } from '../../../../../packages/atoms/src/workplace-experiences/experience/types.ts';
@@ -19,10 +19,11 @@ import { createRoot } from 'react-dom/client';
 import { Provider } from 'react-redux';
 
 import '../../../src/styles/globals.css';
+
 import { builtinMeshAgentObservationAdapters } from '../../../../../packages/atoms/src/agent-adapters/observation-adapters.ts';
-import { agentObservationCards } from '../../../../../packages/atoms/src/agent-adapters/observation-cards.ts';
 import { configureBuiltinMeshAgentObservationAdapters } from '../../../../../packages/atoms/src/mesh-agent-observation-setup.ts';
 import { AgentTasksRail } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/agent-tasks-rail.tsx';
+import { agentObservationCards } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import { MonadMcpOutput } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/monad-mcp-output.tsx';
 import { MeshAgentObservationPanel } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/panel.tsx';
 import {

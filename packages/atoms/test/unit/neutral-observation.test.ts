@@ -2,8 +2,8 @@ import type { MeshAgentObservationEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
-import { turnEndReasonFromStopValue } from '../../src/agent-adapters/observation-projection.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/shared/observation/neutral-observation.ts';
+import { turnEndReasonFromStopValue } from '../../src/agent-adapters/shared/observation/observation-projection.ts';
 
 const event = (over: Partial<MeshAgentObservationEvent>): MeshAgentObservationEvent => ({
   id: 'e',

@@ -1,5 +1,5 @@
 import type { MeshSessionView } from '@monad/protocol';
-import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import type { Message } from '../../src/workplace-experiences/experience/types.ts';
 
 import { expect, test } from 'bun:test';
@@ -319,23 +319,26 @@ const observationFields = (
     return { id, text };
   });
 
+// Plain-text process output projects as an unknown system row (never agent speech), so the live
+// activity card built from it is an unknown-kind card.
 function messageCard(id: string, text: string, provider: string): AgentObservationCard {
   const contractEvent = {
     id,
-    role: 'agent',
+    projection: 'unknown',
+    role: 'system',
     text,
     source: 'plain-text',
     provenance: { rawEvents: [text] }
   };
   return {
     id,
-    kind: 'message',
+    kind: 'unknown',
     streaming: false,
     payload: {
       provider,
       event: {
         id,
-        kind: 'assistant-message',
+        kind: 'unknown',
         streaming: false,
         text,
         provenance: { contractEvents: [contractEvent] }

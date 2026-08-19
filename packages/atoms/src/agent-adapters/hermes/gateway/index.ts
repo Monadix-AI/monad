@@ -6,8 +6,11 @@ import type {
   GatewayRuntimeHandle as MeshAgentRuntimeHandle
 } from '../../gateway/runtime.ts';
 
-import { compactObject, parseJsonObject, recordValue } from '../../adapter-shared.ts';
-import { jsonRpcRequest } from '../../jsonrpc.ts';
+import { meshAgentSessionUsageSchema } from '@monad/protocol';
+import { z } from 'zod';
+
+import { compactObject, parseJsonObject, recordValue } from '../../shared/adapter-shared.ts';
+import { jsonRpcRequest } from '../../shared/transports/jsonrpc.ts';
 
 // Hermes's real gateway (`hermes serve`, default ws://127.0.0.1:9119, path `/api/ws`) speaks genuine
 // JSON-RPC 2.0 for requests/responses (`{id, method, params}` / `{id, result}` / `{id, error}` — the
@@ -52,6 +55,21 @@ interface HermesFrame extends Record<string, unknown> {
   result?: unknown;
   error?: unknown;
 }
+
+const hermesSessionUsagePayloadSchema = z
+  .object({
+    usage: z
+      .object({
+        input: z.number().finite().nonnegative(),
+        output: z.number().finite().nonnegative(),
+        reasoning: z.number().finite().nonnegative().optional(),
+        total: z.number().finite().nonnegative(),
+        context_used: z.number().finite().nonnegative().optional(),
+        context_max: z.number().finite().positive().optional()
+      })
+      .catchall(z.unknown())
+  })
+  .catchall(z.unknown());
 
 function idKeyOf(frame: HermesFrame): string | number | undefined {
   return typeof frame.id === 'string' || typeof frame.id === 'number' ? frame.id : undefined;
@@ -143,6 +161,25 @@ function eventTypeEvents(
         return [{ type: 'provider_error', payload: { message: text || 'Hermes provider error' } }];
       }
       return [{ type: 'agent_message', payload: compactObject({ text, final: true }) }];
+    }
+    case 'session.usage': {
+      const parsed = hermesSessionUsagePayloadSchema.safeParse(payload);
+      if (!parsed.success) return [];
+      const usage = parsed.data.usage;
+      return [
+        {
+          type: 'session_usage_updated',
+          payload: meshAgentSessionUsageSchema.parse({
+            total: usage.total,
+            input: usage.input,
+            output: usage.output,
+            ...(usage.reasoning === undefined ? {} : { reasoningOutput: usage.reasoning }),
+            ...(usage.context_used === undefined || usage.context_max === undefined
+              ? {}
+              : { context: { used: usage.context_used, window: usage.context_max } })
+          })
+        }
+      ];
     }
     case 'approval.request': {
       // Hermes approvals are per-SESSION, not per-id — the session id alone would collide if a second

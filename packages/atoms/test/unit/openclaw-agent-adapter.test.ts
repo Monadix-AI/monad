@@ -7,8 +7,6 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import {
   echoOpenClawInput,
   openClawInitialize,
@@ -16,6 +14,8 @@ import {
   runOpenClawSessionLifecycle
 } from '../../src/agent-adapters/openclaw/gateway/index.ts';
 import { openClawManagedMcpEnv, openClawMeshAgentAdapter } from '../../src/agent-adapters/openclaw/index.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/shared/observation/neutral-observation.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import { monadMcpToolView } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-projection.ts';
 
 const agent = {
@@ -680,7 +680,8 @@ test('OpenClaw history pairs Monad tool calls and results into the semantic chat
         kind: 'tool-result',
         tool: {
           name: 'monad__project_post',
-          output: [{ type: 'text', text: JSON.stringify(output) }],
+          // The adapter de-envelopes the transcript content into the actual MCP payload.
+          output,
           callId: 'call-openclaw-project-post',
           status: 'completed'
         }
@@ -691,7 +692,7 @@ test('OpenClaw history pairs Monad tool calls and results into the semantic chat
       callId: 'call-openclaw-project-post',
       status: 'completed',
       input,
-      output: [{ type: 'text', text: JSON.stringify(output) }],
+      output,
       isError: false,
       action: 'project-post',
       text: input.text,

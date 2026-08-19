@@ -2,7 +2,7 @@ import type { MeshAgentObservationEvent } from '@monad/protocol';
 import type {
   MeshAgentObservationJsonRecordEntry,
   MeshAgentObservationProjector
-} from '../../observation-projection.ts';
+} from '../../shared/observation/observation-projection.ts';
 
 import { contentHash } from '@monad/sdk-atom/agent-observation';
 
@@ -14,7 +14,7 @@ import {
   recordValue,
   textValue,
   toolCategoryByName
-} from '../../observation-projection.ts';
+} from '../../shared/observation/observation-projection.ts';
 import {
   codexAppServerBatchRecordEvents,
   codexAppServerTurnsPageRecordEvents
@@ -29,6 +29,7 @@ import { codexLogRecordEvents, isCodexLogRecord } from './observation-log.ts';
 import { codexObservationMessageGroupAdapter } from './observation-message-group.ts';
 import { codexUsageRecordsFromRecord } from './observation-usage.ts';
 import { codexObservationToolFields } from './tool-fields.ts';
+import { codexToolRuns } from './tool-runs.ts';
 
 export type CodexObservationNotification = Record<string, unknown> & { method: string };
 
@@ -120,6 +121,7 @@ export const codexObservationProjection = {
   checkpoint: codexObservationCheckpoint,
   dedupeIdentity: codexObservationDedupeIdentity,
   toolFields: codexObservationToolFields,
+  toolRuns: codexToolRuns,
   identity: codexObservationIdentity,
   eventEntries: codexHistoryEntries,
   usageRecords: codexUsageRecordsFromRecord,

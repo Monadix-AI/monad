@@ -7,8 +7,8 @@ import type {
   CodexAppServerTurnsPage
 } from './protocol.ts';
 
-import { compactObject, parseJsonObject } from '../../adapter-shared.ts';
-import { jsonRpcErrorResponse, jsonRpcRequest } from '../../jsonrpc.ts';
+import { compactObject, parseJsonObject } from '../../shared/adapter-shared.ts';
+import { jsonRpcErrorResponse, jsonRpcRequest } from '../../shared/transports/jsonrpc.ts';
 import { codexSessionUsageFromNotification } from '../session-usage.ts';
 import { codexRuntimeState, findCodexRuntimeState } from './state.ts';
 

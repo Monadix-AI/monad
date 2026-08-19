@@ -2,7 +2,7 @@ import type { AgentObservationEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import {
   type ObservationTurnTimelineItem,
   observationTurnTimelineItems

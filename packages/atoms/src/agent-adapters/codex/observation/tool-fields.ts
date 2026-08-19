@@ -1,6 +1,6 @@
 import type { MeshAgentObservationEvent, MeshAgentObservationTool } from '@monad/protocol';
 
-import { recordValue } from '../../observation-projection.ts';
+import { recordValue } from '../../shared/observation/observation-projection.ts';
 import {
   codexAppServerToolInput,
   codexAppServerToolOutput,

@@ -1,7 +1,7 @@
 import { expect, test } from 'bun:test';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 
 test('Claude live projection replaces partial thinking and text with the final SDK message blocks', () => {

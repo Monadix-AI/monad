@@ -4,10 +4,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
-import { parseStructuredAuthState } from '../adapter-shared.ts';
-import { agentAdapterIcons } from '../icons.ts';
-import { meshAgentAdapterSettings } from '../settings.ts';
 import { createCodexSettingsImport } from '../settings-import/index.ts';
+import { parseStructuredAuthState } from '../shared/adapter-shared.ts';
+import { agentAdapterIcons } from '../shared/icons.ts';
+import { meshAgentAdapterSettings } from '../shared/settings.ts';
 import { createCodexEventSource } from './event-pages.ts';
 import {
   buildCodexAuthLaunch,

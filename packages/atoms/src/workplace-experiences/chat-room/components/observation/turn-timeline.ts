@@ -1,5 +1,5 @@
 import type { AgentObservationEvent } from '@monad/protocol';
-import type { AgentObservationCard } from '../../../../agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from './card-projection.ts';
 import type { ObservationTimelineRow } from './timeline.tsx';
 
 import { observationTimelineEntries, observationTimelineRows } from './timeline.tsx';

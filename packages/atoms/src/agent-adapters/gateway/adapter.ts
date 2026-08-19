@@ -10,9 +10,9 @@ import type { MeshAgentLaunchSpec, MeshAgentProviderAdapter } from '@monad/sdk-a
 import { homedir } from 'node:os';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
-import { hasFlag, parseStructuredAuthState } from '../adapter-shared.ts';
-import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
-import { meshAgentAdapterSettings } from '../settings.ts';
+import { hasFlag, parseStructuredAuthState } from '../shared/adapter-shared.ts';
+import { parseMeshAgentArgumentSupport } from '../shared/argument-support.ts';
+import { meshAgentAdapterSettings } from '../shared/settings.ts';
 
 interface MakeGatewayAdapterOptions {
   provider: MeshAgentProvider;

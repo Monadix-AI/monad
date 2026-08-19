@@ -1,6 +1,6 @@
 import type { MeshAgentProviderSessionLifecycleContext } from '@monad/sdk-atom';
 
-import { jsonRpcRequest } from '../jsonrpc.ts';
+import { jsonRpcRequest } from '../shared/transports/jsonrpc.ts';
 import { recordValue } from './app-server/events.ts';
 
 type CodexLifecycleEnvironment = Record<string, string | undefined>;

@@ -7,7 +7,7 @@ import type {
 
 import { canonicalJson, contentHash } from '@monad/sdk-atom';
 
-import { createJsonRecordStreamDecoder, jsonRecordEntries, textValue } from './observation-projection.ts';
+import { createJsonRecordStreamDecoder, jsonRecordEntries, textValue } from '../observation/observation-projection.ts';
 
 function providerRecordIds(raw: unknown): string[] {
   if (Array.isArray(raw)) return raw.flatMap(providerRecordIds);

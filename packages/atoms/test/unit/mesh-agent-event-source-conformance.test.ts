@@ -3,9 +3,12 @@ import type { MeshAgentObservationProjector } from '@monad/sdk-atom';
 import { expect, test } from 'bun:test';
 
 import { codexObservationProjection } from '../../src/agent-adapters/codex/observation/index.ts';
-import { createOutputEventSource, createProjectedEventSource } from '../../src/agent-adapters/event-source.ts';
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { observation } from '../../src/agent-adapters/observation-projection.ts';
+import {
+  createOutputEventSource,
+  createProjectedEventSource
+} from '../../src/agent-adapters/shared/events/event-source.ts';
+import { observation } from '../../src/agent-adapters/shared/observation/observation-projection.ts';
 import { meshAgentNeutralStreamItems } from '../../src/workplace-experiences/experience/mesh-agent-observation/mesh-agent-observation.ts';
 
 const projection: MeshAgentObservationProjector = {

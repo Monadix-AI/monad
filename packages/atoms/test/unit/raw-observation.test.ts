@@ -12,9 +12,9 @@ import type {
 
 import { expect, test } from 'bun:test';
 
-import { createOutputEventSource } from '../../src/agent-adapters/event-source.ts';
-import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
-import { observation } from '../../src/agent-adapters/observation-projection.ts';
+import { createOutputEventSource } from '../../src/agent-adapters/shared/events/event-source.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/shared/observation/neutral-observation.ts';
+import { observation } from '../../src/agent-adapters/shared/observation/observation-projection.ts';
 
 const emptyProjection = { recordProjectors: [] } as unknown as MeshAgentObservationProjector;
 

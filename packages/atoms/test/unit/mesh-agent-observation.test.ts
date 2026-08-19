@@ -1,12 +1,12 @@
 import type { AgentObservationEvent, MeshAgentObservationEvent } from '@monad/protocol';
-import type { AgentObservationCard } from '../../src/agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import type { ObservationTimelineEntry } from '../../src/workplace-experiences/chat-room/components/observation/types.ts';
 
 import { expect, test } from 'bun:test';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/shared/observation/neutral-observation.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import { rawJsonText } from '../../src/workplace-experiences/chat-room/components/observation/card-shell.tsx';
 import { commandToolView } from '../../src/workplace-experiences/chat-room/components/observation/command-card.tsx';
 import { fileReadToolView } from '../../src/workplace-experiences/chat-room/components/observation/file-read-card.tsx';
@@ -895,7 +895,9 @@ test('observation does not promote embedded JSON fragments to raw cards', () => 
   expect(meshAgentStreamItems({ id: 'mesh_codex0000000', provider: 'codex', output })).toEqual([
     {
       id: 'mesh_codex0000000:0',
-      role: 'agent',
+      // Plain-text process output projects as an unknown system row, never as agent speech.
+      projection: 'unknown',
+      role: 'system',
       text: output,
       source: 'plain-text',
       provenance: { rawEvents: [output] }
@@ -3231,6 +3233,43 @@ test('observation reconciliation refreshes an earlier tool card when its result 
       kind: 'tool-result',
       output: '/workspace',
       status: 'completed'
+    }
+  });
+});
+
+test('observation reconciliation refreshes an earlier MCP startup card when a server becomes ready', () => {
+  const threadId = 'thread-mcp-startup';
+  const cancelled = mcpStartupNeutralEvent('mcp-cancelled', {
+    name: 'monad',
+    status: 'cancelled',
+    threadId
+  });
+  const message: AgentObservationEvent = {
+    id: 'message-after-mcp',
+    kind: 'assistant-message',
+    streaming: false,
+    text: 'Waiting for the remaining servers.',
+    provenance: { contractEvents: [{ type: 'agentMessage' }] }
+  };
+  const ready = mcpStartupNeutralEvent('mcp-ready', { name: 'monad', status: 'ready', threadId });
+  const previous = cardsFromEvents('codex', cancelled, message);
+  const next = cardsFromEvents('codex', cancelled, message, ready);
+  const reconciled = reconcileObservationItems(previous, next);
+
+  expect({
+    mcpCardChanged: reconciled[0] !== previous[0],
+    messageCardRetained: reconciled[1] === previous[1],
+    payload: reconciled[0]?.payload
+  }).toEqual({
+    mcpCardChanged: true,
+    messageCardRetained: true,
+    payload: {
+      servers: [{ name: 'monad', status: 'ready', threadId }],
+      total: 1,
+      ready: 1,
+      failed: 0,
+      skipped: 0,
+      pending: 0
     }
   });
 });

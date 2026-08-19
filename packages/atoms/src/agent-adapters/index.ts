@@ -10,9 +10,9 @@ import { codexMeshAgentAdapter } from './codex/index.ts';
 import { geminiMeshAgentAdapter } from './gemini/index.ts';
 import { hermesMeshAgentAdapter } from './hermes/index.ts';
 import { monadMeshAgentAdapter } from './monad/index.ts';
-import { toAgentObservationEvent } from './neutral-observation.ts';
 import { openClawMeshAgentAdapter } from './openclaw/index.ts';
 import { qwenMeshAgentAdapter } from './qwen/index.ts';
+import { toAgentObservationEvent } from './shared/observation/neutral-observation.ts';
 
 export { claudeCodeMeshAgentAdapter, createClaudeSdkEventPageReader } from './claude-code/index.ts';
 
@@ -37,3 +37,4 @@ for (const adapter of adapters) {
 }
 
 export const builtinAgentAdapters = adapters;
+export * from '@monad/sdk-atom';

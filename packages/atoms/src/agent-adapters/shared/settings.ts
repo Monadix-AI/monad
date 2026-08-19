@@ -1,5 +1,6 @@
 import type { MeshAgentSetting } from '@monad/protocol';
 
+/** Settings shared by adapters that explicitly opt into the built-in runtime controls. */
 export function meshAgentAdapterSettings(): MeshAgentSetting[] {
   return [
     {

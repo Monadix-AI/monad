@@ -9,7 +9,7 @@ import type {
   UIQuestionPresentation
 } from '@monad/protocol';
 import type { WorkplaceExperienceIcon, WorkplaceExperienceProject } from '@monad/sdk-experience';
-import type { AgentObservationCard } from '../../agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from '../chat-room/components/observation/card-projection.ts';
 
 export type { WorkplaceExperienceProductIconId } from '@monad/sdk-experience';
 export type ParticipantKind = 'human' | 'agent';

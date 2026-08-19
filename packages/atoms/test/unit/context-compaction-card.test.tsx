@@ -4,7 +4,7 @@ import { expect, test } from 'bun:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import {
   ObservationTimelineRowView,
   observationTimelineEntries,

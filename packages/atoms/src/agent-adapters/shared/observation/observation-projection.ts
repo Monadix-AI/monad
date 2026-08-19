@@ -12,11 +12,13 @@ import type {
   MeshAgentObservationJsonRecordEntry,
   MeshAgentObservationMessageGroupProjector,
   MeshAgentObservationProjector,
-  MeshAgentObservationRecordProjector
+  MeshAgentObservationRecordProjector,
+  MeshAgentObservationToolRun
 } from '@monad/sdk-atom';
 
 import { meshAgentObservationEventSchema } from '@monad/protocol';
 
+/** Provider-facing observation primitives shared only by explicitly importing adapters. */
 export type ObservationRole = MeshAgentObservationEvent['role'];
 export type ObservationSource = MeshAgentObservationEvent['source'];
 export type {
@@ -24,7 +26,8 @@ export type {
   MeshAgentObservationJsonRecordEntry,
   MeshAgentObservationMessageGroupProjector,
   MeshAgentObservationProjector,
-  MeshAgentObservationRecordProjector
+  MeshAgentObservationRecordProjector,
+  MeshAgentObservationToolRun
 };
 
 const TERMINAL_EVENT_TYPES = new Set(['turn/completed', 'result', 'error', 'server_error', 'turn-end']);
@@ -446,6 +449,44 @@ export function contentEvents(args: {
     }
     return [];
   });
+}
+
+// MCP tool payloads reach an adapter in one of three transport envelopes: the raw payload, a
+// `{ result }` record whose value is a JSON string, or that record serialized inside the
+// untrusted_tool_result guard block (preamble paragraph, blank line, payload). Adapters normalize
+// `tool.output` to the actual payload before emitting the event — experiences never see envelopes.
+export function normalizedMcpToolOutput(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const match = /^<untrusted_tool_result\b[^>]*>\s*[\s\S]*?\n\s*\n([\s\S]*?)\s*<\/untrusted_tool_result>\s*$/.exec(
+      value
+    );
+    if (!match) return unwrapMcpResultEnvelope(structuredJsonValue(value));
+    return unwrapMcpResultEnvelope(parsedJsonValue(match[1]?.trim()));
+  }
+  return unwrapMcpResultEnvelope(value);
+}
+
+// Only strings that LOOK structured are parsed — a tool whose genuine output is prose (or a bare
+// scalar like "123") must stay a string.
+function structuredJsonValue(value: string): unknown {
+  const head = value.trimStart()[0];
+  if (head !== '{' && head !== '[') return value;
+  return parsedJsonValue(value);
+}
+
+function unwrapMcpResultEnvelope(payload: unknown): unknown {
+  const record = recordValue(payload);
+  if (!record || !Object.hasOwn(record, 'result')) return payload;
+  return parsedJsonValue(record.result) ?? record.result;
+}
+
+function parsedJsonValue(value: unknown): unknown {
+  if (typeof value !== 'string') return value;
+  try {
+    return JSON.parse(value);
+  } catch {
+    return value;
+  }
 }
 
 import { z } from 'zod';

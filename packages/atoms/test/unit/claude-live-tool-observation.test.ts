@@ -3,7 +3,7 @@ import { createElement } from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import { monadMcpToolView } from '../../src/workplace-experiences/chat-room/components/observation/monad-mcp-projection.ts';
 import {
   ObservationTimelineRowView,
@@ -377,7 +377,8 @@ test('Claude live Monad calls use the connecting orb before a result arrives', (
   };
 
   expect([frame(2), frame(3), frame(4)]).toEqual([
-    { kind: 'mcp', input: {}, text: 'Posting to project 0s No details' },
+    // An in-flight message action with no arguments yet renders no empty-state noise.
+    { kind: 'mcp', input: {}, text: 'Posting to project 0s' },
     { kind: 'mcp', input: { text: 'Project sta' }, text: 'Posting to project 0s Project sta' },
     { kind: 'mcp', input: { text: 'Project status' }, text: 'Posting to project 0s Project status' }
   ]);

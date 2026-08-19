@@ -2,7 +2,7 @@ import type { MeshAgentOutputEvent } from '@monad/sdk-atom';
 
 import { z } from 'zod';
 
-import { compactObject } from '../adapter-shared.ts';
+import { compactObject } from '../shared/adapter-shared.ts';
 
 // Wire contract for the Qwen Code `--output-format stream-json` channel and its `--input-format
 // stream-json` control plane: one JSON object per line (JSONL). Qwen Code began as a gemini-cli fork

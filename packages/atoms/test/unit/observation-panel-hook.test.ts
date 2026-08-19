@@ -332,7 +332,7 @@ test('observation hook resumes activity from its last cursor after visiting raw 
   rendered.unmount();
 });
 
-test('connected raw mode follows the latest window and loads earlier events only on request', async () => {
+test('connected raw mode auto-loads its first transcript page and older pages on request', async () => {
   const meshSessionId = 'mesh_observation_raw_tail';
   const snapshot: MeshConnectionSnapshot = {
     state: 'connected',
@@ -396,16 +396,8 @@ test('connected raw mode follows the latest window and loads earlier events only
     canLoadOlderEvents: rendered.result.current.canLoadOlderEvents,
     rawRequests,
     rows: rendered.result.current.rawRows.map((row) => row.preview)
-  }).toEqual({ canLoadOlderEvents: true, rawRequests: [], rows: ['latest'] });
-
-  await act(async () => {
-    rendered.result.current.loadOlderEvents();
-    await Promise.resolve();
-  });
-  expect({
-    rawRequests,
-    rows: rendered.result.current.rawRows.map((row) => row.preview)
   }).toEqual({
+    canLoadOlderEvents: true,
     rawRequests: [
       {
         id: meshSessionId,
@@ -413,6 +405,22 @@ test('connected raw mode follows the latest window and loads earlier events only
         request: { before: 'live:e1:81', limit: 20 }
       }
     ],
+    rows: ['earlier', 'latest']
+  });
+
+  await act(async () => {
+    rendered.result.current.loadOlderEvents();
+    await Promise.resolve();
+  });
+  expect({
+    rawRequests: rawRequests.map((request) => request.request),
+    rows: rendered.result.current.rawRows.map((row) => row.preview)
+  }).toEqual({
+    rawRequests: [
+      { before: 'live:e1:81', limit: 20 },
+      { before: 'live:e1:61', limit: 20 }
+    ],
+    // The mock returns the same record page, and prepend dedupes by cursor identity.
     rows: ['earlier', 'latest']
   });
 

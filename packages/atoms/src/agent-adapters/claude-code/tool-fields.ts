@@ -1,14 +1,10 @@
 import type { MeshAgentObservationEvent, MeshAgentObservationTool } from '@monad/protocol';
 
-import { recordValue, textValue } from './observation-projection.ts';
-import { parseStreamingJson } from './partial-json.ts';
+import { recordValue, textValue } from '../shared/observation/observation-projection.ts';
+import { parseStreamingJson } from '../shared/parsing/partial-json.ts';
 
-/** The Anthropic message/stream wire shape — `message.content` parts plus `content_block_*` stream
- *  events. Several providers speak it verbatim (Claude Code, Qwen Code), so the decode lives here
- *  rather than in any one of their adapters or in the provider-agnostic neutral projection. Reads
- *  the whole merged raw run because a streamed tool input only exists as `partial_json` fragments
- *  spread across the events that were merged into one. */
-export function anthropicTranscriptTool(
+/** Decode Claude Code tool fields from its message/content-block transcript. */
+export function claudeCodeTranscriptTool(
   event: MeshAgentObservationEvent,
   kind: 'tool-call' | 'tool-result'
 ): MeshAgentObservationTool | undefined {

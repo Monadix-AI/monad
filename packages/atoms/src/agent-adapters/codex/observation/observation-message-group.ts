@@ -1,5 +1,5 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
-import type { MeshAgentObservationJsonRecordEntry } from '../../observation-projection.ts';
+import type { MeshAgentObservationJsonRecordEntry } from '../../shared/observation/observation-projection.ts';
 
 import {
   numberValue,
@@ -9,7 +9,7 @@ import {
   recordValue,
   textValue,
   thinkingObservation
-} from '../../observation-projection.ts';
+} from '../../shared/observation/observation-projection.ts';
 import {
   codexAppServerToolCallObservation,
   codexAppServerToolResultObservation,

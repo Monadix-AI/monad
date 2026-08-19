@@ -2,7 +2,7 @@ import type { MeshAgentOutputEvent } from '@monad/sdk-atom';
 
 import { z } from 'zod';
 
-import { compactObject } from '../adapter-shared.ts';
+import { compactObject } from '../shared/adapter-shared.ts';
 
 const antigravityUsageSchema = z
   .object({

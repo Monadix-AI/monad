@@ -1,15 +1,15 @@
 import { expect, test } from 'bun:test';
 
-import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 import {
   type MultiTurnObservationFixture,
   multiTurnObservationFixtureSchema,
   observationFixtureSchema
-} from '../../src/agent-adapters/observation-fixture.ts';
+} from '../../src/agent-adapters/fixtures/observation-fixture.ts';
 import {
   sanitizeObservationRecords,
   unsanitizedSemanticStrings
-} from '../../src/agent-adapters/observation-sanitize.ts';
+} from '../../src/agent-adapters/fixtures/observation-sanitize.ts';
+import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
 
 async function fixture(provider: 'codex' | 'claude-code') {
   return observationFixtureSchema.parse(

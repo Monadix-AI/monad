@@ -1,6 +1,6 @@
 import type { MeshAgentAuthState } from '@monad/protocol';
 
-/** Parse one JSON object literal; `undefined` for non-objects, arrays, or parse errors. */
+/** Shared adapter-boundary parser for one JSON object literal. */
 export function parseJsonObject(value: string): Record<string, unknown> | undefined {
   try {
     const parsed = z.json().parse(JSON.parse(value));

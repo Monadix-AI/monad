@@ -8,7 +8,7 @@ import type { MeshAgentObservationActivity, MeshAgentObservationProjector } from
 
 import { classifyObservationActivity, isStreamingObservationFragment } from './observation-projection.ts';
 
-// Provider start markers. The legacy classifier folds these into `message`/`system` (it never modelled
+// Neutral start markers. The adapter classifier folds these into `message`/`system` (it never modelled
 // turn-start), so the neutral decode detects them here to fill the `turn-start` kind.
 const TURN_START_EVENT_TYPES = new Set(['turn/started', 'turn_started', 'turn-start']);
 const CONTEXT_COMPACTION_EVENT_TYPES = new Set(['contextCompaction', 'compact_boundary']);

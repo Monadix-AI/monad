@@ -1,6 +1,11 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
 
-import { observation, providerIsoTimestamp, recordValue, textValue } from '../../observation-projection.ts';
+import {
+  observation,
+  providerIsoTimestamp,
+  recordValue,
+  textValue
+} from '../../shared/observation/observation-projection.ts';
 
 export function isCodexLogRecord(record: Record<string, unknown>): boolean {
   return record.level === 'ERROR' || record.level === 'WARN';

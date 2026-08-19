@@ -11,7 +11,7 @@ import type {
 } from '@monad/sdk-atom';
 import type { MeshAgentUsageLimitMeter, MeshAgentUsageLimitMeterRow } from './types.ts';
 
-import { toAgentObservationEvent } from '../../../agent-adapters/neutral-observation.ts';
+import { toAgentObservationEvent } from '../../../agent-adapters/shared/observation/neutral-observation.ts';
 
 export type { MeshAgentUsageLimitMeter };
 

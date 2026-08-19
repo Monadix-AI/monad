@@ -13,6 +13,7 @@ import {
 } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+/** Host-side command boundary shared by adapters with managed MCP configuration. */
 export interface ManagedMcpConfigCommand {
   argv: string[];
   cwd: string;

@@ -1,3 +1,4 @@
+// Fixture sanitization preserves protocol vocabulary while replacing user/provider payload values.
 const STRUCTURAL_STRING_KEYS = new Set([
   'coverage',
   'event',

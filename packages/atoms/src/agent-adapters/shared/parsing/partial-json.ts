@@ -1,5 +1,6 @@
 import { Allow, parse as parsePartialJson } from 'partial-json';
 
+/** Parse incomplete structured arguments emitted by streaming provider protocols. */
 export function parseStreamingJson(value: string): unknown {
   try {
     return JSON.parse(value);

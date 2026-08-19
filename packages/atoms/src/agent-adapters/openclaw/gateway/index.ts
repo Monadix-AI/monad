@@ -6,7 +6,7 @@ import type {
   GatewayRuntimeHandle as MeshAgentRuntimeHandle
 } from '../../gateway/runtime.ts';
 
-import { compactObject, parseJsonObject, recordValue } from '../../adapter-shared.ts';
+import { compactObject, parseJsonObject, recordValue } from '../../shared/adapter-shared.ts';
 import {
   buildDeviceAuthPayloadV3,
   createOpenClawDeviceIdentity,

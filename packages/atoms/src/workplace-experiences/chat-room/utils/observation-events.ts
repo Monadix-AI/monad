@@ -1,4 +1,4 @@
-import type { AgentObservationCard } from '../../../agent-adapters/observation-cards.ts';
+import type { AgentObservationCard } from '../components/observation/card-projection.ts';
 
 export function observationEventLoadScope(args: {
   deliveryId?: string;

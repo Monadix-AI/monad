@@ -10,8 +10,8 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
 
-import { readProviderEventFile } from '../event-files.ts';
-import { createOutputEventSource, createProjectedEventSource } from '../event-source.ts';
+import { readProviderEventFile } from '../shared/events/event-files.ts';
+import { createOutputEventSource, createProjectedEventSource } from '../shared/events/event-source.ts';
 import { claudeCodeObservationProjection } from './observation.ts';
 
 interface ClaudeSdkHistoryDeps {

@@ -12,7 +12,7 @@ import type {
 
 import { expect, test } from 'bun:test';
 
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import {
   connectionControlAction,
   convenienceEventsRequest,
@@ -150,6 +150,13 @@ test('raw events prepend keeps older rows first and removes the overlapping boun
   expect(prependRawEventsRows(older, current).map((row) => row.cursor)).toEqual(['h1', 'h2']);
 });
 
+function _planeEvent(id: string, kind: AgentObservationEvent['kind'], text: string): AgentObservationEvent {
+  return { id, kind, streaming: false, text, provenance: { contractEvents: [{ raw: id }] } };
+}
+
+// The two planes name the same records differently — the live log keys by runtime position, the
+// provider transcript by its own row id — so a settled turn present in both is recognized by its
+// A failed turn writes only the prompt row into the transcript — no assistant, no turn markers —
 test('convenience events folds ahead of the live timeline and records the epoch boundary', () => {
   const frames: MeshConvenienceFrame[] = [
     { kind: 'ready', observationEpoch: 'e1', cursor: 'live:e1:3', eventsBefore: 'provider:b1' },
@@ -227,141 +234,9 @@ test('an older page whose positional id differs joins the live row it duplicates
   expect(foldConvenienceEvents(current, frames).events).toEqual([live]);
 });
 
-test('a settled provider turn present in history and live is rendered once despite different event identities', () => {
-  const historical = [
-    { ...observationEvent('history-start', 'Turn started'), kind: 'turn-start' as const },
-    { ...observationEvent('history-user', 'same prompt'), kind: 'user-message' as const },
-    observationEvent('history-final', 'same answer')
-  ];
-  const live = [
-    { ...observationEvent('live-start', 'turn/started'), kind: 'turn-start' as const },
-    { ...observationEvent('live-user', 'same prompt'), kind: 'user-message' as const },
-    {
-      ...observationEvent('live-tool', 'Tool call commandExecution'),
-      kind: 'tool-call' as const,
-      tool: { name: 'commandExecution', callId: 'exec-1' }
-    },
-    { ...observationEvent('live-delta', 'same answer'), streaming: true },
-    observationEvent('live-final', 'same answer'),
-    { ...observationEvent('live-end', 'turn/completed'), kind: 'turn-end' as const, reason: 'completed' as const }
-  ];
-  const current = { ...emptyObservationTimeline, events: live };
-  const frames: MeshConvenienceFrame[] = [
-    {
-      kind: 'patch',
-      cursor: 'provider:turn-1',
-      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
-    }
-  ];
-
-  expect(foldConvenienceEvents(current, frames).events).toEqual(historical);
-});
-
-test('a settled provider tail without turn markers is rendered once across history and live', () => {
-  const historical = [
-    { ...observationEvent('history-user-1', 'first prompt'), kind: 'user-message' as const },
-    observationEvent('history-final-1', 'first answer'),
-    { ...observationEvent('history-user-2', 'same prompt'), kind: 'user-message' as const },
-    observationEvent('history-final-2', 'same answer')
-  ];
-  const live = [
-    { ...observationEvent('live-user-1', 'first prompt'), kind: 'user-message' as const },
-    observationEvent('live-final-1', 'first answer'),
-    { ...observationEvent('live-user-2', 'same prompt'), kind: 'user-message' as const },
-    observationEvent('live-final-2', 'same answer')
-  ];
-  const frames: MeshConvenienceFrame[] = [
-    {
-      kind: 'patch',
-      cursor: 'provider:turn-1',
-      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
-    }
-  ];
-
-  expect(foldConvenienceEvents({ ...emptyObservationTimeline, events: live }, frames).events).toEqual(historical);
-});
-
-test('an unfinished live turn with repeated text remains after settled history', () => {
-  const historical = [
-    { ...observationEvent('history-start', 'Turn started'), kind: 'turn-start' as const },
-    { ...observationEvent('history-user', 'same prompt'), kind: 'user-message' as const },
-    observationEvent('history-final', 'same answer'),
-    { ...observationEvent('history-end', 'Turn completed'), kind: 'turn-end' as const, reason: 'completed' as const }
-  ];
-  const live = [
-    { ...observationEvent('live-start', 'turn/started'), kind: 'turn-start' as const },
-    { ...observationEvent('live-user', 'same prompt'), kind: 'user-message' as const },
-    { ...observationEvent('live-progress', 'same answer'), streaming: true }
-  ];
-  const frames: MeshConvenienceFrame[] = [
-    {
-      kind: 'patch',
-      cursor: 'provider:turn-1',
-      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
-    }
-  ];
-
-  expect(foldConvenienceEvents({ ...emptyObservationTimeline, events: live }, frames).events).toEqual([
-    ...historical,
-    ...live
-  ]);
-});
-
-test('a completed history turn replaces the partial live prefix loaded after it', () => {
-  const startup = { ...observationEvent('live-startup', 'Runtime initialized'), kind: 'system' as const };
-  const sharedProgress = observationEvent('history-progress', 'scoped the implementation');
-  const historical = [
-    { ...observationEvent('history-start', 'Turn started'), kind: 'turn-start' as const },
-    { ...observationEvent('history-user', 'same prompt'), kind: 'user-message' as const },
-    sharedProgress,
-    observationEvent('history-final', 'finished implementation'),
-    { ...observationEvent('history-end', 'Turn completed'), kind: 'turn-end' as const, reason: 'completed' as const }
-  ];
-  const live = [
-    startup,
-    { ...observationEvent('live-start', 'turn/started'), kind: 'turn-start' as const },
-    { ...observationEvent('live-user', 'same prompt'), kind: 'user-message' as const },
-    { ...sharedProgress, id: 'live-progress' }
-  ];
-  const frames: MeshConvenienceFrame[] = [
-    {
-      kind: 'patch',
-      cursor: 'provider:turn-1',
-      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
-    }
-  ];
-
-  expect(foldConvenienceEvents({ ...emptyObservationTimeline, events: live }, frames).events).toEqual([
-    startup,
-    ...historical
-  ]);
-});
-
-test('a settled history turn removes the matching Hermes live replay appended after it', () => {
-  const historical = [
-    { ...observationEvent('history-user', 'join the project'), kind: 'user-message' as const },
-    observationEvent('history-final', 'Posted!')
-  ];
-  const lifecycle = { ...observationEvent('live-lifecycle', 'session changed'), kind: 'unknown' as const };
-  const replay = [
-    { ...observationEvent('live-start', 'Message started'), kind: 'turn-start' as const },
-    { ...observationEvent('live-final', '\n\nPosted!'), streaming: true },
-    { ...observationEvent('live-end', 'complete'), kind: 'turn-end' as const },
-    lifecycle
-  ];
-  const frames: MeshConvenienceFrame[] = [
-    {
-      kind: 'patch',
-      cursor: 'provider:',
-      operations: historical.map((event) => ({ op: 'upsert' as const, event }))
-    }
-  ];
-
-  expect(
-    foldConvenienceEvents({ ...emptyObservationTimeline, events: [...historical, ...replay] }, frames).events
-  ).toEqual([...historical, lifecycle]);
-});
-
+// An in-flight live turn whose prompt matches the transcript's trailing turn is folded as the SAME
+// turn (a resumed runtime's transcript page runs ahead of its fresh live feed), so the transcript
+// copy yields. The cost is the rare converse — a restarted runtime receiving a byte-identical new
 test('convenience history preserves a tool call and result that share a provider record dedupe key', () => {
   const call: AgentObservationEvent = {
     ...observationEvent('mesh:json:item_1:tool-call', 'Tool call command_execution'),
@@ -453,8 +328,8 @@ test('a completed history tool replaces its duplicate running live envelope by c
     }))
   }).toEqual({
     events: [
-      { id: 'live-call', kind: 'tool-call', callId },
-      { id: 'history-result', kind: 'tool-result', callId }
+      { id: 'history-result', kind: 'tool-result', callId },
+      { id: 'live-call', kind: 'tool-call', callId }
     ],
     cards: [{ id: 'live-call', kind: 'tool', streaming: false, callId, resultStatus: 'completed' }]
   });

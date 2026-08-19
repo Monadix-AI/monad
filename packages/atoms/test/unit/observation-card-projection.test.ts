@@ -2,8 +2,8 @@ import type { AgentObservationEvent } from '@monad/protocol';
 
 import { expect, test } from 'bun:test';
 
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
-import { observation } from '../../src/agent-adapters/observation-projection.ts';
+import { observation } from '../../src/agent-adapters/shared/observation/observation-projection.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 
 function toolEvent(args: {
   id: string;
@@ -131,6 +131,32 @@ test('a tool call and result that both omit callId render as separate cards', ()
       at: undefined,
       payload: { provider: 'codex', event: result },
       provenance: { contractEvents: [{ id: 'event_result', callId: undefined }] }
+    }
+  ]);
+});
+
+test('an unknown adapter does not acquire tool pairing semantics from shared field names', () => {
+  const call = toolEvent({ id: 'event_call', kind: 'tool-call', callId: 'same', input: { command: 'pwd' } });
+  const result = toolEvent({ id: 'event_result', kind: 'tool-result', callId: 'same', output: '/workspace' });
+
+  expect(agentObservationCards([call, result], 'third-party')).toEqual([
+    {
+      id: 'event_call',
+      dedupeKey: undefined,
+      kind: 'tool',
+      streaming: true,
+      at: undefined,
+      payload: { provider: 'third-party', event: call },
+      provenance: { contractEvents: [{ id: 'event_call', callId: 'same' }] }
+    },
+    {
+      id: 'event_result',
+      dedupeKey: undefined,
+      kind: 'tool',
+      streaming: false,
+      at: undefined,
+      payload: { provider: 'third-party', event: result },
+      provenance: { contractEvents: [{ id: 'event_result', callId: 'same' }] }
     }
   ]);
 });

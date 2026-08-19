@@ -12,16 +12,16 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
 
-import { hasFlag } from '../adapter-shared.ts';
-import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
-import { createProjectedEventSource } from '../event-source.ts';
-import { agentAdapterIcons } from '../icons.ts';
-import { writeManagedMcpConfigFile } from '../managed-mcp-config.ts';
-import { SessionEventJsonlDriver } from '../session-event-jsonl-driver.ts';
-import { meshAgentAdapterSettings } from '../settings.ts';
+import { hasFlag } from '../shared/adapter-shared.ts';
+import { parseMeshAgentArgumentSupport } from '../shared/argument-support.ts';
+import { createProjectedEventSource } from '../shared/events/event-source.ts';
+import { agentAdapterIcons } from '../shared/icons.ts';
+import { writeManagedMcpConfigFile } from '../shared/managed-mcp-config.ts';
+import { meshAgentAdapterSettings } from '../shared/settings.ts';
 import { deleteAntigravitySession } from './lifecycle.ts';
 import { listAntigravityModelOptions, parseAntigravityModelOptions } from './model-options.ts';
 import { antigravityObservationProjection } from './observation.ts';
+import { SessionEventJsonlDriver } from './session-event-jsonl-driver.ts';
 import { parseAntigravityStreamJson } from './stream-json.ts';
 
 export { parseAntigravityModelOptions } from './model-options.ts';

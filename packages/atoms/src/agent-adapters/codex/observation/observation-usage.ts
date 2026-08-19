@@ -1,6 +1,6 @@
 import type { MeshAgentUsageRecord } from '@monad/protocol';
 
-import { numberValue, recordValue, textValue } from '../../observation-projection.ts';
+import { numberValue, recordValue, textValue } from '../../shared/observation/observation-projection.ts';
 
 function tokenUsageRow(id: string, tokens: unknown, contextWindow: unknown): MeshAgentUsageRecord | undefined {
   const totalTokens = numberValue(tokens);

@@ -6,8 +6,8 @@ import type {
 
 import { resolveBinary } from '@monad/sdk-atom';
 
-import { createProjectedEventSource } from '../event-source.ts';
-import { jsonRpcRequest } from '../jsonrpc.ts';
+import { createProjectedEventSource } from '../shared/events/event-source.ts';
+import { jsonRpcRequest } from '../shared/transports/jsonrpc.ts';
 import { recordValue } from './app-server/events.ts';
 import { CODEX_APP_BIN } from './launch.ts';
 import { codexObservationProjection } from './observation/index.ts';

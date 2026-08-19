@@ -7,9 +7,9 @@ import { claudeCodeObservationProjection } from '../../src/agent-adapters/claude
 import { codexObservationProjection } from '../../src/agent-adapters/codex/observation/index.ts';
 import { geminiObservationProjection } from '../../src/agent-adapters/gemini/observation.ts';
 import { hermesObservationProjection } from '../../src/agent-adapters/hermes/observation.ts';
-import { agentObservationCards } from '../../src/agent-adapters/observation-cards.ts';
 import { openClawObservationProjection } from '../../src/agent-adapters/openclaw/observation.ts';
 import { qwenObservationProjection } from '../../src/agent-adapters/qwen/observation.ts';
+import { agentObservationCards } from '../../src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import {
   ObservationToolCardShell,
   observationElapsedSeconds

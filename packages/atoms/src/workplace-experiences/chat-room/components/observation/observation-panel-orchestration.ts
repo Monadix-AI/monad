@@ -12,7 +12,7 @@ import type { ObservationPanelEvent } from './panel-state.ts';
 
 import { meshSessionConnectionClosedPayloadSchema, meshSessionConnectionOpenedPayloadSchema } from '@monad/protocol';
 
-import { agentObservationCards } from '../../../../agent-adapters/observation-cards.ts';
+import { agentObservationCards } from './card-projection.ts';
 import { type RawFrameRow, rawFrameRow } from './raw-view.ts';
 import { emptyObservationTimeline, mergeConvenienceFrames, type ObservationTimeline } from './timeline-merge.ts';
 
@@ -80,127 +80,40 @@ function observationJoinKey(event: AgentObservationEvent): string {
   return event.dedupeKey ? `${event.dedupeKey}:${event.kind}` : event.id;
 }
 
-interface CompletedObservationTurn {
-  start: number;
-  end: number;
-  signature: string;
-  userSignature: string;
-  assistantTexts: string[];
-  hasUser: boolean;
-}
-
-function completedObservationTurns(
-  events: AgentObservationEvent[],
-  settledTail: boolean,
-  includeReplay = false
-): CompletedObservationTurn[] {
-  const turns: CompletedObservationTurn[] = [];
-  let start: number | undefined;
-  const append = (end: number) => {
-    if (start === undefined) return;
-    const turn = events.slice(start, end + 1);
-    const userText = turn.filter((item) => item.kind === 'user-message').map((item) => item.text ?? '');
-    const allAssistantTexts = turn
-      .filter((item) => item.kind === 'assistant-message')
-      .map((item) => item.text?.trim() ?? '')
-      .filter(Boolean);
-    const assistantTexts = turn
-      .filter((item) => item.kind === 'assistant-message' && !item.streaming)
-      .map((item) => item.text?.trim() ?? '')
-      .filter(Boolean);
-    const assistantText = assistantTexts.at(-1);
-    const replayAssistantTexts = includeReplay && userText.length === 0 ? allAssistantTexts : [];
-    if ((userText.length > 0 && assistantText) || replayAssistantTexts.length > 0) {
-      turns.push({
-        start,
-        end,
-        signature: JSON.stringify([userText, assistantText ?? allAssistantTexts.at(-1)]),
-        userSignature: JSON.stringify(userText),
-        assistantTexts: replayAssistantTexts.length > 0 ? replayAssistantTexts : assistantTexts,
-        hasUser: userText.length > 0
-      });
-    }
-  };
-  for (const [index, event] of events.entries()) {
-    if (event.kind === 'turn-start') start = index;
-    else if (event.kind === 'user-message') {
-      if (start === undefined) start = index;
-      else {
-        const precedingAssistant = events
-          .slice(start, index)
-          .findLast((candidate) => candidate.kind === 'assistant-message');
-        if (precedingAssistant && !precedingAssistant.streaming) {
-          append(index - 1);
-          start = index;
-        }
-      }
-    }
-    if (event.kind !== 'turn-end' || start === undefined) continue;
-    append(index);
-    start = undefined;
-  }
-  const tailAssistant =
-    start === undefined ? undefined : events.slice(start).findLast((event) => event.kind === 'assistant-message');
-  if (settledTail && start !== undefined && tailAssistant && !tailAssistant.streaming) append(events.length - 1);
-  return turns;
-}
-
-function splitSettledTurnOverlap(
-  earlier: AgentObservationEvent[],
-  current: AgentObservationEvent[]
-): { before: AgentObservationEvent[]; after: AgentObservationEvent[] } {
-  const earlierTurns = completedObservationTurns(earlier, true);
-  const currentTurns = completedObservationTurns(current, true, true);
-  const limit = Math.min(earlierTurns.length, currentTurns.length);
-  for (let count = limit; count > 0; count -= 1) {
-    const earlierStart = earlierTurns.length - count;
-    const matches = Array.from({ length: count }, (_, index) => {
-      const earlierTurn = earlierTurns[earlierStart + index];
-      const currentTurn = currentTurns[index];
-      if (!earlierTurn || !currentTurn) return false;
-      if (!currentTurn.hasUser)
-        return currentTurn.assistantTexts.every((text) => earlierTurn.assistantTexts.includes(text));
-      if (earlierTurn.signature === currentTurn.signature) return true;
-      return (
-        earlierTurn.userSignature === currentTurn.userSignature &&
-        currentTurn.assistantTexts.every((text) => earlierTurn.assistantTexts.includes(text))
-      );
-    }).every(Boolean);
-    if (!matches) continue;
-    const first = currentTurns[0];
-    let last = currentTurns[count - 1];
-    const replay = currentTurns[count];
-    const earlierLast = earlierTurns.at(-1);
-    if (
-      replay &&
-      !replay.hasUser &&
-      earlierLast &&
-      replay.assistantTexts.every((text) => earlierLast.assistantTexts.includes(text))
-    )
-      last = replay;
-    if (!first || !last) return { before: [], after: current };
-    return { before: current.slice(0, first.start), after: current.slice(last.end + 1) };
-  }
-  return { before: [], after: current };
-}
-
 export function foldConvenienceEvents(
   timeline: ObservationTimeline,
   earlierFrames: MeshConvenienceFrame[]
 ): ObservationTimeline {
   const earlier = mergeConvenienceFrames(emptyObservationTimeline, earlierFrames);
-  const current = splitSettledTurnOverlap(earlier.events, timeline.events);
-  const currentEvents = [...current.before, ...current.after];
-  const currentByKey = new Map(currentEvents.map((event) => [observationJoinKey(event), event]));
+  // The daemon bounds transcript pages at the live epoch's start (`eventsBefore`), so the two planes
+  // are disjoint by construction and identity is the only merge rule: a transcript event whose join
+  // key (id / dedupeKey / tool callId) the live plane already carries IS the live event — live wins,
+  // with transcript-only fields (a tool result's payload) grafted onto the live copy rather than
+  // dropped. No content or turn-shape matching happens here.
+  const liveByKey = new Map(timeline.events.map((event) => [observationJoinKey(event), event] as const));
+  const remaining: AgentObservationEvent[] = [];
+  const grafts = new Map<string, AgentObservationEvent>();
+  for (const event of earlier.events) {
+    const key = observationJoinKey(event);
+    const live = liveByKey.get(key);
+    if (!live) {
+      remaining.push(event);
+      continue;
+    }
+    if (event.kind === 'tool-result' && event.tool?.output !== undefined && live.tool?.output === undefined) {
+      grafts.set(key, { ...live, tool: { ...event.tool, ...live.tool, output: event.tool.output } });
+    }
+  }
   const seen = new Set<string>();
-  const events = [...current.before, ...earlier.events, ...current.after]
-    .map((event) => currentByKey.get(observationJoinKey(event)) ?? event)
-    .filter((event) => {
-      const key = observationJoinKey(event);
-      if (seen.has(key)) return false;
-      seen.add(key);
-      return true;
-    });
+  const events = [
+    ...remaining,
+    ...timeline.events.map((event) => grafts.get(observationJoinKey(event)) ?? event)
+  ].filter((event) => {
+    const key = observationJoinKey(event);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   return {
     ...timeline,
     events,

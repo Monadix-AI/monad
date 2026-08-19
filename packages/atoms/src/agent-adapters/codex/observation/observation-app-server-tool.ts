@@ -7,7 +7,7 @@ import {
   rawTextValue,
   recordValue,
   textValue
-} from '../../observation-projection.ts';
+} from '../../shared/observation/observation-projection.ts';
 
 export function codexAppServerItemRecord(p: Record<string, unknown>): Record<string, unknown> | undefined {
   const item = p.item;

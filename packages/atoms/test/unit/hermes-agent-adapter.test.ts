@@ -8,9 +8,9 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { hermesEventPage } from '../../src/agent-adapters/hermes/event-pages.ts';
-import { echoHermesInput } from '../../src/agent-adapters/hermes/gateway/index.ts';
+import { echoHermesInput, parseHermesFrame } from '../../src/agent-adapters/hermes/gateway/index.ts';
 import { hermesManagedMcpEnv, hermesMeshAgentAdapter } from '../../src/agent-adapters/hermes/index.ts';
-import { toAgentObservationEvent } from '../../src/agent-adapters/neutral-observation.ts';
+import { toAgentObservationEvent } from '../../src/agent-adapters/shared/observation/neutral-observation.ts';
 
 const agent = {
   name: 'hermes',
@@ -256,6 +256,47 @@ test('Hermes turns an errored completion into a provider error', async () => {
   expect(events).toEqual([{ type: 'provider_error', payload: { message: 'invalid model' } }]);
 });
 
+test('Hermes maps a live session usage sample to the session usage plane', () => {
+  expect(
+    parseHermesFrame({
+      jsonrpc: '2.0',
+      method: 'event',
+      params: {
+        type: 'session.usage',
+        session_id: '36282bac',
+        payload: {
+          usage: {
+            model: 'openrouter/free',
+            input: 32259,
+            output: 260,
+            reasoning: 144,
+            prompt: 32259,
+            completion: 260,
+            total: 32519,
+            calls: 1,
+            context_used: 32259,
+            context_max: 200000,
+            context_percent: 16,
+            compressions: 0,
+            active_subagents: 0
+          }
+        }
+      }
+    })
+  ).toEqual([
+    {
+      type: 'session_usage_updated',
+      payload: {
+        total: 32519,
+        input: 32259,
+        output: 260,
+        reasoningOutput: 144,
+        context: { used: 32259, window: 200000 }
+      }
+    }
+  ]);
+});
+
 test('Hermes resident driver owns resume, turn, event, and approval frames', async () => {
   const definition = hermesMeshAgentAdapter.createSessionRuntime?.(
     { ...agent, env: { HERMES_HOME: '/tmp/hermes/profiles/test', HERMES_DASHBOARD_SESSION_TOKEN: 'token' } },
@@ -393,34 +434,72 @@ test('Hermes projects concatenated gateway frames into turn, reasoning, and assi
   ]);
 });
 
-test('Hermes keeps a streaming reasoning card stable while appending gateway deltas', () => {
+test('Hermes keeps one streaming reasoning card across internal and usage samples', () => {
   const projector = hermesMeshAgentAdapter.events.createLiveProjector?.({ id: 'mesh-hermes-stable' });
   if (!projector) throw new Error('Hermes incremental projector required');
-  const frame = (text: string) =>
+  const frame = (type: string, payload: Record<string, unknown>) =>
     JSON.stringify({
       jsonrpc: '2.0',
       method: 'event',
-      params: { type: 'reasoning.delta', session_id: 'live-1', payload: { text } }
+      params: { type, session_id: type === 'sessions.changed' ? '' : 'live-1', payload }
     });
 
-  const first = projector.advance(frame('We')).events;
-  const second = projector.advance(frame(' think')).events;
+  const first = projector.advance(frame('reasoning.delta', { text: ' "idem' })).events;
+  const internal = projector.advance(frame('sessions.changed', {})).events;
+  const second = projector.advance(frame('reasoning.delta', { text: '_abcdef' })).events;
+  const usage = projector.advance(
+    frame('session.usage', {
+      usage: {
+        model: 'openrouter/free',
+        input: 64806,
+        output: 456,
+        reasoning: 288,
+        total: 65262,
+        calls: 2
+      }
+    })
+  ).events;
 
   expect(
-    [first, second].map((events) => {
+    [first, internal, second, usage].map((events) => {
       const event = events.find((candidate) => candidate.providerEventType === 'reasoning.delta');
-      return event ? { dedupeKey: event.dedupeKey, id: event.id, text: event.text } : null;
+      return {
+        eventCount: events.length,
+        reasoning: event ? { dedupeKey: event.dedupeKey, id: event.id, text: event.text } : null
+      };
     })
   ).toEqual([
     {
-      dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
-      id: 'mesh-hermes-stable:json:index-0:reasoning',
-      text: 'We'
+      eventCount: 1,
+      reasoning: {
+        dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
+        id: 'mesh-hermes-stable:json:index-0:reasoning',
+        text: ' "idem'
+      }
     },
     {
-      dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
-      id: 'mesh-hermes-stable:json:index-0:reasoning',
-      text: 'We think'
+      eventCount: 1,
+      reasoning: {
+        dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
+        id: 'mesh-hermes-stable:json:index-0:reasoning',
+        text: ' "idem'
+      }
+    },
+    {
+      eventCount: 1,
+      reasoning: {
+        dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
+        id: 'mesh-hermes-stable:json:index-0:reasoning',
+        text: ' "idem_abcdef'
+      }
+    },
+    {
+      eventCount: 1,
+      reasoning: {
+        dedupeKey: 'hermes:mesh-hermes-stable:json:index-0:reasoning:agent:reasoning.delta',
+        id: 'mesh-hermes-stable:json:index-0:reasoning',
+        text: ' "idem_abcdef'
+      }
     }
   ]);
 });
@@ -539,6 +618,7 @@ test('Hermes history preserves matching tool call ids for card pairing', () => {
         id: 1,
         role: 'assistant',
         content: '',
+        timestamp: 1787109819.258594,
         tool_calls: [
           {
             id: 'terminal_1',
@@ -552,7 +632,8 @@ test('Hermes history preserves matching tool call ids for card pairing', () => {
         role: 'tool',
         content: '/project',
         tool_call_id: 'terminal_1',
-        tool_name: 'terminal'
+        tool_name: 'terminal',
+        timestamp: 1787109819.310257
       })
     ].join('\n')
   }).events;
@@ -574,6 +655,19 @@ test('Hermes history preserves matching tool call ids for card pairing', () => {
       tool: { name: 'terminal', category: 'shell', callId: 'terminal_1', output: '/project' }
     }
   ]);
+
+  const neutralEvents = events.flatMap((event) => {
+    const neutral = toAgentObservationEvent(event, hermesMeshAgentAdapter.observation);
+    return neutral ? [neutral] : [];
+  });
+  const toolRuns = hermesMeshAgentAdapter.observation?.toolRuns;
+  if (!toolRuns) throw new Error('Hermes tool-run projection required');
+  expect(
+    toolRuns(neutralEvents).map((run) => ({
+      callId: run.call.tool?.callId,
+      resultDurationMs: run.result?.tool?.durationMs
+    }))
+  ).toEqual([{ callId: 'terminal_1', resultDurationMs: 52 }]);
 });
 
 test('Hermes history backfill reads the managed profile home and keeps raw records chronological', async () => {

@@ -2,7 +2,7 @@ import type { MeshRawEventRecord } from '@monad/protocol';
 
 import { expect, type Page, test } from '@playwright/test';
 
-import { multiTurnObservationFixtureSchema } from '../../../../packages/atoms/src/agent-adapters/observation-fixture.ts';
+import { multiTurnObservationFixtureSchema } from '../../../../packages/atoms/src/agent-adapters/fixtures/observation-fixture.ts';
 import claudeCodeFixtureValue from '../../../../packages/atoms/test/fixtures/mesh-agent-observation/claude-code-multi-turn.raw.json' with {
   type: 'json'
 };

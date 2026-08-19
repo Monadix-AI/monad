@@ -14,16 +14,16 @@ import { createHash, randomUUID } from 'node:crypto';
 import { rename, stat, unlink } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
 
-import { builtinAgentAdapters } from '../packages/atoms/src/agent-adapters/index.ts';
 import {
   multiTurnObservationFixtureSchema,
   parseJsonlFrames
-} from '../packages/atoms/src/agent-adapters/observation-fixture.ts';
+} from '../packages/atoms/src/agent-adapters/fixtures/observation-fixture.ts';
 import {
   ObservationSanitizer,
   sanitizeObservationRecords,
   unsanitizedSemanticStrings
-} from '../packages/atoms/src/agent-adapters/observation-sanitize.ts';
+} from '../packages/atoms/src/agent-adapters/fixtures/observation-sanitize.ts';
+import { builtinAgentAdapters } from '../packages/atoms/src/agent-adapters/index.ts';
 import {
   approvalsFileSchema,
   meshAgentProviderSchema,

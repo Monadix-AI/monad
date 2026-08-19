@@ -3,7 +3,7 @@ import type { MeshAgentProviderSessionUsageContext } from '@monad/sdk-atom';
 
 import { meshAgentSessionUsageSchema } from '@monad/protocol';
 
-import { jsonRpcRequest } from '../jsonrpc.ts';
+import { jsonRpcRequest } from '../shared/transports/jsonrpc.ts';
 import { codexProviderSessionUnavailable } from './provider-session-error.ts';
 
 interface CodexUsageProcess {

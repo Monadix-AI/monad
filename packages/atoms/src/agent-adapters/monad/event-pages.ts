@@ -1,6 +1,6 @@
 import type { MeshAgentEventSource, MeshAgentProviderEventContext } from '@monad/sdk-atom';
 
-import { createOutputEventSource } from '../event-source.ts';
+import { createOutputEventSource } from '../shared/events/event-source.ts';
 import { monadObservationProjection } from './observation.ts';
 
 type MonadHistoryOutputReader = (context: MeshAgentProviderEventContext) => string | null | Promise<string | null>;

@@ -38,6 +38,12 @@ UI-only actions, and guessed private formats do not satisfy the contract.
 The `gateway/` directory is shared transport infrastructure used by provider adapters; it is not
 itself a registered provider adapter and therefore does not own a separate lifecycle contract.
 
+The root is a composition boundary: it contains only adapter registries and public entry points.
+Cross-adapter infrastructure lives under `shared/`, capture/replay contracts under `fixtures/`, and
+provider behavior stays inside the adapter that owns that provider vocabulary. A shared helper is
+used only through explicit imports from the adapters that implement the same named protocol; shared
+code must not infer provider business semantics from coincidentally shaped fields.
+
 ## Host semantics
 
 - For a running provider gateway that exposes lifecycle controls, archive/delete is sent before the

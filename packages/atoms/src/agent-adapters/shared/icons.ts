@@ -7,6 +7,7 @@ function fromSimpleIcon(icon: SimpleIcon): ChannelIcon {
   return { title: icon.title, path: icon.path, hex: icon.hex, source: icon.source };
 }
 
+/** Presentation metadata shared by the built-in adapter registrations. */
 export const agentAdapterIcons = {
   antigravity: {
     title: 'Google Antigravity',

@@ -7,7 +7,7 @@ import {
   recordValue,
   textValue,
   turnEndReasonFromStopValue
-} from '../../observation-projection.ts';
+} from '../../shared/observation/observation-projection.ts';
 import {
   codexAppServerToolCallObservation,
   codexAppServerToolResultObservation,

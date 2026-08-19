@@ -1,7 +1,12 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
-import type { ObservationSource } from '../../observation-projection.ts';
+import type { ObservationSource } from '../../shared/observation/observation-projection.ts';
 
-import { observation, rawTextValue, textValue, thinkingObservation } from '../../observation-projection.ts';
+import {
+  observation,
+  rawTextValue,
+  textValue,
+  thinkingObservation
+} from '../../shared/observation/observation-projection.ts';
 import { codexItemSummaries, codexItemText } from './observation-message-group.ts';
 
 export type CodexObservationResponseItem = Record<string, unknown> & { type: string };

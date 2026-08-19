@@ -3,8 +3,8 @@ import type { MeshAgentLaunchSpec, MeshAgentModelOption, MeshAgentProcessLaunchP
 
 import { homedir } from 'node:os';
 
-import { hasFlag, parseJsonObject, uniqueModelNames } from '../adapter-shared.ts';
-import { parseMeshAgentArgumentSupport } from '../argument-support.ts';
+import { hasFlag, parseJsonObject, uniqueModelNames } from '../shared/adapter-shared.ts';
+import { parseMeshAgentArgumentSupport } from '../shared/argument-support.ts';
 
 export const CODEX_APP_BIN = '/Applications/Codex.app/Contents/Resources/codex';
 export const CODEX_NON_INTERACTIVE_ENV = { CODEX_NON_INTERACTIVE: '1' };

@@ -8,11 +8,11 @@ import type {
   SDKUserMessage
 } from '@anthropic-ai/claude-agent-sdk';
 import type { MeshAgentObservationEvent, MeshAgentUsageRecord } from '@monad/protocol';
-import type { MeshAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
+import type { MeshAgentObservationProjector, ObservationRole } from '../shared/observation/observation-projection.ts';
 
 import { z } from 'zod';
 
-import { anthropicTranscriptTool } from '../anthropic-transcript.ts';
+import { claudeCodeTranscriptTool } from './tool-fields.ts';
 
 const looseRecordSchema = z.record(z.string(), z.unknown());
 
@@ -30,8 +30,9 @@ import {
   thinkingObservation,
   toolCategoryByName,
   turnEndReasonFromStopValue
-} from '../observation-projection.ts';
+} from '../shared/observation/observation-projection.ts';
 import { reconcileClaudeStreamEvents } from './observation-stream.ts';
+import { claudeCodeToolRuns } from './tool-runs.ts';
 
 export type ClaudeObservationMessage = Partial<SDKMessage> & Record<string, unknown> & { type: string };
 type ClaudeTranscriptMessage = Partial<SDKAssistantMessage | SDKUserMessage> &
@@ -474,7 +475,8 @@ export const claudeCodeObservationProjection = {
   usageRecords: claudeUsageRecordsFromRecord,
   classifyActivity: classifyObservationActivity,
   toolCategory: toolCategoryByName('shell', ['Bash']),
-  toolFields: anthropicTranscriptTool,
+  toolFields: claudeCodeTranscriptTool,
+  toolRuns: claudeCodeToolRuns,
   isStreamingFragment: isStreamingObservationFragment,
   mergeStreamingRun: (events: MeshAgentObservationEvent[]) => {
     const first = events[0];

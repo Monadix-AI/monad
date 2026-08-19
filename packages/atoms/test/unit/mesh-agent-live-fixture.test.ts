@@ -1,8 +1,8 @@
 import { expect, test } from 'bun:test';
 
+import { observationFixtureSchema } from '../../src/agent-adapters/fixtures/observation-fixture.ts';
+import { unsanitizedSemanticStrings } from '../../src/agent-adapters/fixtures/observation-sanitize.ts';
 import { builtinAgentAdapters } from '../../src/agent-adapters/index.ts';
-import { observationFixtureSchema } from '../../src/agent-adapters/observation-fixture.ts';
-import { unsanitizedSemanticStrings } from '../../src/agent-adapters/observation-sanitize.ts';
 
 test('captured Codex app-server live frames project complete lifecycle messages and indexed reasoning', async () => {
   const item = observationFixtureSchema.parse(

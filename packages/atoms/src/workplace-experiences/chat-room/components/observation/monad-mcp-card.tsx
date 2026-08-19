@@ -66,18 +66,21 @@ export function MonadMcpToolCard({
       </div>
     );
   }
+  const isMessageAction = view.action === 'project-post' || view.action === 'agent-send';
+  const showOutput =
+    view.output !== undefined || (isMessageAction ? view.text !== undefined : view.action !== 'project-ask');
   return (
     <div className="min-w-0 py-0.5 text-sm leading-5">
       {view.action === 'project-ask' ? <MonadMcpQuestionList view={view} /> : null}
-      {view.action !== 'project-ask' || view.output !== undefined ? (
+      {showOutput ? (
         <MonadMcpOutput
-          body={view.action === 'project-post' || view.action === 'agent-send' ? view.text : undefined}
+          body={isMessageAction ? view.text : undefined}
           completedLabel={t('web.plan.statusCompleted')}
           emptyLabel={t('web.workplace.monadMcp.empty')}
           falseLabel={t('web.workplace.monadMcp.no')}
           inProgressLabel={t('web.plan.statusInProgress')}
           memberIdentities={memberIdentities}
-          omitAttachments={view.action === 'project-post' || view.action === 'agent-send'}
+          omitAttachments={isMessageAction}
           output={view.output}
           pendingLabel={t('web.plan.statusPending')}
           planEmptyLabel={t('web.plan.empty')}

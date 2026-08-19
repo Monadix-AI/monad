@@ -1,6 +1,6 @@
 export type JsonRpcId = string | number;
 
-/** Frame a JSON-RPC request (method + id + params) as a newline-delimited stdio line. */
+/** Shared JSON-RPC transport framing for adapters that speak newline-delimited stdio. */
 export function jsonRpcRequest(method: string, id: JsonRpcId, params: Record<string, unknown>): string {
   return `${JSON.stringify({ method, id, params })}\n`;
 }

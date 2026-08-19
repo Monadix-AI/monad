@@ -13,7 +13,12 @@ import type {
 } from '@monad/sdk-atom';
 import type { CodexAppServerEventContext } from './events.ts';
 
-import { jsonRpcNotification, jsonRpcRequest, jsonRpcResponse, jsonRpcResponseId } from '../../jsonrpc.ts';
+import {
+  jsonRpcNotification,
+  jsonRpcRequest,
+  jsonRpcResponse,
+  jsonRpcResponseId
+} from '../../shared/transports/jsonrpc.ts';
 import { parseCodexSessionJsonl, recordValue } from './events.ts';
 import { codexRuntimeState } from './state.ts';
 

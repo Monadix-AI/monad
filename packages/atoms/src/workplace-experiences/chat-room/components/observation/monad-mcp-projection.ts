@@ -1,6 +1,6 @@
 import type { AgentObservationEvent } from '@monad/protocol';
 
-import { parseStreamingJson } from '../../../../agent-adapters/partial-json.ts';
+import { parseStreamingJson } from '../../../../agent-adapters/shared/parsing/partial-json.ts';
 import { observationContractRawEvents } from './provenance.ts';
 
 export const MONAD_MCP_TOOL_NAMES = [
@@ -120,10 +120,19 @@ export function monadMcpToolView(
   if (!toolName) return null;
 
   const parsedInput = inputRecordValue(wrappedCall?.input ?? call.tool?.input);
-  if (!parsedInput && !call.streaming) return null;
+  // A live wire that only signals tool lifecycle (openclaw's `item` stream) carries no arguments at
+  // all. The prefixed name alone already identifies the Monad MCP tool, so an ABSENT input must not
+  // demote the call to a generic card — the paired transcript result supplies the payload later.
+  // Present-but-malformed input still falls back: the generic card shows the raw input verbatim.
+  const inputAbsent = (wrappedCall?.input ?? call.tool?.input) === undefined;
+  const unambiguouslyMonadMcp =
+    wrappedCall !== undefined || prefixedMonadMcpToolName(call.tool?.name ?? '') !== undefined;
+  if (!parsedInput && !call.streaming && !(unambiguouslyMonadMcp && inputAbsent)) return null;
   const record = parsedInput ?? {};
   const input = record;
-  const output = monadMcpOutput(result?.tool?.output ?? result?.text);
+  // Transport envelopes are the producing adapter's problem (normalizedMcpToolOutput at emission);
+  // by the time an event reaches this projection, `tool.output` IS the payload.
+  const output = result?.tool?.output ?? (result?.hasContent === false ? undefined : result?.text);
   const status = result?.tool?.status ?? call.tool?.status;
   const durationMs = result?.tool?.durationMs ?? call.tool?.durationMs;
   const callId = call.tool?.callId ?? result?.tool?.callId;
@@ -246,18 +255,6 @@ function prefixedMonadMcpToolName(name: string): MonadMcpToolName | undefined {
     if (isMonadMcpToolName(candidate)) return candidate;
   }
   return undefined;
-}
-
-function monadMcpOutput(value: unknown): unknown {
-  if (typeof value !== 'string') return value;
-  const match = /^<untrusted_tool_result\b[^>]*>\s*[\s\S]*?\n\s*\n([\s\S]*?)\s*<\/untrusted_tool_result>\s*$/.exec(
-    value
-  );
-  if (!match) return value;
-  const payload = jsonValue(match[1]?.trim());
-  const record = recordValue(payload);
-  if (!record || !Object.hasOwn(record, 'result')) return payload;
-  return jsonValue(record.result) ?? record.result;
 }
 
 function isMonadMcpToolName(value: string): value is MonadMcpToolName {

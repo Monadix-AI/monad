@@ -1,10 +1,11 @@
 import type { MeshAgentObservationEvent } from '@monad/protocol';
-import type { MeshAgentObservationProjector, ObservationRole } from '../observation-projection.ts';
+import type { MeshAgentObservationProjector, ObservationRole } from '../shared/observation/observation-projection.ts';
 
 import {
   classifyObservationActivity,
   compactJson,
   isStreamingObservationFragment,
+  normalizedMcpToolOutput,
   numberValue,
   observation,
   providerEpochSecondsTimestamp,
@@ -14,7 +15,8 @@ import {
   textValue,
   toolCategoryByName,
   turnEndReasonFromStopValue
-} from '../observation-projection.ts';
+} from '../shared/observation/observation-projection.ts';
+import { hermesToolRuns } from './tool-runs.ts';
 
 function roleFromHermesMessage(record: Record<string, unknown>): ObservationRole {
   const role = textValue(record.role)?.toLowerCase();
@@ -63,7 +65,8 @@ function toolCallEvents(
     const item = call as Record<string, unknown>;
     const fn = item.function && typeof item.function === 'object' ? (item.function as Record<string, unknown>) : {};
     const name = textValue(item.name, item.tool_name, fn.name) ?? 'tool';
-    const args = item.input ?? item.args ?? item.arguments ?? fn.arguments;
+    const rawArgs = item.input ?? item.args ?? item.arguments ?? fn.arguments;
+    const args = rawArgs === '' ? undefined : rawArgs;
     const callId = textValue(item.id, item.call_id, item.tool_call_id);
     const argsText = args === undefined ? '' : ` ${compactJson(args) ?? String(args)}`;
     return observation({
@@ -90,8 +93,10 @@ function gatewayToolEvent(
   const payload = recordValue(params?.payload) ?? {};
   const name = textValue(payload.name) ?? 'tool';
   const callId = textValue(payload.tool_id, payload.tool_call_id);
-  const input = payload.args ?? payload.context;
-  const output = payload.result ?? payload.result_text ?? payload.summary;
+  const rawInput = payload.args ?? payload.context;
+  // The gateway sends `args: ""` for a no-argument call; an empty string is not an input.
+  const input = rawInput === '' ? undefined : rawInput;
+  const output = normalizedMcpToolOutput(payload.result ?? payload.result_text ?? payload.summary);
   const durationS = numberValue(payload.duration_s);
   const detail = eventType === 'tool.start' ? input : output;
   return observation({
@@ -207,7 +212,10 @@ export function hermesRecordEvents(
             ...(textValue(record.tool_name) ? { name: textValue(record.tool_name) } : {}),
             ...(textValue(record.tool_call_id, record.toolCallId)
               ? { callId: textValue(record.tool_call_id, record.toolCallId) }
-              : {})
+              : {}),
+            // The transcript stores the result payload as the row's content; surface the
+            // de-enveloped payload as the tool output so consumers never parse transport wrappers.
+            ...(contentText === undefined ? {} : { output: normalizedMcpToolOutput(contentText) })
           }
         }
       : {}),
@@ -227,25 +235,20 @@ export const hermesObservationProjection = {
     return rawRecords.some((raw) => raw.method === 'event') ? event.id : undefined;
   },
   toolCategory: toolCategoryByName('shell', ['terminal', 'shell', 'bash', 'exec']),
+  toolRuns: hermesToolRuns,
   eventEntries: (entries) =>
     entries.filter(({ record }) => {
       if (typeof record.role === 'string') return true;
       const params = recordValue(record.params);
       const type = textValue(params?.type);
       if (record.method !== 'event') return record.method !== undefined;
-      if (
+      return (
         type === 'message.start' ||
         type === 'reasoning.delta' ||
         type === 'message.delta' ||
-        type === 'message.complete'
-      )
-        return true;
-      return (
-        type !== 'gateway.ready' &&
-        type !== 'session.info' &&
-        type !== 'thinking.delta' &&
-        type !== 'reasoning.available' &&
-        type !== 'session.title'
+        type === 'message.complete' ||
+        type === 'tool.start' ||
+        type === 'tool.complete'
       );
     }),
   isStreamingFragment: isStreamingObservationFragment,

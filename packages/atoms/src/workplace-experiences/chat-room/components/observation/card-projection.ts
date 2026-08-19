@@ -1,10 +1,19 @@
 import type { AgentObservationEvent } from '@monad/protocol';
+import type { MeshAgentObservationProjector, MeshAgentObservationToolRun } from '@monad/sdk-atom';
 
 import { agentObservationProvenanceSchema } from '@monad/protocol';
 import { z } from 'zod';
 
-// The experience layer's view model grouping/pairing neutral `AgentObservationEvent`s into
-// renderable units (a tool call+result pair, an MCP startup-progress collapse, …). The daemon
+import { claudeCodeObservationProjection } from '../../../../agent-adapters/claude-code/observation.ts';
+import { codexObservationProjection } from '../../../../agent-adapters/codex/observation/index.ts';
+import { geminiObservationProjection } from '../../../../agent-adapters/gemini/observation.ts';
+import { hermesObservationProjection } from '../../../../agent-adapters/hermes/observation.ts';
+import { monadObservationProjection } from '../../../../agent-adapters/monad/observation.ts';
+import { openClawObservationProjection } from '../../../../agent-adapters/openclaw/observation.ts';
+import { qwenObservationProjection } from '../../../../agent-adapters/qwen/observation.ts';
+
+// The experience layer's view model turns neutral `AgentObservationEvent`s and adapter-declared
+// tool runs into renderable units (a tool card, an MCP startup-progress collapse, …). The daemon
 // never produces or parses this — only `agentObservationCards()` below constructs it — so it lives
 // here rather than in `@monad/protocol` or the third-party `@monad/sdk-atom` authoring contract.
 export const agentObservationCardKindSchema = z.enum([
@@ -216,24 +225,45 @@ function planCard(group: PlanGroup): AgentObservationCard {
   };
 }
 
-function toolCard(
-  call: AgentObservationEvent,
-  result: AgentObservationEvent | undefined,
-  provider: string
-): AgentObservationCard {
-  const events = result ? [call, result] : [call];
-  const callStatus = call.tool?.status?.trim().toLowerCase();
-  const callCompleted =
-    callStatus === 'completed' || callStatus === 'success' || callStatus === 'succeeded' || callStatus === 'failed';
+function toolCard(run: MeshAgentObservationToolRun, provider: string): AgentObservationCard {
+  const events = run.result ? [run.call, run.result] : [run.call];
   return {
-    id: eventIdentity(call),
-    ...(call.dedupeKey ? { dedupeKey: call.dedupeKey } : {}),
+    id: eventIdentity(run.call),
+    ...(run.call.dedupeKey ? { dedupeKey: run.call.dedupeKey } : {}),
     kind: 'tool',
-    streaming: result ? result.streaming : !callCompleted,
-    payload: result ? { provider, call, result } : { provider, call },
+    streaming: run.streaming,
+    payload: run.result ? { provider, call: run.call, result: run.result } : { provider, call: run.call },
     provenance: cardProvenance(events),
-    ...((result?.at ?? call.at) ? { at: result?.at ?? call.at } : {})
+    ...((run.result?.at ?? run.call.at) ? { at: run.result?.at ?? run.call.at } : {})
   };
+}
+
+function adapterToolRuns(events: readonly AgentObservationEvent[], provider: string): MeshAgentObservationToolRun[] {
+  let projection: MeshAgentObservationProjector | undefined;
+  switch (provider) {
+    case 'claude-code':
+      projection = claudeCodeObservationProjection;
+      break;
+    case 'codex':
+      projection = codexObservationProjection;
+      break;
+    case 'gemini':
+      projection = geminiObservationProjection;
+      break;
+    case 'hermes':
+      projection = hermesObservationProjection;
+      break;
+    case 'monad':
+      projection = monadObservationProjection;
+      break;
+    case 'openclaw':
+      projection = openClawObservationProjection;
+      break;
+    case 'qwen':
+      projection = qwenObservationProjection;
+      break;
+  }
+  return projection?.toolRuns?.(events) ?? [];
 }
 
 function eventCard(event: AgentObservationEvent, provider: string): AgentObservationCard {
@@ -260,23 +290,13 @@ function eventCard(event: AgentObservationEvent, provider: string): AgentObserva
   };
 }
 
-function toolResultIndexesByCallId(events: readonly AgentObservationEvent[]): Map<string, AgentObservationEvent[]> {
-  const results = new Map<string, AgentObservationEvent[]>();
-  for (const event of events) {
-    if (event.kind !== 'tool-result' || !event.tool?.callId) continue;
-    const bucket = results.get(event.tool.callId) ?? [];
-    bucket.push(event);
-    results.set(event.tool.callId, bucket);
-  }
-  return results;
-}
-
 export function agentObservationCards(
   events: readonly AgentObservationEvent[],
   provider: string
 ): AgentObservationCard[] {
-  const resultsByCallId = toolResultIndexesByCallId(events);
-  const pairedResults = new Set<AgentObservationEvent>();
+  const toolRuns = adapterToolRuns(events, provider);
+  const toolRunsByCall = new Map(toolRuns.map((run) => [run.call, run]));
+  const pairedResults = new Set(toolRuns.flatMap((run) => run.consumed));
   const startupAnchors = mcpStartupGroups(events);
   const planAnchors = planGroups(events);
   const cards: AgentObservationCard[] = [];
@@ -301,15 +321,8 @@ export function agentObservationCards(
     if (event.progress?.kind === 'plan') continue;
 
     if (event.kind === 'tool-call') {
-      // Pair strictly by `callId`. Adjacency is not a correlation signal: the convenience plane is
-      // a patch stream keyed by event id, and paged history is spliced ahead of the live window, so
-      // "the next event" is not reliably this call's result. An adapter that splits a tool into two
-      // events owns emitting the id that links them.
-      const result = event.tool?.callId
-        ? resultsByCallId.get(event.tool.callId)?.find((candidate) => !pairedResults.has(candidate))
-        : undefined;
-      if (result) pairedResults.add(result);
-      cards.push(toolCard(event, result, provider));
+      const run = toolRunsByCall.get(event);
+      cards.push(run ? toolCard(run, provider) : eventCard(event, provider));
       continue;
     }
 

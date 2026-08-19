@@ -4,7 +4,7 @@ import type { MeshAgentStreamView } from '../../../../../packages/atoms/src/work
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 
-import { agentObservationCards } from '../../../../../packages/atoms/src/agent-adapters/observation-cards.ts';
+import { agentObservationCards } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/card-projection.ts';
 import { MeshAgentObservationPanel } from '../../../../../packages/atoms/src/workplace-experiences/chat-room/components/observation/panel.tsx';
 
 /**

@@ -2,7 +2,7 @@ import type { MeshAgentOutputEvent } from '@monad/sdk-atom';
 
 import { z } from 'zod';
 
-import { compactObject } from '../adapter-shared.ts';
+import { compactObject } from '../shared/adapter-shared.ts';
 
 // Wire contract for the Gemini CLI `--output-format stream-json` channel: one JSON object per line
 // (JSONL). This mirrors `@google/gemini-cli-core`'s `JsonStreamEvent` union and `JsonStreamEventType`
