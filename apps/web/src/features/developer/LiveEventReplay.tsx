@@ -1,6 +1,5 @@
 import type { LiveEventReplayCapture, MeshRawEventPage, ObservationCursor, SessionId } from '@monad/protocol';
 
-import { MeshAgentObservationPanel } from '@monad/atoms/live-event-replay';
 import {
   skipToken,
   useGetDeveloperQuery,
@@ -17,6 +16,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
+import { LiveEventReplayPanel } from './LiveEventReplayPanel';
 import {
   formattedReplayPayload,
   historyReplayFrames,
@@ -420,20 +420,12 @@ export function LiveEventReplay({ initialSelection }: LiveEventReplayProps): Rea
         <div className="grid min-h-0 flex-1 grid-cols-3 divide-x">
           <ReplayColumn title={t('web.developerReplay.finalRender')}>
             <div className="min-h-0 flex-1 overflow-auto p-3">
-              <MeshAgentObservationPanel
+              <LiveEventReplayPanel
                 agentName={`${memberOptions.find((item) => item.id === memberId)?.name ?? memberId} replay`}
-                eventsActive
-                key={`${meshSessionId}:${source}:${step}`}
-                stream={{
-                  id: `${meshSessionId}:${source}:replay`,
-                  agentName: memberOptions.find((item) => item.id === memberId)?.name ?? memberId,
-                  provider:
-                    nativeSessions.find((item) => item.id === meshSessionId)?.provider ?? capture?.provider ?? '',
-                  tag: source,
-                  status: 'running',
-                  output: '',
-                  items: projection.cards
-                }}
+                cards={projection.cards}
+                meshSessionId={meshSessionId}
+                provider={nativeSessions.find((item) => item.id === meshSessionId)?.provider ?? capture?.provider ?? ''}
+                source={source}
               />
               <div ref={finalRenderEndRef} />
             </div>

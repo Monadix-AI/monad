@@ -2,8 +2,8 @@ import type { AgentObservationEvent, LiveEventReplayFrame, MeshRawEventPage } fr
 
 import {
   agentObservationCards,
-  builtinMeshAgentObservationAdapters,
-  meshAgentNeutralStreamItems
+  builtinLiveReplayAdapters,
+  projectConvenienceRows
 } from '@monad/atoms/live-event-replay';
 
 export type ReplaySource = 'live' | 'history';
@@ -38,22 +38,23 @@ export function historyReplayFrames(page: MeshRawEventPage): ReplayRawFrame[] {
   }));
 }
 
+// The replay tool exists to debug the PRODUCTION pipeline, so it projects through the exact shared
+// path the daemon's convenience plane uses (`projectConvenienceRows`) — never a divergent fallback.
 export function replayProjection(args: {
   frames: ReplayRawFrame[];
   meshSessionId: string;
   provider: string;
   source: ReplaySource;
 }): { events: AgentObservationEvent[]; cards: ReturnType<typeof agentObservationCards> } {
-  const adapter = builtinMeshAgentObservationAdapters.find((candidate) => candidate.provider === args.provider);
-  if (!adapter?.observation) return { events: [], cards: [] };
-  const stdout = args.frames.filter((frame) => frame.stream !== 'stderr');
-  const events = meshAgentNeutralStreamItems({
+  const adapter = builtinLiveReplayAdapters.find((candidate) => candidate.provider === args.provider);
+  if (!adapter) return { events: [], cards: [] };
+  const events = projectConvenienceRows(adapter, {
     id: args.meshSessionId,
-    provider: args.provider,
-    adapter,
-    output: stdout.map((frame) => replayPayloadText(frame.payload)).join(''),
-    observedAt: stdout.at(-1)?.observedAt,
-    mode: args.source === 'live' ? 'live' : 'events'
+    rows: args.frames.map((frame) => ({
+      ...(frame.stream ? { stream: frame.stream } : {}),
+      payload: replayPayloadText(frame.payload),
+      ...(frame.observedAt ? { observedAt: frame.observedAt } : {})
+    }))
   });
   return { events, cards: agentObservationCards(events, args.provider) };
 }
