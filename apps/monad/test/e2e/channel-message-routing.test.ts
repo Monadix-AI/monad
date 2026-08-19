@@ -321,10 +321,15 @@ async function configureMockMeshAgent(
       'const turnGate = process.env.MONAD_TEST_TURN_GATE;',
       // A gated turn stays open until the test creates the gate file, so "the post returned while the
       // peer was still working" is an ordering fact rather than a bet on how fast the runner is.
-      'const onTurnRelease = (finish) => {',
-      '  if (!turnGate) { setTimeout(finish, turnDelayMs); return; }',
-      '  const poll = () => { if (existsSync(turnGate)) finish(); else setTimeout(poll, 25); };',
-      '  poll();',
+      // Ungated turns keep their original timing exactly: deferring a same-tick completion by even
+      // one tick reorders the mock against the runtime and drops members out of the project.
+      'const onTurnRelease = (finish, sameTick) => {',
+      '  if (turnGate) {',
+      '    const poll = () => { if (existsSync(turnGate)) finish(); else setTimeout(poll, 25); };',
+      '    poll();',
+      '  } else if (turnDelayMs > 0) setTimeout(finish, turnDelayMs);',
+      '  else if (sameTick) finish();',
+      '  else setTimeout(finish, 0);',
       '};',
       'const exitDelayMs = Number(process.env.MONAD_TEST_EXIT_DELAY_MS ?? 0);',
       'const args = process.argv.slice(2).join(" ");',
@@ -349,7 +354,7 @@ async function configureMockMeshAgent(
       '  const send = (value) => process.stdout.write(JSON.stringify(value) + "\\n");',
       '  const complete = (threadId, turnId) => {',
       '    const finish = () => send({ method: "turn/completed", params: { threadId, turn: { id: turnId, items: [] } } });',
-      '    onTurnRelease(finish);',
+      '    onTurnRelease(finish, false);',
       '  };',
       '  process.stdin.on("data", (chunk) => {',
       '    buffer += chunk.toString();',
@@ -387,7 +392,7 @@ async function configureMockMeshAgent(
       '  process.stdout.write(JSON.stringify({ type: "result", subtype: "success", result: "", permission_denials: [] }) + "\\n");',
       '};',
       'process.stdin.on("data", () => {',
-      '  onTurnRelease(completeTurn);',
+      '  onTurnRelease(completeTurn, true);',
       '});',
       '}'
     ].join('\n')
