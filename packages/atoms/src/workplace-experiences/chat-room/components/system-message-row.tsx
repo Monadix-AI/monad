@@ -135,7 +135,7 @@ export function SystemMessageRow({
         detailTooltip ??
         (directMessageText ? (
           <span className="inline-flex min-w-0 items-center gap-2 text-muted-foreground">
-            <span className="min-w-0 truncate">
+            <span className="inline-flex min-w-0 items-center overflow-hidden text-ellipsis whitespace-pre">
               {msg.directMessage && directMessageTemplate ? (
                 directMessageTemplate.split(/([\uE000\uE001])/u).map((part) => {
                   const identity =
