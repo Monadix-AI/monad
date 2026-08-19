@@ -110,7 +110,11 @@ export default defineConfig({
     },
     url: `http://localhost:${port}`,
     reuseExistingServer: !process.env.CI,
-    timeout: 120_000
+    // Piped, because Playwright discards the server's output by default: a cold CI runner that
+    // never reaches `url` otherwise fails with a bare timeout and no reason to act on.
+    stdout: 'pipe',
+    stderr: 'pipe',
+    timeout: 240_000
   },
   projects: [
     {
