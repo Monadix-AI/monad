@@ -263,7 +263,8 @@ function fixturePages(provider: FixtureProvider): FixturePageSet {
   }
   const ranges = [
     [split, records.length],
-    [firstTurnEnd, split],
+    [middleTurnStart, split],
+    [firstTurnEnd, middleTurnStart],
     [0, firstTurnEnd]
   ] as const;
   if (!(middleTurnStart < split && split < middleTurnEnd)) {
@@ -567,10 +568,11 @@ function registerFixturePagingTests(): void {
 
             await runStep('load-newest-turn', async () => {
               await page.goto(`${HARNESS}?mode=fixture&provider=${provider}`);
-              await expect.poll(() => rawRequests.length).toBeGreaterThanOrEqual(1);
-              await expect.poll(async () => fixtureRequestCount(page)).toBeGreaterThan(0);
+              await expect
+                .poll(() => rawRequests.toSorted())
+                .toEqual([pages[0]?.cursor, pages[0]?.cursor, pages[1]?.cursor].toSorted());
+              await expect.poll(async () => fixtureRequestCount(page)).toBeGreaterThanOrEqual(2);
               await waitForRenderFrames(page);
-              expect(rawRequests.every((cursor) => cursor === pages[0]?.cursor)).toBe(true);
               const initial = await renderedFixtureIntegrity(page, {
                 mode: 'newest',
                 splitExpectedMarkerCount,
@@ -662,10 +664,12 @@ function registerFixturePagingTests(): void {
             });
 
             const newestRecordId = `fixture-${provider}-record-${pages[0]?.end ? pages[0].end - 1 : 0}`;
-            await runStep('open-raw-newest-page', async () => {
+            await runStep('open-raw-and-backfill-first-history-page', async () => {
               const beforeRawRequestCount = rawRequests.length;
               await page.getByRole('tab', { name: 'Raw' }).click();
-              await expect.poll(() => rawRequests.length).toBe(beforeRawRequestCount + 1);
+              await expect
+                .poll(() => rawRequests.slice(beforeRawRequestCount).toSorted())
+                .toEqual([pages[0]?.cursor, pages[1]?.cursor].toSorted());
               await expect(page.locator(`[data-raw-card-id="${newestRecordId}"]`)).toHaveCount(1);
             });
 
