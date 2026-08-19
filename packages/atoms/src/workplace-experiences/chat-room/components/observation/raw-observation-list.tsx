@@ -4,6 +4,7 @@ import type { RawDisplayMode, RawFrameRow } from './raw-view.ts';
 import { CheckIcon, Copy01Icon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { uiFontFamily as uiFont } from '@monad/ui/components/AgentAvatar';
+import { AnsiText, hasAnsiSgr, parseAnsiText } from '@monad/ui/components/AnsiText';
 import { Button } from '@monad/ui/components/Button';
 import { CodeBlock } from '@monad/ui/components/CodeBlock';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@monad/ui/components/Tooltip';
@@ -120,11 +121,13 @@ export function rawVirtualListControlProps(args: {
 // One raw frame's card, kept separate from the VirtualList-backed list below: VirtualList only
 // paints rows once mounted client-side, so an SSR test against RawObservationList never sees a
 // row's title/body — this component is what the SSR test suite renders directly instead.
-function RawObservationCard({
+export function RawObservationCard({
   row,
   text,
   displayMode = 'lines'
 }: RawDisplayCard & { displayMode?: RawDisplayMode }): React.ReactElement {
+  const ansiSegments = useMemo(() => parseAnsiText(text, undefined, 'adaptive'), [text]);
+  const hasAnsi = hasAnsiSgr(text);
   return (
     <div
       data-observation-raw-row={row.cursor}
@@ -188,7 +191,7 @@ function RawObservationCard({
           <RawObservationCopyButton text={text} />
         </div>
       </div>
-      {displayMode === 'parsed' ? (
+      {displayMode === 'parsed' && !hasAnsi ? (
         <div
           data-observation-raw-preview={row.identity}
           style={{
@@ -229,7 +232,7 @@ function RawObservationCard({
             width: '100%'
           }}
         >
-          {text}
+          <AnsiText segments={ansiSegments} />
         </pre>
       )}
     </div>

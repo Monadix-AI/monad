@@ -12,6 +12,7 @@ import { HugeiconsIcon } from '@hugeicons/react';
 import { useCancelMcpTaskMutation } from '@monad/client-rtk';
 import { mcpAppCapabilityResponseSchema, mcpAppViewResponseSchema } from '@monad/protocol';
 import { Button, cn, FileIcon, Tool, ToolContent, ToolHeader, ToolInput, ToolOutput } from '@monad/ui';
+import { AnsiText, parseAnsiText } from '@monad/ui/components/AnsiText';
 import { CodeInline } from '@monad/ui/components/CodeBlock';
 import { Markdown } from '@monad/ui/components/Markdown';
 import { memo, useEffect, useMemo, useRef, useState } from 'react';
@@ -237,37 +238,6 @@ interface McpAppDisplay {
   bridgeId?: string;
 }
 
-interface AnsiState {
-  color?: string;
-  bold: boolean;
-  dim: boolean;
-}
-
-interface AnsiSegment {
-  key: string;
-  text: string;
-  className?: string;
-}
-
-const ANSI_COLOR_CLASSES: Record<number, string> = {
-  30: 'text-zinc-300',
-  31: 'text-red-300',
-  32: 'text-emerald-300',
-  33: 'text-yellow-300',
-  34: 'text-info',
-  35: 'text-fuchsia-300',
-  36: 'text-cyan-300',
-  37: 'text-zinc-100',
-  90: 'text-zinc-500',
-  91: 'text-red-200',
-  92: 'text-emerald-200',
-  93: 'text-yellow-200',
-  94: 'text-info',
-  95: 'text-fuchsia-200',
-  96: 'text-cyan-200',
-  97: 'text-foreground'
-};
-
 function parseJsonOutput(raw: string | undefined): unknown {
   if (!raw) return undefined;
   try {
@@ -347,49 +317,6 @@ function parseCodeExecOutput(raw: string | undefined): CodeExecOutput | null {
     exitCode: obj.exitCode,
     backend: typeof obj.backend === 'string' ? obj.backend : undefined
   };
-}
-
-function parseAnsiText(text: string, baseClassName?: string): AnsiSegment[] {
-  const segments: AnsiSegment[] = [];
-  const state: AnsiState = { bold: false, dim: false };
-  const pattern = new RegExp(`${String.fromCharCode(27)}\\[([0-9;]*)m`, 'g');
-  let cursor = 0;
-  let match: RegExpExecArray | null;
-
-  const className = () => cn(baseClassName, state.color, state.bold && 'font-semibold', state.dim && 'opacity-70');
-  const pushText = (value: string, start: number) => {
-    if (value)
-      segments.push({ key: `${start}-${value.length}-${segments.length}`, text: value, className: className() });
-  };
-
-  for (;;) {
-    match = pattern.exec(text);
-    if (!match) break;
-    pushText(text.slice(cursor, match.index), cursor);
-    cursor = pattern.lastIndex;
-    const codes = match[1] ? match[1].split(';').map((code) => Number.parseInt(code, 10)) : [0];
-    for (const code of codes) {
-      if (!Number.isFinite(code) || code === 0) {
-        state.color = undefined;
-        state.bold = false;
-        state.dim = false;
-      } else if (code === 1) {
-        state.bold = true;
-      } else if (code === 2) {
-        state.dim = true;
-      } else if (code === 22) {
-        state.bold = false;
-        state.dim = false;
-      } else if (code === 39) {
-        state.color = undefined;
-      } else if (ANSI_COLOR_CLASSES[code]) {
-        state.color = ANSI_COLOR_CLASSES[code];
-      }
-    }
-  }
-
-  pushText(text.slice(cursor), cursor);
-  return segments;
 }
 
 function parsedJsonObject(raw: string | undefined): unknown {
@@ -1383,21 +1310,6 @@ function ShellCommand({ command }: { command: string }) {
         language="bash"
       />
     </span>
-  );
-}
-
-function AnsiText({ segments }: { segments: AnsiSegment[] }) {
-  return (
-    <>
-      {segments.map((segment) => (
-        <span
-          className={segment.className}
-          key={segment.key}
-        >
-          {segment.text}
-        </span>
-      ))}
-    </>
   );
 }
 
