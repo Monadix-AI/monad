@@ -10,7 +10,7 @@ import type {
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 
 import { hasFlag } from '../shared/adapter-shared.ts';
 import { parseMeshAgentArgumentSupport } from '../shared/argument-support.ts';

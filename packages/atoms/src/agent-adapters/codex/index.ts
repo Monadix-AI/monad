@@ -2,7 +2,7 @@ import type { MeshAgentProviderAdapter } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 
 import { createCodexSettingsImport } from '../settings-import/index.ts';
 import { parseStructuredAuthState } from '../shared/adapter-shared.ts';

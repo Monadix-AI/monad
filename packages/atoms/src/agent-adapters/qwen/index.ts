@@ -11,7 +11,7 @@ import type {
 import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
-import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 
 import { createBasicSettingsImport } from '../settings-import/index.ts';
 import { hasFlag, parseStructuredAuthState, uniqueModelNames } from '../shared/adapter-shared.ts';

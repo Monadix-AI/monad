@@ -13,6 +13,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./agent-observation": "./src/agent-observation.ts",
+    "./bin-probes": "./src/bin-probes.ts",
     "./channel": "./src/channel.ts",
     "./command": "./src/command.ts",
     "./hook": "./src/hook.ts",

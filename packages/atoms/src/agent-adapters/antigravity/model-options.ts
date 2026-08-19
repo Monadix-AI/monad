@@ -2,7 +2,7 @@ import type { MeshAgentView } from '@monad/protocol';
 import type { MeshAgentModelOption } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 
 const MODEL_DISCOVERY_TIMEOUT_MS = 10_000;
 

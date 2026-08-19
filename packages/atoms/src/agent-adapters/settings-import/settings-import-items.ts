@@ -6,7 +6,7 @@ import type {
   MeshAgentSettingsImportPreview,
   MeshAgentView
 } from '@monad/protocol';
-import type { BinProbes } from '@monad/sdk-atom';
+import type { BinProbes } from '@monad/sdk-atom/bin-probes';
 
 import { readdir, stat } from 'node:fs/promises';
 import { join } from 'node:path';

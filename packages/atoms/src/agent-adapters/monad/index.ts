@@ -4,7 +4,7 @@ import type {
   SessionEventRuntimeDefinition
 } from '@monad/sdk-atom';
 
-import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 import { z } from 'zod';
 
 import { agentAdapterIcons } from '../shared/icons.ts';

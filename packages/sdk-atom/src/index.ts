@@ -82,7 +82,6 @@ import type {
   MeshAgentStartPreflight,
   MeshAgentUsageProbe
 } from './agent-adapter.ts';
-import type { BinProbes } from './bin-probes.ts';
 import type {
   ChannelAdapter,
   ChannelAdapterFactory,
@@ -191,7 +190,6 @@ import type {
 import sdkPackage from '../package.json' with { type: 'json' };
 import { MeshAgentError, meshAgentOutputEventSchema } from './agent-adapter.ts';
 import { canonicalJson, contentHash, toFallbackAgentObservationEvent } from './agent-observation.ts';
-import { defaultBinProbes, resolveBinary } from './bin-probes.ts';
 import { assertChannelInbound, createChannelTestHarness, defineChannel, parseChannelManifest } from './channel.ts';
 import { defineCommand } from './command.ts';
 import { defineProvider } from './model.ts';
@@ -210,7 +208,6 @@ export type {
   AdapterMigration,
   BeliefExplanation,
   BeliefMatch,
-  BinProbes,
   ChannelAdapter,
   ChannelAdapterFactory,
   ChannelAtomConfig,
@@ -381,7 +378,6 @@ export {
   configureSandboxCredential,
   contentHash,
   createChannelTestHarness,
-  defaultBinProbes,
   defineChannel,
   defineCommand,
   defineLocalLauncher,
@@ -392,7 +388,6 @@ export {
   meshAgentOutputEventSchema,
   noneLauncher,
   parseChannelManifest,
-  resolveBinary,
   sandboxBackendRefSchema,
   sandboxCredential,
   sandboxLauncherDescriptorSchema,

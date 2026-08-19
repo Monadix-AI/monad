@@ -8,7 +8,7 @@ import type {
 import type { MeshAgentLaunchSpec, MeshAgentProviderAdapter } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 
 import { hasFlag, parseStructuredAuthState } from '../shared/adapter-shared.ts';
 import { parseMeshAgentArgumentSupport } from '../shared/argument-support.ts';

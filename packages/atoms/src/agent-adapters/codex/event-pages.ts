@@ -4,7 +4,7 @@ import type {
   MeshAgentProviderEventPageRequestContext
 } from '@monad/sdk-atom';
 
-import { resolveBinary } from '@monad/sdk-atom';
+import { resolveBinary } from '@monad/sdk-atom/bin-probes';
 
 import { createProjectedEventSource } from '../shared/events/event-source.ts';
 import { jsonRpcRequest } from '../shared/transports/jsonrpc.ts';

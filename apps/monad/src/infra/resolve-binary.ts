@@ -2,6 +2,6 @@
 // Re-exported here so existing daemon imports (obscura, delegation presets, mesh-agent host) keep
 // resolving.
 
-export type { BinProbes } from '@monad/sdk-atom';
+export type { BinProbes } from '@monad/sdk-atom/bin-probes';
 
-export { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+export { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';

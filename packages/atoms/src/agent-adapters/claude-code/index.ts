@@ -18,7 +18,8 @@ import type {
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { getSessionMessages } from '@anthropic-ai/claude-agent-sdk';
-import { defaultBinProbes, MeshAgentError, resolveBinary } from '@monad/sdk-atom';
+import { MeshAgentError } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 
 import { createClaudeCodeSettingsImport } from '../settings-import/index.ts';
 import {

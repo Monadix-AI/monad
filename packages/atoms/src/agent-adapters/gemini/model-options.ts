@@ -2,7 +2,7 @@ import type { MeshAgentView } from '@monad/protocol';
 import type { MeshAgentModelOption } from '@monad/sdk-atom';
 
 import { homedir } from 'node:os';
-import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom';
+import { defaultBinProbes, resolveBinary } from '@monad/sdk-atom/bin-probes';
 import { z } from 'zod';
 
 export const GEMINI_SUPPORTED_MODEL_OPTIONS: MeshAgentModelOption[] = [
