@@ -15,6 +15,7 @@ interface WorkflowStep {
 
 interface WorkflowJob {
   'continue-on-error'?: boolean | string;
+  'timeout-minutes'?: number | string;
   if?: string;
   needs?: string | string[];
   outputs?: Record<string, string>;
@@ -389,4 +390,22 @@ test('the Playwright browser cache survives an unrelated dependency bump', async
     resolvesFromTheInstalledPackage: true,
     resolvesWhereTheDependencyLives: 'apps/web'
   });
+});
+
+test('only the Windows unit leg is exempt from blocking, and it gives up before a release waits 30 minutes', async () => {
+  const workflow = (await workflows()).find(({ file }) => file === 'ci.yml')?.workflow;
+  const softened = Object.entries(workflow?.jobs ?? {})
+    .filter(([, job]) => job['continue-on-error'] !== undefined)
+    .map(([name, job]) => ({ job: name, when: job['continue-on-error'], timeout: job['timeout-minutes'] }));
+
+  // The exemption is deliberate and narrow: the Windows unit leg hangs intermittently in
+  // apps/monad/test/unit/sessions. Pinned here so it stays one named leg with a shorter deadline
+  // instead of quietly spreading to the rest of the matrix.
+  expect(softened).toEqual([
+    {
+      job: 'unit',
+      when: '$'.concat("{{ matrix.os == 'windows-latest' }}"),
+      timeout: '$'.concat("{{ matrix.os == 'windows-latest' && 12 || 30 }}")
+    }
+  ]);
 });
