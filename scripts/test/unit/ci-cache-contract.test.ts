@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 
 interface WorkflowStep {
   'continue-on-error'?: boolean | string;
+  'timeout-minutes'?: number | string;
   'working-directory'?: string;
   if?: string;
   name?: string;
@@ -392,20 +393,23 @@ test('the Playwright browser cache survives an unrelated dependency bump', async
   });
 });
 
-test('only the Windows unit leg is exempt from blocking, and it gives up before a release waits 30 minutes', async () => {
+test('only the Windows unit leg is exempt from blocking, and its deadline can report a hang', async () => {
   const workflow = (await workflows()).find(({ file }) => file === 'ci.yml')?.workflow;
   const softened = Object.entries(workflow?.jobs ?? {})
     .filter(([, job]) => job['continue-on-error'] !== undefined)
-    .map(([name, job]) => ({ job: name, when: job['continue-on-error'], timeout: job['timeout-minutes'] }));
+    .map(([name, job]) => ({ job: name, when: job['continue-on-error'] }));
 
   // The exemption is deliberate and narrow: the Windows unit leg hangs intermittently in
-  // apps/monad/test/unit/sessions. Pinned here so it stays one named leg with a shorter deadline
-  // instead of quietly spreading to the rest of the matrix.
-  expect(softened).toEqual([
-    {
-      job: 'unit',
-      when: '$'.concat("{{ matrix.os == 'windows-latest' }}"),
-      timeout: '$'.concat("{{ matrix.os == 'windows-latest' && 12 || 30 }}")
-    }
-  ]);
+  // apps/monad/test/unit/sessions. Pinned so it stays one named leg instead of spreading across
+  // the matrix, and so the deadline stays on the step: a job-level timeout cancels rather than
+  // fails, and continue-on-error absorbs a failure but not a cancellation.
+  expect({
+    softened,
+    testStepTimeout: workflow?.jobs?.unit?.steps?.find((step) => step.name === 'Test workspace unit')?.[
+      'timeout-minutes'
+    ]
+  }).toEqual({
+    softened: [{ job: 'unit', when: '$'.concat("{{ matrix.os == 'windows-latest' }}") }],
+    testStepTimeout: 10
+  });
 });
