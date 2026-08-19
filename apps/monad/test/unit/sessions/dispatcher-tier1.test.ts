@@ -383,7 +383,7 @@ test('project deletion applies provider deletion before removing project session
   }
 });
 
-test('project deletion preserves local storage when provider deletion fails', async () => {
+test('project deletion removes local storage when provider deletion fails', async () => {
   const store = createStore();
   const d = buildHandlers(mockModel(['hi']), undefined, { store });
   const adapter = getMeshAgentProviderAdapter('codex');
@@ -417,10 +417,57 @@ test('project deletion preserves local storage when provider deletion fails', as
       exitedAt: now
     });
 
-    await expect(d.session.deleteProject({ id: projectId })).rejects.toThrow('provider delete failed');
-    expect({ project: store.getWorkplaceProject(projectId)?.id, session: store.getSession(sessionId)?.id }).toEqual({
-      project: projectId,
-      session: sessionId
+    await d.session.deleteProject({ id: projectId });
+    expect({ project: store.getWorkplaceProject(projectId), session: store.getSession(sessionId) }).toEqual({
+      project: null,
+      session: null
+    });
+  } finally {
+    adapter.deleteSession = originalDeleteSession;
+    store.close();
+  }
+});
+
+test('stopped native session deletion removes the Monad session when provider deletion fails', async () => {
+  const store = createStore();
+  const d = buildHandlers(mockModel(['hi']), undefined, { store, sessionDeleteGraceMs: 1 });
+  const adapter = getMeshAgentProviderAdapter('codex');
+  const originalDeleteSession = adapter.deleteSession;
+  adapter.deleteSession = async () => {
+    throw new Error('provider delete failed');
+  };
+
+  try {
+    const { sessionId } = await d.session.create({ title: 'stopped native session' });
+    const now = '2026-08-19T00:00:00.000Z';
+    const meshSessionId = 'mesh_stoppeddelete';
+    store.upsertMeshSession({
+      id: meshSessionId,
+      transcriptTargetId: sessionId,
+      agentName: 'pmem_codex_stopped',
+      provider: 'codex',
+      workingPath: '/tmp/stopped-native-session',
+      runtimeRole: 'interactive',
+      agentRuntimeId: null,
+      agentRuntimeTokenHash: null,
+      lastDeliveredSeq: 0,
+      lastVisibleSeq: 0,
+      state: 'stopped',
+      pid: null,
+      providerSessionRef: 'thread_stopped_delete_failure',
+      outputSnapshot: '',
+      exitCode: 0,
+      startedAt: now,
+      updatedAt: now,
+      exitedAt: now
+    });
+
+    await d.session.delete({ id: sessionId });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect({ meshSession: store.getMeshSession(meshSessionId), session: store.getSession(sessionId) }).toEqual({
+      meshSession: null,
+      session: null
     });
   } finally {
     adapter.deleteSession = originalDeleteSession;

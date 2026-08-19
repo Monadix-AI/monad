@@ -631,9 +631,18 @@ export class MeshAgentHost {
   }
 
   async deleteSession(sessionId: MeshAgentTargetId): Promise<void> {
-    const handled = await this.applyLiveProviderSessionLifecycle(sessionId, 'delete');
+    let handled = new Set<string>();
+    try {
+      handled = await this.applyLiveProviderSessionLifecycle(sessionId, 'delete');
+    } catch (err) {
+      this.log.warn({ err, sessionId }, 'live provider session deletion failed');
+    }
     await this.stopSession(sessionId);
-    await this.applyProviderSessionLifecycle(sessionId, 'delete', handled);
+    try {
+      await this.applyProviderSessionLifecycle(sessionId, 'delete', handled);
+    } catch (err) {
+      this.log.warn({ err, sessionId }, 'provider session deletion failed');
+    }
   }
 
   async stopAll(): Promise<void> {

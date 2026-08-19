@@ -1,9 +1,11 @@
 import { afterAll, beforeAll, describe, expect, test } from 'bun:test';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { httpErrorSchema } from '@monad/protocol';
+import { createSessionResponseSchema, httpErrorSchema } from '@monad/protocol';
 
 import { registerMcpAppBridge, revokeMcpAppBridgesForServer } from '#/capabilities/tools/registry/mcp/app-bridge.ts';
+import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
+import { createStore } from '#/store/db/index.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
 
@@ -12,7 +14,8 @@ import { buildHandlers, mockModel } from '../../helpers.ts';
 // all reach the daemon over whichever transport the client dials, so we bind one app to both and
 // assert the endpoints those commands hit return the same thing on each.
 
-const app = createHttpTransport(buildHandlers(mockModel(['hello'])));
+const store = createStore();
+const app = createHttpTransport(buildHandlers(mockModel(['hello']), undefined, { sessionDeleteGraceMs: 1, store }));
 const handler = (req: Request) => app.handle(req);
 const sockPath = join(tmpdir(), `monad-transport-${process.pid}.sock`);
 const EXTERNAL_DEPENDENCY_ROUTES = new Set([
@@ -34,6 +37,7 @@ beforeAll(() => {
 afterAll(() => {
   tcp.stop(true);
   uds.stop(true);
+  store.close();
 });
 
 /** Fetch a path over TCP loopback and over the Unix socket; return both JSON bodies + statuses. */
@@ -177,5 +181,72 @@ describe('transport parity (TCP loopback ⇆ Unix socket)', () => {
     expect(u.status).toBe(200);
     expect(Array.isArray((t.body as { sessions: unknown[] }).sessions)).toBe(true);
     expect(Array.isArray((u.body as { sessions: unknown[] }).sessions)).toBe(true);
+  });
+
+  test('stopped native session deletion survives provider failure over both transports', async () => {
+    const adapter = getMeshAgentProviderAdapter('codex');
+    const originalDeleteSession = adapter.deleteSession;
+    adapter.deleteSession = async () => {
+      throw new Error('provider delete failed');
+    };
+
+    try {
+      for (const transport of [
+        {
+          name: 'tcp',
+          fetch: (path: string, init?: RequestInit) => fetch(`http://127.0.0.1:${tcp.port}${path}`, init)
+        },
+        {
+          name: 'unix',
+          fetch: (path: string, init?: RequestInit) => fetch(`http://localhost${path}`, { ...init, unix: sockPath })
+        }
+      ]) {
+        const created = await transport.fetch('/v1/sessions', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ title: `stopped native session over ${transport.name}` })
+        });
+        const { sessionId } = createSessionResponseSchema.parse(await created.json());
+        const now = '2026-08-19T00:00:00.000Z';
+        const meshSessionId = `mesh_transport_${transport.name}`;
+        store.upsertMeshSession({
+          id: meshSessionId,
+          transcriptTargetId: sessionId,
+          agentName: `pmem_codex_${transport.name}`,
+          provider: 'codex',
+          workingPath: `/tmp/stopped-native-session-${transport.name}`,
+          runtimeRole: 'interactive',
+          agentRuntimeId: null,
+          agentRuntimeTokenHash: null,
+          lastDeliveredSeq: 0,
+          lastVisibleSeq: 0,
+          state: 'stopped',
+          pid: null,
+          providerSessionRef: `thread_transport_delete_failure_${transport.name}`,
+          outputSnapshot: '',
+          exitCode: 0,
+          startedAt: now,
+          updatedAt: now,
+          exitedAt: now
+        });
+
+        const deleted = await transport.fetch(`/v1/sessions/${sessionId}`, { method: 'DELETE' });
+        expect({ transport: transport.name, status: deleted.status, body: await deleted.json() }).toEqual({
+          transport: transport.name,
+          status: 200,
+          body: { deleted: true }
+        });
+        await new Promise((resolve) => setTimeout(resolve, 20));
+        const fetched = await transport.fetch(`/v1/sessions/${sessionId}`);
+        expect({
+          transport: transport.name,
+          status: fetched.status,
+          meshSession: store.getMeshSession(meshSessionId),
+          session: store.getSession(sessionId)
+        }).toEqual({ transport: transport.name, status: 404, meshSession: null, session: null });
+      }
+    } finally {
+      adapter.deleteSession = originalDeleteSession;
+    }
   });
 });
