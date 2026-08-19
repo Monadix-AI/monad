@@ -284,6 +284,7 @@ async function configureMockMeshAgent(
     provider?: 'claude-code' | 'codex';
     authState?: 'authenticated' | 'unauthenticated' | 'unknown';
     turnDelayMs?: number;
+    turnGate?: string;
     exitDelayMs?: number;
   } = {}
 ): Promise<{ argsLog: string; envLog: string; lifecycleLog: string; stdinLog: string }> {
@@ -309,7 +310,7 @@ async function configureMockMeshAgent(
     script,
     [
       '#!/usr/bin/env bun',
-      'import { appendFileSync } from "node:fs";',
+      'import { appendFileSync, existsSync } from "node:fs";',
       'const argsLog = process.env.MONAD_TEST_ARGS_LOG;',
       'const envLog = process.env.MONAD_TEST_ENV_LOG;',
       'const stdinLog = process.env.MONAD_TEST_STDIN_LOG;',
@@ -317,6 +318,14 @@ async function configureMockMeshAgent(
       'const authState = process.env.MONAD_TEST_AUTH_STATE;',
       'const provider = process.env.MONAD_TEST_PROVIDER;',
       'const turnDelayMs = Number(process.env.MONAD_TEST_TURN_DELAY_MS ?? 0);',
+      'const turnGate = process.env.MONAD_TEST_TURN_GATE;',
+      // A gated turn stays open until the test creates the gate file, so "the post returned while the
+      // peer was still working" is an ordering fact rather than a bet on how fast the runner is.
+      'const onTurnRelease = (finish) => {',
+      '  if (!turnGate) { setTimeout(finish, turnDelayMs); return; }',
+      '  const poll = () => { if (existsSync(turnGate)) finish(); else setTimeout(poll, 25); };',
+      '  poll();',
+      '};',
       'const exitDelayMs = Number(process.env.MONAD_TEST_EXIT_DELAY_MS ?? 0);',
       'const args = process.argv.slice(2).join(" ");',
       'if (args === "login status" || args === "auth status" || args === "auth status --json") {',
@@ -340,8 +349,7 @@ async function configureMockMeshAgent(
       '  const send = (value) => process.stdout.write(JSON.stringify(value) + "\\n");',
       '  const complete = (threadId, turnId) => {',
       '    const finish = () => send({ method: "turn/completed", params: { threadId, turn: { id: turnId, items: [] } } });',
-      '    if (turnDelayMs > 0) setTimeout(finish, turnDelayMs);',
-      '    else setTimeout(finish, 0);',
+      '    onTurnRelease(finish);',
       '  };',
       '  process.stdin.on("data", (chunk) => {',
       '    buffer += chunk.toString();',
@@ -379,8 +387,7 @@ async function configureMockMeshAgent(
       '  process.stdout.write(JSON.stringify({ type: "result", subtype: "success", result: "", permission_denials: [] }) + "\\n");',
       '};',
       'process.stdin.on("data", () => {',
-      '  if (turnDelayMs > 0) setTimeout(completeTurn, turnDelayMs);',
-      '  else completeTurn();',
+      '  onTurnRelease(completeTurn);',
       '});',
       '}'
     ].join('\n')
@@ -403,6 +410,7 @@ async function configureMockMeshAgent(
           MONAD_TEST_AUTH_STATE: opts.authState ?? 'authenticated',
           MONAD_TEST_PROVIDER: provider,
           MONAD_TEST_TURN_DELAY_MS: String(opts.turnDelayMs ?? 0),
+          ...(opts.turnGate ? { MONAD_TEST_TURN_GATE: opts.turnGate } : {}),
           MONAD_TEST_EXIT_DELAY_MS: String(opts.exitDelayMs ?? 0)
         },
         enabled: true,
@@ -1168,9 +1176,13 @@ for (const kind of TRANSPORTS) {
 
       await t.fetch(`/v1/mesh/sessions/${claudeSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
       await t.fetch(`/v1/mesh/sessions/${reviewerSession.id}/stop?transcriptTargetId=${sessionId}`, json('POST'));
+      // The peer's turn must still be running when the post returns. A timer cannot express that:
+      // any delay long enough to survive a slow runner also outlives the 5s waits later in this
+      // test. The gate holds the turn open until this test releases it, on any machine speed.
+      const turnGate = join(dir, 'claude-turn-gate');
       const { lifecycleLog: delayedClaudeLifecycleLog } = await configureMockMeshAgent(t, dir, {
         agentName: 'claude',
-        turnDelayMs: 3_000
+        turnGate
       });
       const claudeInputBeforePost = await readLogIfExists(claudeStdinLog);
       const claudeLifecycleBeforePost = await readLogIfExists(delayedClaudeLifecycleLog);
@@ -1216,6 +1228,7 @@ for (const kind of TRANSPORTS) {
         }
       });
       expect(await readLogIfExists(delayedClaudeLifecycleLog)).toBe(claudeLifecycleBeforePost);
+      await writeFile(turnGate, '');
 
       const claudeInput = await waitForFile(claudeStdinLog, 'please inspect this');
       expect(
