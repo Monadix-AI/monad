@@ -286,9 +286,18 @@ jobs:
             -o "$(dirname "$(which bun)")/monad-sandbox-launcher" \
             apps/monad/native/sandbox-launcher/main.c
 
+      # apt stalled 34.5 minutes on azure.archive.ubuntu.com here and burned the job timeout, the
+      # same mirror that hung the browser install. Bound each attempt rather than hand this leg's
+      # deadline to a mirror.
       - name: Install MinGW (Windows sandbox launcher cross-compile)
         if: runner.os == 'Linux'
-        run: sudo apt-get install -y --no-install-recommends gcc-mingw-w64-x86-64
+        run: |
+          for attempt in 1 2 3; do
+            sudo timeout 240 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=15 \
+              install -y --no-install-recommends gcc-mingw-w64-x86-64 && exit 0
+            echo "::warning::apt attempt ${attempt} did not finish within its deadline"
+          done
+          exit 1
 
       - name: Build Windows sandbox launchers (Low IL + AppContainer, x64 spike)
         if: runner.os == 'Linux'
