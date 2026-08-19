@@ -30,8 +30,11 @@ export function resolvePlaywrightWebPort(
   return parsePort(env.WEB_PORT) ?? parsePort(readEnvValue(envPath, 'WEB_PORT')) ?? DEFAULT_WEB_PORT;
 }
 
-export function resolvePlaywrightWebServerCommand(port: number): string {
-  return `bun ./node_modules/vite/bin/vite.js --host 0.0.0.0 --port ${port}`;
+// The runtime is named by absolute path because the test step runs under `bunx --bun turbo`, which
+// puts a node-shim directory ahead of Bun on PATH. A bare `bun` there resolves to the shim, and the
+// server never reaches the port Playwright is polling.
+export function resolvePlaywrightWebServerCommand(port: number, runtime = process.execPath): string {
+  return `${runtime} ./node_modules/vite/bin/vite.js --host 0.0.0.0 --port ${port}`;
 }
 
 export function resolvePlaywrightDaemonPort(

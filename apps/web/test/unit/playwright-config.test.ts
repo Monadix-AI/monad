@@ -78,10 +78,14 @@ test('resolvePlaywrightWebPort falls back to the Playwright default', () => {
   expect(resolvePlaywrightWebPort({}, '/no/such/env.local')).toBe(3201);
 });
 
-test('Playwright starts the installed Vite entry without package-runner resolution', () => {
-  expect(resolvePlaywrightWebServerCommand(3729)).toBe(
-    'bun ./node_modules/vite/bin/vite.js --host 0.0.0.0 --port 3729'
+test('Playwright starts the installed Vite entry through an absolute runtime path', () => {
+  expect(resolvePlaywrightWebServerCommand(3729, '/opt/bun/bin/bun')).toBe(
+    '/opt/bun/bin/bun ./node_modules/vite/bin/vite.js --host 0.0.0.0 --port 3729'
   );
+});
+
+test('the resolved web server command defaults to the runtime running Playwright', () => {
+  expect(resolvePlaywrightWebServerCommand(3729).startsWith(`${process.execPath} `)).toBe(true);
 });
 
 test('resolvePlaywrightWorkers keeps local runs fast and limits CI runner contention', () => {

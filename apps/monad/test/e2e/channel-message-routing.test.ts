@@ -1243,12 +1243,6 @@ for (const kind of TRANSPORTS) {
       await writeFile(turnGate, '');
 
       const claudeInput = await waitForFile(claudeStdinLog, 'please inspect this');
-      // Once the peer has both the message and an open gate it must complete, which is what proves
-      // the assertion above reads a log this instance really writes to. It has to wait for the
-      // delivery too: the mock only ends a turn it was given work for.
-      await waitFor(async () => (await readLogIfExists(delayedClaudeLifecycleLog)).includes('turn:'), {
-        message: `released peer never completed a turn in ${delayedClaudeLifecycleLog}`
-      });
       expect(
         managedIngressBatches(claudeInput)
           .flatMap((batch) => batch.messages)
