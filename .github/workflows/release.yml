@@ -129,11 +129,14 @@ jobs:
       - name: Install Linux and Windows cross-compilers
         if: runner.os == 'Linux'
         run: |
-          # Bounded and retried: apt has stalled for tens of minutes on azure.archive.ubuntu.com,
-          # long enough to burn a job timeout and take the release build with it.
+          # GitHub's default azure.archive.ubuntu.com mirror stalled for tens of minutes today and
+          # exhausted every bounded retry. Point apt at the canonical archive first; the retry below
+          # stays as a backstop.
+          sudo sed -i 's|https\?://azure.archive.ubuntu.com/ubuntu|http://archive.ubuntu.com/ubuntu|g' \
+            /etc/apt/sources.list /etc/apt/sources.list.d/*.sources /etc/apt/sources.list.d/*.list 2>/dev/null || true
           for attempt in 1 2 3; do
-            sudo timeout 120 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=15 update -qq \
-              && sudo timeout 300 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=15 \
+            sudo timeout 180 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=15 update \
+              && sudo timeout 420 apt-get -o Acquire::Retries=3 -o Acquire::http::Timeout=15 \
                 install -y --no-install-recommends binutils binutils-aarch64-linux-gnu gcc gcc-aarch64-linux-gnu libc6-dev-arm64-cross gcc-mingw-w64-x86-64 \
               && break
             echo "::warning::apt attempt ${attempt} did not finish within its deadline"
