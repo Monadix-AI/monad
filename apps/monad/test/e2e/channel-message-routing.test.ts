@@ -1241,13 +1241,14 @@ for (const kind of TRANSPORTS) {
         (await readLogIfExists(delayedClaudeLifecycleLog)).split('\n').filter((line) => line.startsWith('turn:'))
       ).toEqual([]);
       await writeFile(turnGate, '');
-      // Releasing the gate must produce the completion the assertion above denied, which is what
-      // proves that assertion reads a log this instance actually writes to.
+
+      const claudeInput = await waitForFile(claudeStdinLog, 'please inspect this');
+      // Once the peer has both the message and an open gate it must complete, which is what proves
+      // the assertion above reads a log this instance really writes to. It has to wait for the
+      // delivery too: the mock only ends a turn it was given work for.
       await waitFor(async () => (await readLogIfExists(delayedClaudeLifecycleLog)).includes('turn:'), {
         message: `released peer never completed a turn in ${delayedClaudeLifecycleLog}`
       });
-
-      const claudeInput = await waitForFile(claudeStdinLog, 'please inspect this');
       expect(
         managedIngressBatches(claudeInput)
           .flatMap((batch) => batch.messages)
