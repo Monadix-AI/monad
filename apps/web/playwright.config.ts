@@ -1,4 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { defineConfig, devices } from '@playwright/test';
 
@@ -30,10 +31,24 @@ export function resolvePlaywrightWebPort(
   return parsePort(env.WEB_PORT) ?? parsePort(readEnvValue(envPath, 'WEB_PORT')) ?? DEFAULT_WEB_PORT;
 }
 
-// The runtime is named by absolute path because the test step runs under `bunx --bun turbo`, which
-// puts a node-shim directory ahead of Bun on PATH. A bare `bun` there resolves to the shim, and the
-// server never reaches the port Playwright is polling.
-export function resolvePlaywrightWebServerCommand(port: number, runtime = process.execPath): string {
+// `bunx --bun turbo` runs its tasks through a generated `bun-node-*` shim, so both PATH and
+// process.execPath point at it there. Vite launched by that shim produced no output and never
+// answered the port, so the server has to be started by a real Bun. Same exclusion the mesh e2e
+// fixture applies when it picks a Bun to compile with.
+export function resolvePlaywrightRuntime(
+  candidates: Array<string | undefined | null> = [
+    process.execPath,
+    ...(process.env.PATH ?? '').split(delimiter).flatMap((dir) => (dir ? [join(dir, 'bun')] : []))
+  ],
+  exists: (path: string) => boolean = existsSync
+): string {
+  const runtime = candidates.find(
+    (candidate): candidate is string => !!candidate && !candidate.includes('bun-node-') && exists(candidate)
+  );
+  return runtime ?? 'bun';
+}
+
+export function resolvePlaywrightWebServerCommand(port: number, runtime = resolvePlaywrightRuntime()): string {
   return `${runtime} ./node_modules/vite/bin/vite.js --host 0.0.0.0 --port ${port}`;
 }
 

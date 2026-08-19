@@ -7,6 +7,7 @@ import {
   resolvePlaywrightBrowserChannel,
   resolvePlaywrightDaemonPort,
   resolvePlaywrightRetryPolicy,
+  resolvePlaywrightRuntime,
   resolvePlaywrightShard,
   resolvePlaywrightTrace,
   resolvePlaywrightWebPort,
@@ -84,8 +85,16 @@ test('Playwright starts the installed Vite entry through an absolute runtime pat
   );
 });
 
-test('the resolved web server command defaults to the runtime running Playwright', () => {
-  expect(resolvePlaywrightWebServerCommand(3729).startsWith(`${process.execPath} `)).toBe(true);
+test('the resolved runtime skips the bun-node shim that turbo runs tasks through', () => {
+  expect(resolvePlaywrightRuntime(['/tmp/bun-node-0d9b296af/bun', '/home/runner/.bun/bin/bun'], () => true)).toBe(
+    '/home/runner/.bun/bin/bun'
+  );
+});
+
+test('the resolved runtime falls back to PATH lookup when no candidate exists on disk', () => {
+  expect(
+    resolvePlaywrightRuntime(['/tmp/bun-node-x/bun', '/nowhere/bun'], (path) => path === '/tmp/bun-node-x/bun')
+  ).toBe('bun');
 });
 
 test('resolvePlaywrightWorkers keeps local runs fast and limits CI runner contention', () => {
