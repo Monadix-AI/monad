@@ -350,6 +350,11 @@ jobs:
     if: github.event_name == 'merge_group' || inputs.full
     runs-on: ubuntu-latest
     timeout-minutes: 25
+    # Playwright's webServer wait times out intermittently on these runners with no server output,
+    # one shard passing while its twin fails in the same run. Until that is found the leg reports
+    # without blocking a release. Deliberate coverage loss: a real browser regression stops failing
+    # the gate, so read this leg before shipping anything that touches apps/web.
+    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -408,6 +413,9 @@ jobs:
         working-directory: apps/web
 
       - name: Test web E2E
+        # Deadline on the step, not the job: a job-level timeout cancels, and continue-on-error
+        # absorbs a failure but not a cancellation.
+        timeout-minutes: 20
         env:
           PLAYWRIGHT_SHARD: ${{ matrix.shard }}/2
         run: bunx --bun turbo run test:e2e --filter=@monad/web --output-logs=errors-only
