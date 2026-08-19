@@ -4,8 +4,28 @@ import {
   formattedReplayPayload,
   historyReplayFrames,
   liveReplayFrames,
-  replayProjection
+  replayProjection,
+  replaySource,
+  selectReplayOption
 } from '#/features/developer/live-event-replay-model.ts';
+
+test('replay route values preserve deep-link selections until options load', () => {
+  expect({
+    live: replaySource('live'),
+    history: replaySource('history'),
+    invalid: replaySource('snapshot'),
+    pending: selectReplayOption('ses_requested', []),
+    available: selectReplayOption('ses_requested', ['ses_other', 'ses_requested']),
+    fallback: selectReplayOption('ses_missing', ['ses_first', 'ses_second'])
+  }).toEqual({
+    live: 'live',
+    history: 'history',
+    invalid: undefined,
+    pending: 'ses_requested',
+    available: 'ses_requested',
+    fallback: 'ses_first'
+  });
+});
 
 test('live replay preserves packet boundaries while projecting provider records', () => {
   const frames = liveReplayFrames(

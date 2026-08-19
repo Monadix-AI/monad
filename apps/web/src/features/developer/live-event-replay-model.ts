@@ -8,6 +8,15 @@ import {
 
 export type ReplaySource = 'live' | 'history';
 
+export function replaySource(value: string): ReplaySource | undefined {
+  return value === 'live' || value === 'history' ? value : undefined;
+}
+
+export function selectReplayOption(current: string, options: string[]): string {
+  if (options.length === 0) return current;
+  return options.includes(current) ? current : (options[0] ?? '');
+}
+
 export interface ReplayRawFrame {
   identity: string;
   seq: number | string;

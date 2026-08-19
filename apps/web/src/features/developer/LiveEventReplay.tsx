@@ -13,7 +13,7 @@ import {
 } from '@monad/client-rtk';
 import { observationCursorSchema } from '@monad/protocol';
 import { Button, CodeBlock } from '@monad/ui';
-import { Link } from '@tanstack/react-router';
+import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { useT } from '#/components/I18nProvider';
@@ -23,24 +23,35 @@ import {
   liveReplayFrames,
   type ReplayRawFrame,
   type ReplaySource,
-  replayProjection
+  replayProjection,
+  selectReplayOption
 } from './live-event-replay-model';
 
 const LIVE_PAGE_LIMIT = 5_000;
 
-export function LiveEventReplay(): React.ReactElement {
+export interface LiveEventReplayProps {
+  initialSelection?: {
+    projectId: string;
+    sessionId: string;
+    memberId: string;
+    source: ReplaySource;
+  };
+}
+
+export function LiveEventReplay({ initialSelection }: LiveEventReplayProps): React.ReactElement {
   const t = useT();
+  const navigate = useNavigate();
   const developer = useGetDeveloperQuery(undefined, { refetchOnMountOrArgChange: true });
   const capturesQuery = useListLiveEventReplayCapturesQuery(undefined, {
     skip: developer.data?.developerMode !== true
   });
   const captures = capturesQuery.data?.captures ?? [];
-  const [projectId, setProjectId] = useState('');
-  const [sessionId, setSessionId] = useState('');
-  const [memberId, setMemberId] = useState('');
+  const [projectId, setProjectId] = useState(initialSelection?.projectId ?? '');
+  const [sessionId, setSessionId] = useState(initialSelection?.sessionId ?? '');
+  const [memberId, setMemberId] = useState(initialSelection?.memberId ?? '');
   const [meshSessionId, setMeshSessionId] = useState('');
   const [observationEpoch, setObservationEpoch] = useState('');
-  const [source, setSource] = useState<ReplaySource>('live');
+  const [source, setSource] = useState<ReplaySource>(initialSelection?.source ?? 'live');
   const [step, setStep] = useState(0);
   const [historyFrames, setHistoryFrames] = useState<ReplayRawFrame[]>([]);
   const [liveExtra, setLiveExtra] = useState<{ captureKey: string; frames: ReplayRawFrame[] }>({
@@ -114,6 +125,18 @@ export function LiveEventReplay(): React.ReactElement {
   useEffect(() => setMemberId((current) => selectOption(current, memberOptions)), [memberOptions]);
   useEffect(() => setMeshSessionId((current) => selectOption(current, nativeSessions)), [nativeSessions]);
   useEffect(() => setObservationEpoch((current) => selectAvailable(current, epochs, 'observationEpoch')), [epochs]);
+  const routeSelectionIsAvailable =
+    projects.some((item) => item.projectId === projectId) &&
+    sessions.some((item) => item.sessionId === sessionId) &&
+    memberOptions.some((item) => item.id === memberId);
+  useEffect(() => {
+    if (!routeSelectionIsAvailable) return;
+    void navigate({
+      params: { projectId, sessionId, memberId, source },
+      replace: true,
+      to: '/developer/live-event-replay/$projectId/$sessionId/$memberId/$source'
+    });
+  }, [memberId, navigate, projectId, routeSelectionIsAvailable, sessionId, source]);
 
   const liveQuery = useGetLiveEventReplayFramesQuery(
     capture
@@ -475,11 +498,17 @@ function selectAvailable<K extends keyof LiveEventReplayCapture>(
   items: LiveEventReplayCapture[],
   key: K
 ) {
-  return items.some((item) => item[key] === current) ? current : String(items[0]?.[key] ?? '');
+  return selectReplayOption(
+    current,
+    items.map((item) => String(item[key]))
+  );
 }
 
 function selectOption(current: string, items: Array<{ id: string }>): string {
-  return items.some((item) => item.id === current) ? current : (items[0]?.id ?? '');
+  return selectReplayOption(
+    current,
+    items.map((item) => item.id)
+  );
 }
 
 function mergeFrames(older: ReplayRawFrame[], current: ReplayRawFrame[]): ReplayRawFrame[] {
