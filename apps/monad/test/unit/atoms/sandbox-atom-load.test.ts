@@ -48,8 +48,8 @@ test('the power pack registers only contributed heavy launchers through the gate
   expect(got.find((launcher) => launcher.kind === 'e2b')?.descriptor.settings?.fields[0]?.type).toBe('secret');
   // Explicit backend selects the registered heavy launcher even when the light default differs.
   expect(selectSandboxLauncher('darwin', 'e2b').kind).toBe('e2b');
-  expect(experiences).toHaveLength(1);
-  expect(experiences[0]).toMatchObject({
+  expect(experiences.map((experience) => experience.id).sort()).toEqual(['kanban', 'research-desk']);
+  expect(experiences.find((experience) => experience.id === 'kanban')).toMatchObject({
     id: 'kanban',
     title: 'Kanban',
     icon: 'git-fork',
@@ -72,7 +72,12 @@ test('the power pack still exposes sandbox details when a runtime sink rejects r
     onError: () => {}
   });
 
-  expect(described).toEqual(['sandbox:docker', 'sandbox:e2b', 'workplace-experience:kanban']);
+  expect(described).toEqual([
+    'sandbox:docker',
+    'sandbox:e2b',
+    'workplace-experience:kanban',
+    'workplace-experience:research-desk'
+  ]);
 });
 
 test('vm remains available as a built-in without loading Power Pack', () => {
