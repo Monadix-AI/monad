@@ -96,14 +96,14 @@ test('every Bun dependency install restores the package cache first', async () =
     { cacheConfigured: true, job: 'atom-pack-release.yml:release' },
     { cacheConfigured: true, job: 'ci.yml:checks' },
     { cacheConfigured: true, job: 'ci.yml:unit' },
+    { cacheConfigured: true, job: 'ci.yml:integration' },
     { cacheConfigured: true, job: 'ci.yml:hermetic-e2e' },
     { cacheConfigured: true, job: 'ci.yml:web-e2e' },
     { cacheConfigured: true, job: 'ci.yml:dist-tail' },
-    { cacheConfigured: true, job: 'nightly.yml:live-e2e' },
+    { cacheConfigured: true, job: 'live-e2e.yml:live-e2e' },
     { cacheConfigured: true, job: 'npm-publish.yml:publish' },
     { cacheConfigured: true, job: 'release.yml:atom-pack' },
     { cacheConfigured: true, job: 'release.yml:build' },
-    { cacheConfigured: true, job: 'release.yml:upgrade-test' },
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:linux-kvm' },
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:macos-vfkit' },
     { cacheConfigured: true, job: 'sandbox-vm-real.yml:windows-hyperv' }
@@ -127,6 +127,7 @@ test('a failing CI job still persists the dependency cache it just built', async
   ).toEqual([
     { job: 'checks', savesOnFailure: true },
     { job: 'unit', savesOnFailure: true },
+    { job: 'integration', savesOnFailure: true },
     { job: 'hermetic-e2e', savesOnFailure: true },
     { job: 'web-e2e', savesOnFailure: true },
     { job: 'dist-tail', savesOnFailure: true }
@@ -151,7 +152,7 @@ test('Windows jobs move temporary files off the slow system volume', async () =>
         windowsOnly: steps[redirect]?.if === "runner.os == 'Windows'"
       };
     })
-  ).toEqual(['unit', 'hermetic-e2e'].map((job) => ({ job, precedesCheckout: true, windowsOnly: true })));
+  ).toEqual(['unit', 'integration', 'hermetic-e2e'].map((job) => ({ job, precedesCheckout: true, windowsOnly: true })));
   // libuv reads TMP before TEMP, so setting only one leaves os.tmpdir() on the slow volume.
   expect({
     setsBothVariables: ['TMP=', 'TEMP='].every((name) => script.includes(name)),
@@ -177,10 +178,10 @@ test('the Bun cache lives on the same volume as the workspace', async () => {
     allUnderRunnerTemp: cacheSteps.every((step) => String(step.with?.path ?? '').includes('runner.temp')),
     exportsPerJob: exports.length,
     exportsMatchTheCachedPath: exports.every((step) => step.run?.includes('$RUNNER_TEMP/bun-install-cache'))
-  }).toEqual({ steps: 10, allUnderRunnerTemp: true, exportsPerJob: 5, exportsMatchTheCachedPath: true });
+  }).toEqual({ steps: 12, allUnderRunnerTemp: true, exportsPerJob: 6, exportsMatchTheCachedPath: true });
 });
 
-test('CI caches PR tasks while the final release gate forces complete execution', async () => {
+test('CI caches PR tasks while the post-merge release avoids a duplicate quality execution', async () => {
   const ci = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
   const release = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release.yml')).text()) as Workflow;
   const testRuns = Object.entries(ci.jobs ?? {}).flatMap(([job, definition]) =>
@@ -193,10 +194,11 @@ test('CI caches PR tasks while the final release gate forces complete execution'
   expect(ci.env?.TURBO_FORCE).toBe('$'.concat("{{ inputs.force && 'true' || 'false' }}"));
   expect(testRuns).toEqual([
     { forced: false, job: 'unit' },
+    { forced: false, job: 'integration' },
     { forced: false, job: 'hermetic-e2e' },
     { forced: false, job: 'web-e2e' }
   ]);
-  expect(release.jobs?.['ci-gate']?.with).toMatchObject({ force: true, full: true });
+  expect(release.jobs?.['ci-gate']).toBeUndefined();
 });
 
 test('CI preserves failures while running both unit test scopes', async () => {
@@ -221,9 +223,51 @@ test('CI preserves failures while running both unit test scopes', async () => {
   ]);
 });
 
+test('integration tests have a dedicated workspace, Turbo, and full-suite path', async () => {
+  const rootPackage = await Bun.file(join(root, 'package.json')).json();
+  const monadPackage = await Bun.file(join(root, 'apps/monad/package.json')).json();
+  const turbo = Bun.JSONC.parse(await Bun.file(join(root, 'turbo.jsonc')).text()) as {
+    tasks?: Record<string, { passThroughEnv?: string[] }>;
+  };
+  const integrationSteps = (await workflows())
+    .find(({ file }) => file === 'ci.yml')
+    ?.workflow.jobs?.integration?.steps?.filter((step) => step.name?.startsWith('Test '));
+
+  expect({
+    ci: integrationSteps?.map((step) => ({ condition: step.if ?? null, name: step.name, run: step.run })),
+    full: rootPackage.scripts?.['test:raw'],
+    package: monadPackage.scripts?.['test:integration'],
+    root: rootPackage.scripts?.['test:integration:raw'],
+    timingExport: turbo.tasks?.['test:integration']?.passThroughEnv
+  }).toEqual({
+    ci: [
+      {
+        condition: null,
+        name: 'Test workspace integration',
+        run: 'bun scripts/quiet-run.ts bunx --bun turbo run test:integration --output-logs=errors-only'
+      },
+      {
+        condition: "runner.os == 'Linux' && !cancelled()",
+        name: 'Test container integration',
+        run: 'bun scripts/bun-test.ts apps/monad/test/integration/tools/code-exec-docker.container.unix.test.ts --only-failures'
+      },
+      {
+        condition: '$'.concat('{{ !cancelled() }}'),
+        name: 'Test script integration',
+        run: 'bun scripts/bun-test.ts scripts/test/integration/ --only-failures'
+      }
+    ],
+    full: 'bun run test:unit:raw && bun run test:integration:raw && bun run test:e2e:raw',
+    package: 'bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures',
+    root: 'turbo run test:integration --output-logs=errors-only && bun scripts/bun-test.ts scripts/test/integration/ --only-failures',
+    timingExport: ['MONAD_TEST_JUNIT_DIR']
+  });
+});
+
 test('the cross-platform matrix is reachable without publishing a release', async () => {
   const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
   const fullGate = "github.event_name == 'merge_group' || inputs.full";
+  const releaseGate = 'autorelease: pending';
 
   expect(workflow.on?.workflow_dispatch?.inputs?.full).toEqual({
     default: true,
@@ -234,9 +278,21 @@ test('the cross-platform matrix is reachable without publishing a release', asyn
   // Dispatch defaults `full` to true, so all three matrix gates open on a manual run.
   expect({
     hermeticE2e: workflow.jobs?.['hermetic-e2e']?.if,
+    integrationMatrixGate: String(workflow.jobs?.integration?.strategy?.matrix?.os ?? '').includes(fullGate),
     webE2e: workflow.jobs?.['web-e2e']?.if,
     unitMatrixGate: String(workflow.jobs?.unit?.strategy?.matrix?.os ?? '').includes(fullGate)
-  }).toEqual({ hermeticE2e: fullGate, webE2e: fullGate, unitMatrixGate: true });
+  }).toEqual({
+    hermeticE2e: '$'.concat(
+      "{{ github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
+    ),
+    integrationMatrixGate: true,
+    webE2e: '$'.concat(
+      "{{ github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
+    ),
+    unitMatrixGate: true
+  });
+  expect(JSON.stringify(workflow.jobs?.unit?.strategy?.matrix)).toContain(releaseGate);
+  expect(JSON.stringify(workflow.jobs?.integration?.strategy?.matrix)).toContain(releaseGate);
 });
 
 test('every Windows job drops Defender scanning before it writes to disk', async () => {
@@ -256,7 +312,7 @@ test('every Windows job drops Defender scanning before it writes to disk', async
       };
     })
   ).toEqual(
-    ['unit', 'hermetic-e2e'].map((job) => ({
+    ['unit', 'integration', 'hermetic-e2e'].map((job) => ({
       job,
       first: { if: "runner.os == 'Windows'", run: '$'.concat('{{ env.WINDOWS_DEFENDER_EXCLUSIONS }}'), shell: 'pwsh' },
       precedesCheckout: true
@@ -277,33 +333,22 @@ test('every Windows job drops Defender scanning before it writes to disk', async
   });
 });
 
-test('release validation receives only the Turbo remote cache secret', async () => {
+test('post-merge publishing no longer receives quality-gate cache credentials', async () => {
   const releasePlease = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release-please.yml')).text()) as Workflow;
   const release = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release.yml')).text()) as Workflow;
 
-  expect({
-    declared: release.on?.workflow_call?.secrets,
-    forwardedToCi: release.jobs?.['ci-gate']?.secrets,
-    passedToRelease: releasePlease.jobs?.['release-assets']?.secrets
-  }).toEqual({
-    declared: {
-      TURBO_TOKEN: {
-        description: 'Token used to authenticate Turbo remote cache access.',
-        required: false
-      }
-    },
-    forwardedToCi: 'inherit',
-    passedToRelease: { TURBO_TOKEN: '$'.concat('{{ secrets.TURBO_TOKEN }}') }
-  });
+  expect(release.on?.workflow_call?.secrets).toBeUndefined();
+  expect(release.jobs?.['ci-gate']).toBeUndefined();
+  expect(releasePlease.jobs?.['release-assets']?.secrets).toBeUndefined();
 });
 
-test('stable releases publish only a fully validated pending manifest version', async () => {
+test('stable releases build only after Release Please creates the draft from the merged PR', async () => {
   const releasePlease = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release-please.yml')).text()) as Workflow;
   const release = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'release.yml')).text()) as Workflow;
-  const upload = release.jobs?.publish?.steps?.find((step) => step.name === 'Upload release assets');
+  const preflight = release.jobs?.preflight?.steps?.find((step) => step.name === 'Verify release version and draft');
 
   expect({
-    stateOutputs: releasePlease.jobs?.['release-state']?.outputs,
+    stateJob: releasePlease.jobs?.['release-state'],
     releasePlease: {
       if: releasePlease.jobs?.['release-please']?.if,
       needs: releasePlease.jobs?.['release-please']?.needs,
@@ -314,34 +359,24 @@ test('stable releases publish only a fully validated pending manifest version', 
       needs: releasePlease.jobs?.['release-assets']?.needs,
       with: releasePlease.jobs?.['release-assets']?.with
     },
-    upload: {
-      draft: upload?.with?.draft,
-      targetCommitish: upload?.with?.target_commitish
-    }
+    preflightRequiresDraft: preflight?.run?.includes('select(.isDraft == true)')
   }).toEqual({
-    stateOutputs: {
-      pending: '$'.concat('{{ steps.release.outputs.pending }}'),
-      sha: '$'.concat('{{ steps.release.outputs.sha }}'),
-      tag: '$'.concat('{{ steps.release.outputs.tag }}')
-    },
+    stateJob: undefined,
     releasePlease: {
-      if: "needs.release-state.outputs.pending != 'true'",
-      needs: 'release-state',
-      skipGithubRelease: true
+      if: undefined,
+      needs: undefined,
+      skipGithubRelease: undefined
     },
     releaseAssets: {
-      if: "needs.release-state.outputs.pending == 'true'",
-      needs: 'release-state',
+      if: "needs.release-please.outputs.release_created == 'true'",
+      needs: 'release-please',
       with: {
         make_latest: true,
-        sha: '$'.concat('{{ needs.release-state.outputs.sha }}'),
-        tag: '$'.concat('{{ needs.release-state.outputs.tag }}')
+        sha: '$'.concat('{{ needs.release-please.outputs.sha }}'),
+        tag: '$'.concat('{{ needs.release-please.outputs.tag_name }}')
       }
     },
-    upload: {
-      draft: true,
-      targetCommitish: '$'.concat('{{ inputs.sha || inputs.tag }}')
-    }
+    preflightRequiresDraft: true
   });
 });
 
@@ -350,7 +385,7 @@ test('critical daemon and browser E2E jobs cannot be softened or omitted from th
   // web-e2e was removed from this set on purpose: its Playwright webServer wait times out
   // intermittently on the runners and it now reports without blocking. The exemption is pinned
   // below so it stays visible rather than becoming an unexplained gap in this list.
-  const critical = ['hermetic-e2e', 'e2e-deps'];
+  const critical = ['integration', 'hermetic-e2e', 'e2e-deps'];
 
   expect(
     critical.map((job) => ({
@@ -361,7 +396,16 @@ test('critical daemon and browser E2E jobs cannot be softened or omitted from th
         .map((step) => step.name ?? step.run ?? step.uses)
     }))
   ).toEqual(critical.map((job) => ({ job, continueOnError: null, softenedSteps: [] })));
-  expect(workflow.jobs?.gate?.needs).toEqual(['checks', 'unit', 'hermetic-e2e', 'web-e2e', 'dist-tail', 'e2e-deps']);
+  expect(workflow.jobs?.gate?.needs).toEqual([
+    'release-notes',
+    'checks',
+    'unit',
+    'integration',
+    'hermetic-e2e',
+    'web-e2e',
+    'dist-tail',
+    'e2e-deps'
+  ]);
   expect(JSON.stringify(critical.map((job) => workflow.jobs?.[job]))).not.toMatch(/allow[-_]?failure|quarantine/i);
 });
 
@@ -396,7 +440,7 @@ test('the Playwright browser cache survives an unrelated dependency bump', async
   });
 });
 
-test('the non-blocking legs are named, and their deadlines can report a hang', async () => {
+test('quality legs preserve first-pass failures while retaining bounded deadlines', async () => {
   const workflow = (await workflows()).find(({ file }) => file === 'ci.yml')?.workflow;
   const softened = Object.entries(workflow?.jobs ?? {})
     .filter(([, job]) => job['continue-on-error'] !== undefined)
@@ -415,10 +459,7 @@ test('the non-blocking legs are named, and their deadlines can report a hang', a
       'timeout-minutes'
     ]
   }).toEqual({
-    softened: [
-      { job: 'unit', when: '$'.concat("{{ matrix.os == 'windows-latest' }}") },
-      { job: 'web-e2e', when: true }
-    ],
+    softened: [],
     unitStepTimeout: 10,
     webStepTimeout: 20
   });

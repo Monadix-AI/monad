@@ -5,7 +5,7 @@ description: "We can't develop against every third-party IM platform, so our cha
 We can't develop against every third-party IM platform, so our channel adapters follow a single
 normalization and routing contract, and each adapter is pinned to that contract's behavior. This
 is the conformance contract; the tests live in
-`apps/monad/test/unit/channels/channel-conformance.test.ts` (+ `telegram` normalization is a pure, tested
+`apps/monad/test/integration/channels/channel-conformance.test.ts` (+ `telegram` normalization is a pure, tested
 function `normalizeTelegramMessage`).
 
 ## Shared contracts

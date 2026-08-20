@@ -579,7 +579,7 @@ for (const kind of TRANSPORTS) {
         const firstReconcile = reopenedStore.reconcileSessionBindingRuntimesAfterRestart();
         // A second reconcile pass (idempotent no-op) proves the first pass didn't leave anything to
         // re-recover — the established "double reconcile" idiom from
-        // apps/monad/test/unit/store/session-bindings.test.ts.
+        // apps/monad/test/integration/store/session-bindings.test.ts.
         const secondReconcile = reopenedStore.reconcileSessionBindingRuntimesAfterRestart();
         expect(secondReconcile.recovered).toBe(0);
 

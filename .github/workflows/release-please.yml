@@ -17,62 +17,33 @@ permissions:
   contents: read
 
 jobs:
-  release-state:
-    runs-on: ubuntu-latest
-    outputs:
-      pending: ${{ steps.release.outputs.pending }}
-      sha: ${{ steps.release.outputs.sha }}
-      tag: ${{ steps.release.outputs.tag }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Resolve pending release
-        id: release
-        shell: bash
-        run: |
-          version="$(jq -er '.["."]' .release-please-manifest.json)"
-          tag="v${version}"
-          if git show-ref --verify --quiet "refs/tags/${tag}"; then
-            pending=false
-          else
-            pending=true
-          fi
-          echo "pending=${pending}" >> "$GITHUB_OUTPUT"
-          echo "sha=${GITHUB_SHA}" >> "$GITHUB_OUTPUT"
-          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
-
   release-please:
-    needs: release-state
-    if: needs.release-state.outputs.pending != 'true'
     runs-on: ubuntu-latest
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      sha: ${{ steps.release.outputs.sha }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
     steps:
       - uses: googleapis/release-please-action@45996ed1f6d02564a971a2fa1b5860e934307cf7 # v5.0.0
+        id: release
         with:
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
-          skip-github-release: true
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
 
-  # A manifest version without a tag is a pending release. Build and validate that exact main
-  # commit first; release.yml creates the draft only after every build and install test succeeds.
   release-assets:
     name: build and publish release assets
-    needs: release-state
-    if: needs.release-state.outputs.pending == 'true'
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
     uses: ./.github/workflows/release.yml
     permissions:
       attestations: write
       contents: write
       id-token: write
-    secrets:
-      TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
     with:
-      tag: ${{ needs.release-state.outputs.tag }}
-      sha: ${{ needs.release-state.outputs.sha }}
+      tag: ${{ needs.release-please.outputs.tag_name }}
+      sha: ${{ needs.release-please.outputs.sha }}
       make_latest: true

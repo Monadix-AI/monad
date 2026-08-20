@@ -13,7 +13,7 @@ here is [security-guidelines.md § 8](../../../docs/internal/development/securit
 - `net: 'none'` denies all outbound connections at the kernel level.
 - `net: { allowProxyPort }` permits only the local filtering proxy; all other sockets denied.
 - `net: 'unrestricted'` leaves egress fully open (default for development convenience).
-- Tests: `apps/monad/test/unit/tools/seatbelt.macos.test.ts` (live kernel, 7 cases).
+- Tests: `apps/monad/test/integration/tools/seatbelt.macos.test.ts` (live kernel, 7 cases).
 
 **Linux — bwrap (preferred, when installed) + Landlock + seccomp-bpf** (`packages/sandbox/src/launchers/bwrap.ts`, `apps/monad/native/sandbox-launcher/main.c`)
 
@@ -42,7 +42,7 @@ Landlock + seccomp-bpf launcher — fallback when `bwrap` is absent:
 - Graceful degradation: Landlock unavailable (kernel < 5.13) → unconfined with warning;
   seccomp `EINVAL`/`ENOSYS` → silently skipped; `socketcall`-only arches (i386, no `SYS_socket`)
   skip the socket block.
-- Tests: `apps/monad/test/unit/tools/sandbox-escape.linux.test.ts` (12 cases, incl. net:'none' AF_INET/
+- Tests: `apps/monad/test/integration/tools/sandbox-escape.linux.test.ts` (12 cases, incl. net:'none' AF_INET/
   AF_INET6 block + default-net allow). The complete sandbox package, daemon tool, and bwrap E2E scope
   is documented in [Sandbox VM conformance](../../sandbox-vm/docs/conformance.md). Verified live on Ubuntu
   26.04 arm64 with kernel 7.0 under UTM; that native-sandbox result does not imply nested KVM

@@ -1,0 +1,46 @@
+name: Live E2E
+
+on:
+  schedule:
+    - cron: "0 5 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: live-e2e-main
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: ~/.bun/install/cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+      - name: Install and generate
+        run: |
+          bun install --frozen-lockfile
+          bun run generate
+      - name: Live model E2E
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          MONAD_LIVE_MODEL: ${{ vars.MONAD_LIVE_MODEL }}
+        run: >-
+          bun test
+          apps/monad/test/e2e/live-model.test.ts
+          apps/monad/test/e2e/live-approvals.test.ts
+          apps/monad/test/e2e/live-hooks.test.ts
+          apps/monad/test/e2e/live-scenarios.test.ts
+          apps/monad/test/e2e/live-resilience.test.ts

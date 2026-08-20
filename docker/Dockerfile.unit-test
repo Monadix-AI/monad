@@ -33,9 +33,9 @@ ENV NODE_ENV=test \
     http_proxy="" https_proxy="" all_proxy=""
 RUN bun scripts/bun-test.ts \
   apps/cli/test/unit/browser-binary.linux.test.ts \
-  apps/monad/test/unit/mesh-agent/process-tree.linux.test.ts \
-  apps/monad/test/unit/tools/bwrap.linux.test.ts \
-  apps/monad/test/unit/tools/sandbox-escape.linux.test.ts \
+  apps/monad/test/integration/mesh-agent/process-tree.linux.test.ts \
+  apps/monad/test/integration/tools/bwrap.linux.test.ts \
+  apps/monad/test/integration/tools/sandbox-escape.linux.test.ts \
   apps/monad/test/e2e/sandbox-bwrap.linux.test.ts \
-  packages/environment/test/unit/home.linux.test.ts \
+  packages/environment/test/integration/home.linux.test.ts \
   --only-failures

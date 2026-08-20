@@ -16,10 +16,11 @@ on:
         required: false
         type: boolean
         default: false
-    secrets:
-      TURBO_TOKEN:
-        description: Token used to authenticate Turbo remote cache access.
+      generate_notes:
+        description: Generate notes for a release without a release PR, such as nightly.
         required: false
+        type: boolean
+        default: false
   workflow_dispatch:
     inputs:
       tag:
@@ -35,6 +36,11 @@ on:
         required: false
         type: boolean
         default: false
+      generate_notes:
+        description: Generate notes instead of requiring a prepared draft release.
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   contents: read
@@ -47,19 +53,34 @@ env:
   MONAD_DIST_VERSION: ${{ inputs.tag }}
 
 jobs:
-  ci-gate:
-    name: validate release commit
-    uses: ./.github/workflows/ci.yml
-    with:
-      full: true
-      force: true
-      sha: ${{ inputs.sha || inputs.tag }}
-      release_validation: true
-    secrets: inherit
+  preflight:
+    name: verify release inputs
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.RELEASE_REF }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify release version and draft
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="$(jq -er '.version' package.json)"
+          [[ "${RELEASE_TAG}" == "v${version}" || "${RELEASE_TAG}" == "v${version}-"* ]]
+          [[ "$(git rev-parse HEAD)" == "$(git rev-parse "${RELEASE_REF}^{commit}")" ]]
+          if [[ "${{ inputs.generate_notes }}" != true ]]; then
+            gh release view "${RELEASE_TAG}" --repo "${GITHUB_REPOSITORY}" --json isDraft \
+              --jq 'select(.isDraft == true) | true' | grep -qx true
+          fi
 
   atom-pack:
     name: build monad power pack
-    needs: ci-gate
+    needs: preflight
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -78,11 +99,10 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Generate contracts
         run: bun run generate
-      - name: Build and verify Power Pack
+      - name: Build Power Pack
         run: |
           bun run --cwd packages/monad-power-pack build:atom-pack
           bun apps/cli/src/main.ts atom pack packages/monad-power-pack --out dist/monad-power-pack.atom-pack.zip
-          bun scripts/bun-test.ts packages/monad-power-pack/test/unit --only-failures
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: monad-power-pack
@@ -91,7 +111,7 @@ jobs:
 
   build:
     name: dist build (${{ matrix.target }})
-    needs: ci-gate
+    needs: preflight
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
     strategy:
@@ -210,137 +230,9 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  install-test:
-    name: installer smoke test (${{ matrix.os }})
-    needs: installers
-    runs-on: ${{ matrix.runner }}
-    timeout-minutes: 10
-    # The Windows leg reports without blocking. It is not flaky: the installer reaches
-    # "Starting Monad" and its `monad up` never returns, leaving orphan monad and conhost
-    # processes, while the same forced-interactive autostart finishes in seconds on Linux and
-    # macOS. That is a real defect a Windows user hits after every install, tracked separately;
-    # this exemption only stops it holding the release, and its deadline is on the step because a
-    # job-level timeout cancels rather than fails.
-    continue-on-error: ${{ matrix.os == 'windows' }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: linux
-            runner: ubuntu-latest
-          - os: macos
-            runner: macos-14
-          - os: windows
-            runner: windows-latest
-    steps:
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          pattern: dist-*
-          merge-multiple: true
-          path: artifacts
-      - name: Test shell installer
-        if: runner.os != 'Windows'
-        shell: bash
-        run: |
-          python3 -m http.server 8123 --directory artifacts >"${RUNNER_TEMP}/monad-dist-http.log" 2>&1 &
-          for attempt in {1..20}; do curl -fsS http://127.0.0.1:8123/ >/dev/null && break; sleep 0.25; done
-          export MONAD_DOWNLOAD_URL=http://127.0.0.1:8123
-          export MONAD_INSTALL_DIR="${RUNNER_TEMP}/monad-install"
-          export MONAD_NO_MODIFY_PATH=1
-          export MONAD_NO_OPEN=1
-          export MONAD_FORCE_INTERACTIVE=1
-          if [[ "${RUNNER_OS}" == "macOS" ]]; then
-            script -q "${RUNNER_TEMP}/install.log" sh artifacts/install.sh
-          else
-            script -qefc "sh artifacts/install.sh" "${RUNNER_TEMP}/install.log"
-          fi
-          cat "${RUNNER_TEMP}/install.log"
-          grep -F "◆ MONAD" "${RUNNER_TEMP}/install.log"
-          grep -F "▮" "${RUNNER_TEMP}/install.log"
-          grep -F "Checksum verified" "${RUNNER_TEMP}/install.log"
-          ! grep -F "no checksums to verify" "${RUNNER_TEMP}/install.log"
-          ! grep -F "skipping sha256 checksum verification" "${RUNNER_TEMP}/install.log"
-          test -x "${MONAD_INSTALL_DIR}/monad"
-          "${MONAD_INSTALL_DIR}/monad" --version | grep -F "${MONAD_DIST_VERSION#v}"
-      - name: Test PowerShell installer
-        if: runner.os == 'Windows'
-        timeout-minutes: 6
-        shell: pwsh
-        run: |
-          Start-Process python -ArgumentList '-m','http.server','8123','--directory','artifacts' -WindowStyle Hidden
-          for ($attempt = 0; $attempt -lt 20; $attempt++) {
-            try { Invoke-WebRequest http://127.0.0.1:8123/ -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Milliseconds 250 }
-          }
-          $env:MONAD_DOWNLOAD_URL = 'http://127.0.0.1:8123'
-          $env:MONAD_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'monad-install'
-          $env:MONAD_NO_MODIFY_PATH = '1'
-          $env:MONAD_NO_OPEN = '1'
-          $env:MONAD_FORCE_INTERACTIVE = '1'
-          & artifacts/install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'install.log')
-          Select-String -SimpleMatch '◆ MONAD' (Join-Path $env:RUNNER_TEMP 'install.log') | Out-Null
-          Select-String -SimpleMatch 'Checksum verified' (Join-Path $env:RUNNER_TEMP 'install.log') | Out-Null
-          if (Select-String -SimpleMatch 'no checksums to verify' (Join-Path $env:RUNNER_TEMP 'install.log')) {
-            throw 'installer did not verify the archive checksum'
-          }
-          if (!(Test-Path (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe'))) { throw 'monad.exe was not installed' }
-          & (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe') --version | Select-String ($env:MONAD_DIST_VERSION -replace '^v','')
-
-  upgrade-test:
-    name: dist CLI and Web upgrade e2e
-    needs: installers
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.RELEASE_REF }}
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: 1.3.14
-      - uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
-          restore-keys: ${{ runner.os }}-bun-
-      - name: Install dependencies
-        run: bun install --frozen-lockfile
-      - name: Install dist
-        run: bun scripts/install-cargo-dist.ts "$DIST_VERSION" "$DIST_INSTALLER_SHA256"
-      - name: Build an older managed installation
-        env:
-          MONAD_DIST_VERSION: 0.0.1
-        run: |
-          rm -rf target/distrib
-          dist build --artifacts=local --target=x86_64-unknown-linux-gnu --tag=v0.0.1 --force-tag --output-format=json > old-local-dist-manifest.json
-          cp old-local-dist-manifest.json target/distrib/x86_64-unknown-linux-gnu-dist-manifest.json
-          dist build --artifacts=global --tag=v0.0.1 --force-tag --output-format=json > old-global-dist-manifest.json
-          bun scripts/enhance-dist-installers.ts
-          mkdir -p artifacts/old
-          find target/distrib -maxdepth 1 -type f -exec cp {} artifacts/old/ \;
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: dist-x86_64-unknown-linux-gnu
-          path: artifacts/new
-      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
-        with:
-          name: dist-installers
-          path: artifacts/new
-      - name: Upgrade an active daemon through CLI and Web
-        run: |
-          CHANNEL=stable
-          case "${RELEASE_TAG}" in
-            *-beta.*) CHANNEL=beta ;;
-            *-nightly.*) CHANNEL=nightly ;;
-          esac
-          bun scripts/test/upgrade-dist-e2e.ts \
-            --old-dir artifacts/old \
-            --new-dir artifacts/new \
-            --tag "${RELEASE_TAG}" \
-            --channel "${CHANNEL}"
-
   publish:
     name: publish GitHub release
-    needs: [atom-pack, install-test, upgrade-test]
+    needs: [atom-pack, installers]
     permissions:
       attestations: write
       contents: write
@@ -371,14 +263,22 @@ jobs:
         uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4
         with:
           subject-path: release-assets/*
-      - name: Generate complete release changelog
+      - name: Resolve nightly release range
+        if: inputs.generate_notes
+        id: release
+        shell: bash
         run: |
-          bun scripts/generate-release-changelog.ts \
-            --tag "${RELEASE_TAG}" \
-            --target "${RELEASE_REF}" \
-            --repository "${GITHUB_REPOSITORY}" \
-            --output release-notes.md
-      - name: Upload release assets
+          metadata="$(bun scripts/resolve-release-range.ts --tag "${RELEASE_TAG}" --target "${RELEASE_REF}")"
+          echo "range=$(jq -er '.range' <<<"$metadata")" >> "$GITHUB_OUTPUT"
+      - name: Generate nightly release notes
+        if: inputs.generate_notes
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        with:
+          version: v2.13.1
+          config: cliff.toml
+          args: ${{ steps.release.outputs.range }} --tag ${{ env.RELEASE_TAG }} --output release-notes.md
+      - name: Create nightly draft and upload release assets
+        if: inputs.generate_notes
         uses: softprops/action-gh-release@3d0d9888cb7fd7b750713d6e236d1fcb99157228 # v3.0.2
         with:
           tag_name: ${{ env.RELEASE_TAG }}
@@ -388,6 +288,11 @@ jobs:
           body_path: release-notes.md
           files: release-assets/*
           fail_on_unmatched_files: true
+      - name: Upload assets to prepared release draft
+        if: ${{ !inputs.generate_notes }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${RELEASE_TAG}" release-assets/* --repo "${GITHUB_REPOSITORY}" --clobber
       - name: Verify GitHub release asset digests
         env:
           GH_TOKEN: ${{ github.token }}

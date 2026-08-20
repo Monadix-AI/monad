@@ -16,6 +16,10 @@ Monad 把守护进程、CLI 和 Web 界面作为同一个带版本号的构建�
 | `beta` | 愿意反馈问题的早期用户 | 使用同一质量门的预发行版本 | `v0.2.0-beta.1` |
 | `nightly` | 跟踪 `main` 的开发者 | 自动构建当天 `main` 最新提交 | `v0.2.0-nightly.<date>+<sha>` |
 
+Stable 和 beta 的 release PR body 就是待审阅的 release notes。该 PR 每次追加提交都会重新生成
+notes 并重跑完整质量门；合并后只构建、签署并发布产物，不重复运行质量门。Nightly 没有 release
+PR，只运行单元测试和集成测试后直接构建发布；耗时的 live E2E 使用独立的定时工作流。
+
 每个 dist 安装器都绑定到一个精确发行 tag。先用 latest 安装稳定版，需要时再显式切换已有安装：
 
 ```bash

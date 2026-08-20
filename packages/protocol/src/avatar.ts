@@ -5,7 +5,7 @@ import { z } from 'zod';
 // by the project hook — not hand-maintained — and is the one source of truth for the
 // style SET: the wire enum below and the static imports in avatar-cache.ts both derive from it
 // (avatar-cache's `Record<AvatarStyle, …>` is compile-time-locked to this union, so a missing/extra
-// style is a type error). `apps/monad/test/unit/avatar-styles.test.ts` asserts the generated list
+// style is a type error). `apps/monad/test/integration/avatar-styles.test.ts` asserts the generated list
 // still equals the installed package, so a @dicebear/styles upgrade that adds/drops a style fails a
 // test until the file is regenerated.
 import { AVATAR_STYLE_SLUGS } from '../generated/avatar-styles.ts';

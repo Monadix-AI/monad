@@ -7,8 +7,10 @@ import {
   testRunExitCode
 } from '../../lib/test-failure-rerun.ts';
 
-test('JUnit failures make the wrapper fail even when Bun reports a zero process exit', () => {
-  expect([testRunExitCode(0, 1), testRunExitCode(2, 0), testRunExitCode(0, 0)]).toEqual([1, 2, 0]);
+test('process, parsed JUnit, and missing-report failures keep the wrapper nonzero', () => {
+  expect([testRunExitCode(0, 1), testRunExitCode(2, 0), testRunExitCode(0, 0, true), testRunExitCode(0, 0)]).toEqual([
+    1, 2, 1, 0
+  ]);
 });
 
 test('groups unique failed JUnit cases by file and matches nested test names by suffix', () => {

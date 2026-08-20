@@ -25,7 +25,7 @@ const allowGate: ToolGate = async () => ({ allow: true });
 import { connectMcpServers } from '#/capabilities/mcp/service.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
-const fixture = join(import.meta.dir, '../unit/tools/fixtures/fat-mcp-server.ts');
+const fixture = join(import.meta.dir, '../integration/tools/fixtures/fat-mcp-server.ts');
 
 const paths: MonadPaths = {
   home: '/dev/null',

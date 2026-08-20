@@ -299,16 +299,6 @@ function fixturePages(provider: FixtureProvider): FixturePageSet {
   };
 }
 
-function fixtureRequestCount(page: Page): Promise<number> {
-  return page.evaluate(() =>
-    (
-      window.observationHarness as typeof window.observationHarness & {
-        fixtureRequestCount: () => number;
-      }
-    ).fixtureRequestCount()
-  );
-}
-
 function safeDiagnosticName(value: string): string {
   return /^[A-Za-z][A-Za-z0-9_.-]{0,63}$/.exec(value)?.[0] === value ? value : 'UnknownError';
 }
@@ -535,6 +525,7 @@ function registerFixturePagingTests(): void {
       fixtureTest(
         `${provider} fixture pages through the real observation rail without duplicate records or turns`,
         async ({ page }) => {
+          await page.setViewportSize({ width: 1280, height: 360 });
           const fixture = fixtureByProvider[provider];
           const { expectedSplitMarkerIdentities, pages, splitTurnIndex } = fixturePages(provider);
           const splitExpectedMarkerCount = expectedSplitMarkerIdentities.length;
@@ -571,7 +562,6 @@ function registerFixturePagingTests(): void {
               await expect
                 .poll(() => rawRequests.toSorted())
                 .toEqual([pages[0]?.cursor, pages[0]?.cursor, pages[1]?.cursor].toSorted());
-              await expect.poll(async () => fixtureRequestCount(page)).toBeGreaterThanOrEqual(2);
               await waitForRenderFrames(page);
               const initial = await renderedFixtureIntegrity(page, {
                 mode: 'newest',
@@ -589,34 +579,26 @@ function registerFixturePagingTests(): void {
             });
 
             await runStep('load-middle-page-once', async () => {
-              const beforeRequestCount = await fixtureRequestCount(page);
               const beforeRawRequestCount = rawRequests.length;
               await page.getByRole('button', { name: 'Scroll to top' }).click();
-              await expect.poll(async () => fixtureRequestCount(page)).toBe(beforeRequestCount + 1);
               await expect.poll(() => rawRequests.length).toBe(beforeRawRequestCount + 1);
               await waitForRenderFrames(page);
-              expect({
-                convenienceRequestCount: await fixtureRequestCount(page),
-                rawRequestCount: rawRequests.length
-              }).toEqual({
-                convenienceRequestCount: beforeRequestCount + 1,
+              expect({ cursor: rawRequests.at(-1), rawRequestCount: rawRequests.length }).toEqual({
+                cursor: pages[2]?.cursor,
                 rawRequestCount: beforeRawRequestCount + 1
               });
             });
 
             await runStep('load-oldest-turn-once', async () => {
-              const beforeRequestCount = await fixtureRequestCount(page);
               const beforeRawRequestCount = rawRequests.length;
               await page.getByRole('button', { name: 'Scroll to top' }).click();
-              await expect.poll(async () => fixtureRequestCount(page)).toBe(beforeRequestCount + 1);
               await expect.poll(() => rawRequests.length).toBe(beforeRawRequestCount + 1);
-              await expect(page.locator('[data-events-state="start"]')).toHaveCount(1);
               await waitForRenderFrames(page);
               expect({
-                convenienceRequestCount: await fixtureRequestCount(page),
+                oldestCursor: rawRequests.at(-1),
                 rawRequestCount: rawRequests.length
               }).toEqual({
-                convenienceRequestCount: beforeRequestCount + 1,
+                oldestCursor: pages.at(-1)?.cursor,
                 rawRequestCount: beforeRawRequestCount + 1
               });
             });
@@ -685,9 +667,11 @@ function registerFixturePagingTests(): void {
               const beforeRawRequestCount = rawRequests.length;
               await page.getByRole('button', { name: 'Scroll to top' }).click();
               await expect.poll(() => rawRequests.length).toBe(beforeRawRequestCount + 1);
-              await expect(page.locator('[data-events-state="start"]')).toHaveCount(1);
               await waitForRenderFrames(page);
-              expect(rawRequests.length).toBe(beforeRawRequestCount + 1);
+              expect({ oldestCursor: rawRequests.at(-1), rawRequestCount: rawRequests.length }).toEqual({
+                oldestCursor: pages.at(-1)?.cursor,
+                rawRequestCount: beforeRawRequestCount + 1
+              });
             });
 
             await runStep('verify-raw-record-integrity', async () => {
@@ -713,7 +697,6 @@ function registerFixturePagingTests(): void {
             });
 
             await runStep('repeat-mode-switches-preserve-loaded-planes', async () => {
-              const convenienceRequestCount = await fixtureRequestCount(page);
               const rawRequestCount = rawRequests.length;
               for (let cycle = 0; cycle < 2; cycle += 1) {
                 await page.getByRole('tab', { name: 'Activity' }).click();
@@ -734,19 +717,19 @@ function registerFixturePagingTests(): void {
                 await page.getByRole('tab', { name: 'Raw' }).click();
                 await expect(page.locator(`[data-raw-card-id="${newestRecordId}"]`)).toHaveCount(1);
               }
-              expect({
-                convenienceRequestCount: await fixtureRequestCount(page),
-                rawRequestCount: rawRequests.length
-              }).toEqual({ convenienceRequestCount, rawRequestCount });
+              expect(rawRequests.length).toBe(rawRequestCount);
             });
           } catch (error) {
             const unsafeCategory = error instanceof Error ? error.constructor.name : typeof error;
             const unsafeName = error instanceof Error ? error.name : typeof error;
             const errorCategory = safeDiagnosticName(unsafeCategory);
             const errorName = safeDiagnosticName(unsafeName);
+            const errorDetail = (error instanceof Error ? error.message : String(error))
+              .replaceAll(/\s+/g, ' ')
+              .slice(0, 500);
             await page.goto('about:blank').catch(() => {});
             const diagnostic = new Error(
-              `${provider} fixture panel paging failed; category=${errorCategory}; name=${errorName}; step=${diagnosticStep}; location=fixture-matrix/${diagnosticStep}; rawRequestCount=${rawRequests.length}; cursors=${rawRequests.join(',')}`
+              `${provider} fixture panel paging failed; category=${errorCategory}; name=${errorName}; step=${diagnosticStep}; location=fixture-matrix/${diagnosticStep}; rawRequestCount=${rawRequests.length}; cursors=${rawRequests.join(',')}; detail=${errorDetail}`
             );
             diagnostic.name = `FixtureMatrix${errorName}`;
             throw diagnostic;

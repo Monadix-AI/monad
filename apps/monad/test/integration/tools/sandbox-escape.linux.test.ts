@@ -8,7 +8,7 @@
 
 if (process.platform !== 'linux') process.exit(0);
 
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, test as bunTest, expect } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -18,10 +18,7 @@ import { landlockLauncher } from '@monad/sandbox/launchers/landlock';
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 
 const launcher = landlockLauncher;
-// Skip when the native monad-sandbox-launcher binary isn't installed (isAvailable() probes for it).
-if (!launcher.isAvailable?.()) {
-  process.exit(0);
-}
+const test = bunTest.skipIf(!launcher.isAvailable?.());
 
 afterEach(() => configureSandboxLauncher(noneLauncher));
 

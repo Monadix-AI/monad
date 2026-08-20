@@ -27,6 +27,7 @@
   "scripts": {
     "generate": "bun ../../scripts/i18n/catalog.ts --write",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:integration": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc -p tsconfig.typecheck.json --noEmit"
   },
   "sideEffects": false,

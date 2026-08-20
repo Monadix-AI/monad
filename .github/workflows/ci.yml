@@ -2,7 +2,8 @@ name: CI
 
 on:
   pull_request:
-    branches: [main]
+    branches: [main, beta]
+    types: [opened, synchronize, reopened, labeled]
   merge_group:
     branches: [main]
   workflow_call:
@@ -23,6 +24,11 @@ on:
         type: string
       release_validation:
         description: Called by release.yml, which runs the real installer and upgrade jobs itself.
+        required: false
+        type: boolean
+        default: false
+      nightly:
+        description: Run only unit and integration validation before a nightly build.
         required: false
         type: boolean
         default: false
@@ -90,12 +96,65 @@ env:
     "TEMP=$fast" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
 jobs:
+  release-notes:
+    name: sync release notes
+    if: "${{ contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          ref: ${{ github.event.pull_request.head.sha }}
+          persist-credentials: false
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+      - name: Resolve release range
+        id: release
+        shell: bash
+        run: |
+          tag="v$(jq -er '.["."]' .release-please-manifest.json)"
+          metadata="$(bun scripts/resolve-release-range.ts --tag "$tag" --target "${{ github.event.pull_request.head.sha }}")"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "range=$(jq -er '.range' <<<"$metadata")" >> "$GITHUB_OUTPUT"
+      - name: Generate release notes
+        uses: orhun/git-cliff-action@f50e11560dce63f7c33227798f90b924471a88b5 # v4.8.0
+        with:
+          version: v2.13.1
+          config: cliff.toml
+          args: ${{ steps.release.outputs.range }} --tag ${{ steps.release.outputs.tag }} --output generated-release-notes.md
+      - name: Preserve Release Please metadata
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --jq .body > release-pr-body.md
+          bun scripts/merge-release-pr-notes.ts \
+            --body release-pr-body.md \
+            --notes generated-release-notes.md \
+            --output release-notes.md
+      - name: Update release PR body
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+        shell: bash
+        run: |
+          jq -n --rawfile body release-notes.md '{body: $body}' \
+            | gh api --method PATCH "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}" --input - >/dev/null
+
   # OS-independent checks — typecheck, lint, knip in one job to share bun install.
   checks:
     name: checks
     # OS-independent (lint, typecheck, knip, generated-artifact drift). Linux runners bill at 1x;
     # macOS at 10x. The OS-sensitive work is covered by the unit/e2e matrices below.
     runs-on: ubuntu-latest
+    if: ${{ !inputs.nightly }}
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -136,15 +195,10 @@ jobs:
     name: unit (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
-    # The Windows leg hangs intermittently in apps/monad/test/unit/sessions: the same commit has
-    # both passed in 3 minutes and stalled with no output. Until that is found it reports without
-    # blocking. The deadline it trips is on the step below, because a job-level timeout cancels
-    # rather than fails, and continue-on-error absorbs a failure but not a cancellation.
-    continue-on-error: ${{ matrix.os == 'windows-latest' }}
     strategy:
       fail-fast: false
       matrix:
-        os: ${{ fromJSON((github.event_name == 'merge_group' || inputs.full) && '["ubuntu-latest","macos-latest","windows-latest"]' || '["ubuntu-latest"]') }}
+        os: "${{ fromJSON((github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending')) && '[\"ubuntu-latest\",\"macos-latest\",\"windows-latest\"]' || '[\"ubuntu-latest\"]') }}"
     steps:
       # Runs before checkout so the dependency-cache extraction and install are covered too.
       - name: Exclude the workspace from Defender scanning
@@ -233,12 +287,91 @@ jobs:
           path: ${{ runner.temp }}/bun-install-cache
           key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
 
+  # Local-boundary integration tests use real SQLite and host filesystem fixtures without starting
+  # public daemon transports. Keeping them separate gives resource leaks and platform failures their
+  # own timeout, timing artifact, and cache entry instead of hiding them inside the unit suite.
+  integration:
+    name: integration (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: "${{ fromJSON((github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending')) && '[\"ubuntu-latest\",\"macos-latest\",\"windows-latest\"]' || '[\"ubuntu-latest\"]') }}"
+    steps:
+      - name: Exclude the workspace from Defender scanning
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ${{ env.WINDOWS_DEFENDER_EXCLUSIONS }}
+
+      - name: Put temporary files on the fast volume
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: ${{ env.WINDOWS_FAST_TEMP }}
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ inputs.sha || github.sha }}
+          persist-credentials: false
+
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+        with:
+          bun-version-file: package.json
+
+      - name: Keep the Bun cache on the workspace volume
+        shell: bash
+        run: echo "BUN_INSTALL_CACHE_DIR=$RUNNER_TEMP/bun-install-cache" >> "$GITHUB_ENV"
+
+      - uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: bun-cache
+        with:
+          path: ${{ runner.temp }}/bun-install-cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+          restore-keys: ${{ runner.os }}-bun-
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Test workspace integration
+        timeout-minutes: 10
+        env:
+          MONAD_TEST_JUNIT_DIR: ${{ runner.temp }}/monad-junit
+        run: bun scripts/quiet-run.ts bunx --bun turbo run test:integration --output-logs=errors-only
+
+      - name: Test container integration
+        if: runner.os == 'Linux' && !cancelled()
+        timeout-minutes: 5
+        env:
+          MONAD_TEST_CONTAINER_DEPS: 1
+          MONAD_TEST_JUNIT_DIR: ${{ runner.temp }}/monad-junit
+        run: bun scripts/bun-test.ts apps/monad/test/integration/tools/code-exec-docker.container.unix.test.ts --only-failures
+
+      - name: Test script integration
+        if: ${{ !cancelled() }}
+        run: bun scripts/bun-test.ts scripts/test/integration/ --only-failures
+
+      - name: Upload test timings
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: junit-integration-${{ matrix.os }}
+          path: ${{ runner.temp }}/monad-junit
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        if: always() && steps.bun-cache.outputs.cache-hit != 'true'
+        with:
+          path: ${{ runner.temp }}/bun-install-cache
+          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lock') }}
+
   # Hermetic daemon E2E uses real HTTP/SSE/stdio transports and local subprocess fixtures, but
   # excludes live providers, host-installed provider sessions, and dependency-container tests
   # before Bun loads those files.
   hermetic-e2e:
     name: hermetic e2e (${{ matrix.os }})
-    if: github.event_name == 'merge_group' || inputs.full
+    if: "${{ github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
     runs-on: ${{ matrix.os }}
     timeout-minutes: 35
     strategy:
@@ -353,14 +486,9 @@ jobs:
   # Playwright starts its own Vite server, so this job needs no daemon and no provider credentials.
   web-e2e:
     name: web e2e (${{ matrix.shard }}/2)
-    if: github.event_name == 'merge_group' || inputs.full
+    if: "${{ github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
-    # Playwright's webServer wait times out intermittently on these runners with no server output,
-    # one shard passing while its twin fails in the same run. Until that is found the leg reports
-    # without blocking a release. Deliberate coverage loss: a real browser regression stops failing
-    # the gate, so read this leg before shipping anything that touches apps/web.
-    continue-on-error: true
     strategy:
       fail-fast: false
       matrix:
@@ -446,7 +574,7 @@ jobs:
   # and future merge queues gated while avoiding duplicate artifact builds inside release.yml.
   dist-tail:
     name: installer and upgrade e2e
-    if: ${{ !inputs.release_validation }}
+    if: ${{ !inputs.release_validation && !inputs.nightly }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
@@ -546,7 +674,7 @@ jobs:
   # preinstalled.
   e2e-deps:
     name: e2e deps container
-    if: github.event_name == 'merge_group' || inputs.full
+    if: "${{ github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
     runs-on: ubuntu-latest
     timeout-minutes: 25
     steps:
@@ -566,23 +694,37 @@ jobs:
   gate:
     name: merge gate
     if: always()
-    needs: [checks, unit, hermetic-e2e, web-e2e, dist-tail, e2e-deps]
+    needs: [release-notes, checks, unit, integration, hermetic-e2e, web-e2e, dist-tail, e2e-deps]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Verify required jobs
         env:
-          FULL_CI: ${{ github.event_name == 'merge_group' || inputs.full }}
+          FULL_CI: "${{ github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
+          RELEASE_PR: "${{ contains(github.event.pull_request.labels.*.name, 'autorelease: pending') }}"
+          RELEASE_NOTES_RESULT: ${{ needs.release-notes.result }}
           CHECKS_RESULT: ${{ needs.checks.result }}
           UNIT_RESULT: ${{ needs.unit.result }}
+          INTEGRATION_RESULT: ${{ needs.integration.result }}
           HERMETIC_E2E_RESULT: ${{ needs.hermetic-e2e.result }}
           WEB_E2E_RESULT: ${{ needs.web-e2e.result }}
           DIST_TAIL_RESULT: ${{ needs.dist-tail.result }}
           E2E_DEPS_RESULT: ${{ needs.e2e-deps.result }}
           RELEASE_VALIDATION: ${{ inputs.release_validation }}
+          NIGHTLY: ${{ inputs.nightly }}
         run: |
-          test "$CHECKS_RESULT" = success
           test "$UNIT_RESULT" = success
+          test "$INTEGRATION_RESULT" = success
+
+          if [[ "$NIGHTLY" == true ]]; then
+            exit 0
+          fi
+
+          test "$CHECKS_RESULT" = success
+
+          if [[ "$RELEASE_PR" == true ]]; then
+            test "$RELEASE_NOTES_RESULT" = success
+          fi
 
           if [[ "$FULL_CI" == true ]]; then
             test "$HERMETIC_E2E_RESULT" = success

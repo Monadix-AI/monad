@@ -19,14 +19,14 @@ test('parseNativeAgentFileReferences extracts @file markers and removes them fro
       'Implemented the parser.',
       '',
       '@file(apps/monad/src/services/native-agent/file-refs.ts)',
-      '@file "./apps/monad/test/unit/services/native-agent-file-refs.test.ts"',
+      '@file "./apps/monad/test/integration/services/native-agent-file-refs.test.ts"',
       '@file apps/monad/src/services/native-agent/file-refs.ts'
     ].join('\n')
   );
 
   expect(parsed.paths).toEqual([
     'apps/monad/src/services/native-agent/file-refs.ts',
-    './apps/monad/test/unit/services/native-agent-file-refs.test.ts'
+    './apps/monad/test/integration/services/native-agent-file-refs.test.ts'
   ]);
   expect(parsed.text).toBe('Implemented the parser.');
 });

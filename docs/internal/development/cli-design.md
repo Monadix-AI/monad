@@ -84,7 +84,7 @@ newcomers.
 
 Every entry above must exist in `apps/cli/src/commands/shortcuts.ts` (or as an `aliases`
 entry on the canonical command). The table and the registry are checked against each other
-by `apps/cli/test/unit/cli-surface.test.ts`.
+by `apps/cli/test/integration/cli-surface.test.ts`.
 
 ## 2b. Usage-table groups
 

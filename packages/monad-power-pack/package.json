@@ -8,7 +8,7 @@
     "@monad/sdk-experience": "workspace:*",
     "@monad/ui": "workspace:*",
     "@xyflow/react": "^12.11.3",
-    "e2b": "^2.40.0",
+    "e2b": "^2.42.0",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "zod": "^4.4.3"
@@ -30,6 +30,7 @@
     "build:atom-pack:research-desk": "bun build src/experiences/research-desk/client.tsx --outfile dist/experiences/research-desk.js --target browser --format esm --production",
     "build:kanban": "bun build src/experiences/kanban/client.tsx --outfile src/experiences/kanban.js --target browser --format esm --production",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:integration": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts bun run typecheck:raw",
     "typecheck:raw": "tsc --noEmit && tsc -p tsconfig.client.json --noEmit"
   },

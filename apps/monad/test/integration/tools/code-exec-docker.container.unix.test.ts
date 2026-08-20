@@ -7,10 +7,7 @@ import { detectDockerRuntime, dockerLauncher, dockerRuntimeAvailable } from '@mo
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
 
 const runtime = await detectDockerRuntime();
-if (!runtime) {
-  process.stdout.write('skip: no Docker or Podman detected\n');
-  process.exit(0);
-}
+if (!runtime) throw new Error('Docker or Podman is required for the container integration lane');
 
 afterEach(() => configureSandboxLauncher(noneLauncher));
 

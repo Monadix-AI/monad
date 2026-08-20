@@ -1,14 +1,13 @@
 // e2e: daemon-level sandbox wiring for Linux bubblewrap.
 //
-// Complements apps/monad/test/unit/tools/bwrap.linux.test.ts (raw arg-gen + kernel checks) by
+// Complements apps/monad/test/integration/tools/bwrap.linux.test.ts (raw arg-gen + kernel checks) by
 // exercising the full spawn.ts middleware path: the configureSandboxLauncher → sandboxLauncher()
 // round-trip, the env overlay in sandboxedSpawn, and kernel-enforced write confinement through
 // the daemon's own sandboxedSpawn wrapper rather than the launcher directly.
 
 if (process.platform !== 'linux') process.exit(0);
-if (!Bun.which('bwrap')) process.exit(0);
 
-import { afterAll, beforeAll, expect, test } from 'bun:test';
+import { afterAll, beforeAll, test as bunTest, expect } from 'bun:test';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -24,8 +23,14 @@ import {
   selectSandboxLauncher
 } from '#/capabilities/tools';
 
-beforeAll(() => configureSandboxLauncher(bwrapLauncher));
+const enabled = Boolean(Bun.which('bwrap'));
+const test = bunTest.skipIf(!enabled);
+
+beforeAll(() => {
+  if (enabled) configureSandboxLauncher(bwrapLauncher);
+});
 afterAll(() => {
+  if (!enabled) return;
   configureSandboxLauncher(noneLauncher);
   clearSandboxLaunchers();
 });

@@ -14,7 +14,7 @@ import { HOST_CONTROL_KEY } from '#/agent/approvals/engine.ts';
 import { connectMcpServers } from '#/capabilities/mcp/service.ts';
 import { AtomPackRegistry } from '#/handlers/atom-pack/index.ts';
 
-const fixture = join(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');
+const fixture = join(import.meta.dir, '../integration/tools/fixtures/mock-mcp-server.ts');
 
 const paths: MonadPaths = {
   home: '/dev/null',

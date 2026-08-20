@@ -252,12 +252,16 @@ So *every commit that lands on `main` is a candidate for the next release.*
 
 For **stable** and **beta**, release-please reads the Conventional Commit
 history, opens a release PR with the version bump and generated `CHANGELOG.md`,
-and tags once that PR is merged — that PR is the human gate. **nightly** is fully
-automatic: a daily job builds `main`'s tip (skipping if there are no new commits
-since the last nightly) and publishes a rolling prerelease — no release PR, no
-changelog churn. You never need a branch just to release; the release workflow uses dist to build
-every target and smoke-tests the generated shell and PowerShell installers before publishing, so a
-momentarily-red `main` is recoverable.
+and tags once that PR is merged — that PR is the human gate. CI rewrites the PR
+body with the exact `git-cliff` release notes and runs the complete quality matrix.
+Every added commit cancels the superseded run, regenerates that body, and reruns
+the gate. After merge, the release workflow only verifies the prepared draft,
+builds, attests, and publishes its assets; it does not repeat the quality gate.
+
+**nightly** is fully automatic: a daily job runs unit and integration
+tests, builds `main`'s tip (skipping if there are no new commits), and publishes a
+rolling prerelease with generated notes. Live-provider E2E runs on its own schedule
+and cannot delay nightly publishing.
 
 These channel branches are **not** version-maintenance branches. We do not keep
 long-lived `release/*` branches for patching shipped versions; add one only if we

@@ -9,6 +9,8 @@ import { afterEach, expect, test } from 'bun:test';
 import { resolve } from 'node:path';
 import { client as acpClient, ndJsonStream, PROTOCOL_VERSION } from '@agentclientprotocol/sdk';
 
+import { DAEMON_E2E_TIMEOUT_BUDGET } from '../../scripts/e2e-timeout-budget.ts';
+
 const helper = resolve(import.meta.dir, 'acp-stdio.helper.ts');
 
 function spawnAcpHelper() {
@@ -20,9 +22,9 @@ function spawnAcpHelper() {
   });
 
   const output = new WritableStream<Uint8Array>({
-    write(chunk) {
-      proc.stdin.write(chunk);
-      proc.stdin.flush();
+    async write(chunk) {
+      await proc.stdin.write(chunk);
+      await proc.stdin.flush();
     },
     close() {
       proc.stdin.end();
@@ -47,33 +49,42 @@ function spawnAcpHelper() {
 
 const procs: ReturnType<typeof Bun.spawn>[] = [];
 
-afterEach(() => {
-  for (const p of procs.splice(0)) p.kill();
+afterEach(async () => {
+  await Promise.all(
+    procs.splice(0).map(async (proc) => {
+      proc.kill();
+      await proc.exited;
+    })
+  );
 });
 
-test('stdio ACP: initialize → newSession → prompt → forkSession over real child process', async () => {
-  const { proc, app, stream, updates } = spawnAcpHelper();
-  procs.push(proc);
+test(
+  'stdio ACP: initialize → newSession → prompt → forkSession over real child process',
+  async () => {
+    const { proc, app, stream, updates } = spawnAcpHelper();
+    procs.push(proc);
 
-  await app.connectWith(stream, async (ctx) => {
-    const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
-    expect(init.protocolVersion).toBe(PROTOCOL_VERSION);
-    expect(init.agentInfo?.name).toBe('Monad');
+    await app.connectWith(stream, async (ctx) => {
+      const init = await ctx.request('initialize', { protocolVersion: PROTOCOL_VERSION, clientCapabilities: {} });
+      expect(init.protocolVersion).toBe(PROTOCOL_VERSION);
+      expect(init.agentInfo?.name).toBe('Monad');
 
-    const { sessionId } = await ctx.request('session/new', { cwd: process.cwd(), mcpServers: [] });
-    expect(sessionId).toMatch(/^ses_/);
+      const { sessionId } = await ctx.request('session/new', { cwd: process.cwd(), mcpServers: [] });
+      expect(sessionId).toMatch(/^ses_/);
 
-    const res = await ctx.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'hello' }] });
-    expect(res.stopReason).toBe('end_turn');
+      const res = await ctx.request('session/prompt', { sessionId, prompt: [{ type: 'text', text: 'hello' }] });
+      expect(res.stopReason).toBe('end_turn');
 
-    const text = updates
-      .filter((u) => u.update.sessionUpdate === 'agent_message_chunk')
-      .map((u) => (u.update as { content: { text: string } }).content.text)
-      .join('');
-    expect(text.length).toBeGreaterThan(0);
+      const text = updates
+        .filter((u) => u.update.sessionUpdate === 'agent_message_chunk')
+        .map((u) => (u.update as { content: { text: string } }).content.text)
+        .join('');
+      expect(text.length).toBeGreaterThan(0);
 
-    const forked = await ctx.request('session/fork', { sessionId, cwd: process.cwd(), mcpServers: [] });
-    expect(forked.sessionId).toMatch(/^ses_/);
-    expect(forked.sessionId).not.toBe(sessionId);
-  });
-}, 20_000);
+      const forked = await ctx.request('session/fork', { sessionId, cwd: process.cwd(), mcpServers: [] });
+      expect(forked.sessionId).toMatch(/^ses_/);
+      expect(forked.sessionId).not.toBe(sessionId);
+    });
+  },
+  DAEMON_E2E_TIMEOUT_BUDGET.testCaseMs
+);

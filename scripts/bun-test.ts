@@ -120,7 +120,12 @@ const loudEnv = loud ? { MONAD_TEST_DEBUG: '1' } : {};
 const { exitCode, junitReports } =
   shardCount > 1 && !loud && ownsReporter ? await runNativeShards(shardCount) : await runTests();
 const failed = groupFailedCases(junitReports.flatMap((path) => parseFailedCases(readFileSync(path, 'utf8'))));
-const effectiveExitCode = testRunExitCode(exitCode, failed.length);
+const missingReport = !loud && ownsReporter && junitReports.length === 0;
+const effectiveExitCode = testRunExitCode(exitCode, failed.length, missingReport);
+
+if (missingReport) {
+  process.stderr.write('[monad-test] Test process exited without producing its required JUnit report.\n');
+}
 
 if (failed.length > 0) {
   if (process.env.GITHUB_ACTIONS === 'true') {
