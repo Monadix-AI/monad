@@ -303,8 +303,13 @@ export async function connectMcpServer(spec: McpServerSpec): Promise<McpConnecti
   const connectionAbort = new AbortController();
   const urlCompletions = new McpUrlCompletionRegistry();
   let activeContext: ToolContext | undefined;
+  let activeProgress: ((progress: { message?: string; progress: number; total?: number }) => void) | undefined;
   let callQueue = Promise.resolve();
-  const withCallContext = async <T>(ctx: ToolContext | undefined, run: () => Promise<T>): Promise<T> => {
+  const withCallContext = async <T>(
+    ctx: ToolContext | undefined,
+    run: () => Promise<T>,
+    onProgress?: (progress: { message?: string; progress: number; total?: number }) => void
+  ): Promise<T> => {
     let release: () => void = () => {};
     const previous = callQueue;
     callQueue = new Promise<void>((resolve) => {
@@ -312,10 +317,12 @@ export async function connectMcpServer(spec: McpServerSpec): Promise<McpConnecti
     });
     await previous;
     activeContext = ctx;
+    activeProgress = onProgress;
     try {
       return await run();
     } finally {
       activeContext = undefined;
+      activeProgress = undefined;
       release();
     }
   };
@@ -369,18 +376,21 @@ export async function connectMcpServer(spec: McpServerSpec): Promise<McpConnecti
       let result: CallToolResult;
       try {
         let progressText = '';
+        const reportProgress = (progress: { message?: string; progress: number; total?: number }) => {
+          const message = typeof progress.message === 'string' ? progress.message : undefined;
+          const next =
+            message ?? `${name}: ${progress.progress}${progress.total !== undefined ? `/${progress.total}` : ''}`;
+          if (next === progressText) return;
+          progressText = next;
+          ctx?.reportProgress?.(next);
+        };
         const requestOptions = {
           timeout,
           maxTotalTimeout: Math.max(timeout, 15 * 60_000),
           resetTimeoutOnProgress: true,
           signal: ctx?.signal,
           toolDefinition: definition,
-          onprogress: (progress: { message?: string; progress: number; total?: number }) => {
-            const message = typeof progress.message === 'string' ? progress.message : undefined;
-            progressText =
-              message ?? `${name}: ${progress.progress}${progress.total !== undefined ? `/${progress.total}` : ''}`;
-            ctx?.reportProgress?.(progressText);
-          }
+          onprogress: reportProgress
         };
         const pendingResult = serverSupportsTasks(client)
           ? await callToolWithTasks({
@@ -394,19 +404,21 @@ export async function connectMcpServer(spec: McpServerSpec): Promise<McpConnecti
               serverName: spec.name,
               taskJournal: spec.taskJournal,
               registerUrlCompletion: (elicitationId, complete) => urlCompletions.register(elicitationId, complete),
-              withRequestContext: (run) => withCallContext(ctx, run)
+              withRequestContext: (run) => withCallContext(ctx, run, reportProgress)
             })
-          : await withCallContext(ctx, () =>
-              client.callTool(
-                {
-                  name,
-                  arguments: (args ?? {}) as Record<string, unknown>,
-                  _meta: traceMeta(ctx)
-                },
-                requestOptions
-              )
+          : await withCallContext(
+              ctx,
+              () =>
+                client.callTool(
+                  {
+                    name,
+                    arguments: (args ?? {}) as Record<string, unknown>,
+                    _meta: traceMeta(ctx)
+                  },
+                  requestOptions
+                ),
+              reportProgress
             );
-        await Promise.resolve();
         result = pendingResult;
       } catch (error) {
         log.warn(
@@ -498,6 +510,16 @@ export async function connectMcpServer(spec: McpServerSpec): Promise<McpConnecti
     const protocolOnMessage = transport.onmessage;
     watchMcpTransport(transport, notifyDisconnect);
     transport.onmessage = (message, extra) => {
+      if ('method' in message && message.method === 'notifications/progress') {
+        const params = message.params;
+        if (params && typeof params === 'object' && typeof params.progress === 'number') {
+          activeProgress?.({
+            progress: params.progress,
+            ...(typeof params.total === 'number' ? { total: params.total } : {}),
+            ...(typeof params.message === 'string' ? { message: params.message } : {})
+          });
+        }
+      }
       protocolOnMessage?.(message, extra);
       if ('method' in message && message.method === 'notifications/resources/updated') {
         const uri =
