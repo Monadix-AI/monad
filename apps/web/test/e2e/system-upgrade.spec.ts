@@ -14,11 +14,12 @@ function json(body: unknown, status = 200) {
 async function installSystemSettingsApiMock(
   page: Page,
   health: { version: string; latestVersion?: string; latestVersionCheckedAt?: string },
-  upgrade: { latestVersion?: string; pauseAtProgress?: number } = {}
+  upgrade: { checking?: boolean; latestVersion?: string; pauseAtProgress?: number } = {}
 ) {
   let upgradeGets = 0;
   let upgradeStarts = 0;
   let finishUpgrade: (() => void) | undefined;
+  let healthState = { ...health };
   let startup = { enabled: false, supported: true };
   const upgradeLatestVersion = upgrade.latestVersion ?? health.latestVersion;
   let upgradeState = {
@@ -29,7 +30,7 @@ async function installSystemSettingsApiMock(
     latestVersion: upgradeLatestVersion ?? null,
     lastAttempt: null,
     progress: 0,
-    stage: 'idle',
+    stage: upgrade.checking ? 'checking' : 'idle',
     totalBytes: null,
     bytesPerSecond: null
   };
@@ -44,7 +45,7 @@ async function installSystemSettingsApiMock(
     const path = url.pathname.replace('/api/v1', '/v1').replace('/api/health', '/health');
     const method = request.method();
 
-    if (method === 'GET' && path === '/health') return route.fulfill(json({ status: 'ok', ...health }));
+    if (method === 'GET' && path === '/health') return route.fulfill(json({ status: 'ok', ...healthState }));
     if (method === 'GET' && path === '/v1/system/upgrade') {
       upgradeGets += 1;
       if (upgradeState.available && upgradeState.stage === 'idle') {
@@ -162,6 +163,9 @@ async function installSystemSettingsApiMock(
     setExternalStartup(enabled: boolean) {
       startup = { ...startup, enabled };
     },
+    setHealthVersion(version: string) {
+      healthState = { ...healthState, version };
+    },
     upgradeGets: () => upgradeGets,
     upgradeStarts: () => upgradeStarts
   };
@@ -211,7 +215,11 @@ test.describe('System upgrade settings', () => {
     await expect(page.getByRole('button', { name: 'Downloading 42%' })).toHaveText('42%');
 
     api.finishUpgrade();
-    await expect(page.getByRole('button', { name: 'Restarting 90%' })).toHaveText('90%');
+    await expect(page.getByRole('button', { name: 'Restarting…' })).toHaveText('Restarting…');
+
+    const reloaded = page.waitForEvent('load');
+    api.setHealthVersion('0.2.0');
+    await reloaded;
 
     await page.goto('/settings/system');
 
@@ -223,6 +231,17 @@ test.describe('System upgrade settings', () => {
     await expect(settingsPage.getByText('90%')).toHaveCount(0);
     await expect(settingsPage.getByText('Checking')).toHaveCount(0);
     await expect(settingsPage.getByText('Verifying')).toHaveCount(0);
+  });
+
+  test('keeps the background update check silent in the sidebar', async ({ page }) => {
+    const api = await installSystemSettingsApiMock(page, { version: '0.1.1' }, { checking: true });
+
+    await page.goto('/');
+
+    await expect.poll(api.upgradeGets).toBeGreaterThan(0);
+    await expect(page.getByRole('button', { name: 'toggle theme' })).toBeVisible();
+    // behavior-ok: a background update check keeps the normal sidebar control instead of exposing progress
+    await expect(page.getByRole('button', { name: /Checking|Downloading|Restarting/ })).toHaveCount(0);
   });
 
   test('reloads launch-at-login switch from system state when settings opens', async ({ page }) => {
