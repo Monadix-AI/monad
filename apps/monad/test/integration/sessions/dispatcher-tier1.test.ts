@@ -8,6 +8,7 @@ import { HandlerError } from '#/handlers/handler-error.ts';
 import { getMeshAgentProviderAdapter } from '#/services/mesh-agent/index.ts';
 import { createStore } from '#/store/db/index.ts';
 import { buildHandlers, mockModel } from '../../helpers.ts';
+import { waitFor } from '../../wait.ts';
 
 test('sessionGet reports a well-formed id for a missing session as not_found', async () => {
   const d = buildHandlers(mockModel(['hi']));
@@ -516,7 +517,9 @@ test('stopped native session deletion removes the Monad session when provider de
     });
 
     await d.session.delete({ id: sessionId });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => store.getMeshSession(meshSessionId) === null && store.getSession(sessionId) === null, {
+      message: 'stopped native session storage was not deleted'
+    });
 
     expect({ meshSession: store.getMeshSession(meshSessionId), session: store.getSession(sessionId) }).toEqual({
       meshSession: null,
