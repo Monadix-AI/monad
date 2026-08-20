@@ -9,6 +9,7 @@ show_tools = true
 
 [tools]
 cargo-dist = "0.32.0"
+node = "22"
 
 [env]
 _.file = ".env.local"
