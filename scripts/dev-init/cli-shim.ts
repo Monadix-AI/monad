@@ -1,18 +1,15 @@
 import { chmod, mkdir } from 'node:fs/promises';
-import { join, posix, win32 } from 'node:path';
+import { join } from 'node:path';
 
-function quoteShell(value: string): string {
-  return `'${value.replaceAll("'", `'"'"'`)}'`;
-}
-
-export function devCliShimText(root: string, platform: NodeJS.Platform = process.platform): string {
+// The shim resolves its own worktree from its location instead of baking in an absolute path, so a
+// shim copied or inherited from another checkout still runs the source next to it. An absolute path
+// here is what used to make a stale .dev/bin silently run a different worktree.
+export function devCliShimText(platform: NodeJS.Platform = process.platform): string {
   if (platform === 'win32') {
-    const entrypoint = win32.join(root, 'apps', 'cli', 'src', 'bin.ts');
-    return `@echo off\r\nbun "${entrypoint}" %*\r\n`;
+    return '@echo off\r\nbun "%~dp0..\\..\\apps\\cli\\src\\bin.ts" %*\r\n';
   }
 
-  const entrypoint = posix.join(root, 'apps', 'cli', 'src', 'bin.ts');
-  return `#!/bin/sh\nexec bun ${quoteShell(entrypoint)} "$@"\n`;
+  return '#!/bin/sh\nroot=$(CDPATH= cd -- "$(dirname -- "$0")/../.." && pwd)\nexec bun "$root/apps/cli/src/bin.ts" "$@"\n';
 }
 
 export async function installDevCliShim(root: string, platform: NodeJS.Platform = process.platform): Promise<string> {
@@ -20,7 +17,7 @@ export async function installDevCliShim(root: string, platform: NodeJS.Platform 
   const shimPath = join(binDir, platform === 'win32' ? 'monad.cmd' : 'monad');
 
   await mkdir(binDir, { recursive: true });
-  await Bun.write(shimPath, devCliShimText(root, platform));
+  await Bun.write(shimPath, devCliShimText(platform));
   if (platform !== 'win32') await chmod(shimPath, 0o755);
 
   return shimPath;

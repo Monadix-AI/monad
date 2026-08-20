@@ -12,7 +12,7 @@ import { watchUpgradeRestartAndReload } from '#/lib/monad-store';
 
 const BACKGROUND_CHECK_INTERVAL_MS = 5 * 60_000;
 
-function upgradeStatusIsActive(stage: SystemUpgradeStatus['stage'] | undefined): boolean {
+function upgradeStatusNeedsPolling(stage: SystemUpgradeStatus['stage'] | undefined): boolean {
   return (
     stage === 'checking' ||
     stage === 'downloading' ||
@@ -20,6 +20,10 @@ function upgradeStatusIsActive(stage: SystemUpgradeStatus['stage'] | undefined):
     stage === 'installing' ||
     stage === 'restarting'
   );
+}
+
+function upgradeStatusIsBusy(stage: SystemUpgradeStatus['stage'] | undefined): boolean {
+  return stage === 'downloading' || stage === 'verifying' || stage === 'installing' || stage === 'restarting';
 }
 
 export function SidebarUpgradeControl({
@@ -44,21 +48,26 @@ export function SidebarUpgradeControl({
     skip: !daemonOnline
   });
   const stage = upgradeStatus?.stage;
-  const upgradeActive = upgradeStatusIsActive(stage);
-  const upgradeBusy = isStartingUpgrade || upgradeInitiated || upgradeActive;
+  const upgradeBusy = isStartingUpgrade || upgradeInitiated || upgradeStatusIsBusy(stage);
   const upgradeVisible = Boolean(hasUpgradeHint || upgradeStatus?.available || upgradeBusy);
-  const progress = Math.round(upgradeInitiated && stage === 'ready' ? 0 : (upgradeStatus?.progress ?? 0));
+  const restarting = stage === 'installing' || stage === 'restarting';
+  const progress = Math.round(
+    upgradeInitiated && (stage === 'checking' || stage === 'ready') ? 0 : (upgradeStatus?.progress ?? 0)
+  );
 
   useEffect(() => {
     if (stage === 'complete' || stage === 'failed' || stage === 'ready') setInitialCheckPending(false);
     if (stage === 'failed') setUpgradeInitiated(false);
-    setUpgradePolling(upgradeStatusIsActive(stage));
+    setUpgradePolling(upgradeStatusNeedsPolling(stage));
   }, [stage]);
 
   if (!upgradeVisible) return <ThemeToggle />;
 
-  const stageLabel = upgradeStageLabel(t, stage);
-  const label = upgradeBusy ? `${stageLabel} ${progress}%` : t('web.settings.system.updateTitle');
+  const label = restarting
+    ? `${t('web.settings.system.upgradeStage.restarting')}…`
+    : upgradeBusy
+      ? `${t('web.settings.system.upgradeStage.downloading')} ${progress}%`
+      : t('web.settings.system.updateTitle');
 
   const startUpgrade = async () => {
     if (upgradeBusy) return;
@@ -89,7 +98,11 @@ export function SidebarUpgradeControl({
           size="sm"
         >
           {upgradeBusy ? (
-            `${progress}%`
+            restarting ? (
+              `${t('web.settings.system.upgradeStage.restarting')}…`
+            ) : (
+              `${progress}%`
+            )
           ) : (
             <HugeiconsIcon
               className="size-4"
@@ -101,21 +114,4 @@ export function SidebarUpgradeControl({
       <TooltipContent>{label}</TooltipContent>
     </Tooltip>
   );
-}
-
-function upgradeStageLabel(t: ReturnType<typeof useT>, stage: SystemUpgradeStatus['stage'] | undefined): string {
-  switch (stage) {
-    case 'checking':
-      return t('web.settings.system.upgradeStage.checking');
-    case 'downloading':
-      return t('web.settings.system.upgradeStage.downloading');
-    case 'verifying':
-      return t('web.settings.system.upgradeStage.verifying');
-    case 'installing':
-      return t('web.settings.system.upgradeStage.installing');
-    case 'restarting':
-      return t('web.settings.system.upgradeStage.restarting');
-    default:
-      return t('web.settings.system.upgradeStage.idle');
-  }
 }

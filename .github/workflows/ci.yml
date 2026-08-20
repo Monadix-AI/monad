@@ -578,9 +578,6 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     env:
-      # Keep in step with release.yml's DIST_VERSION; release-dist-workflow.test.ts pins them equal.
-      DIST_VERSION: "0.32.0"
-      DIST_INSTALLER_SHA256: "b657cf8c04a8b7bc28f39d220f7e6dd11bbd2bdb072c552262bd9ccf597261b5"
       OLD_TAG: v0.0.1
       NEW_TAG: v0.0.2
     steps:
@@ -592,6 +589,12 @@ jobs:
       - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
         with:
           bun-version-file: package.json
+
+      - uses: jdx/mise-action@7e36c90d9ab29c415a2384db3006f3ec8a8cc654 # v4.2.4
+        with:
+          version: 2026.6.11
+          install: true
+          cache: true
 
       - name: Keep the Bun cache on the workspace volume
         shell: bash
@@ -606,9 +609,6 @@ jobs:
 
       - name: Install dependencies
         run: bun install --frozen-lockfile
-
-      - name: Install dist
-        run: bun scripts/install-cargo-dist.ts "$DIST_VERSION" "$DIST_INSTALLER_SHA256"
 
       # Both sides are built here rather than downloaded, so this job stands alone and does not need
       # the release matrix to have run first.

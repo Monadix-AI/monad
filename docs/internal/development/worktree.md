@@ -59,10 +59,8 @@ bun install        # link binaries + run postinstall (sets up ports and the Turb
 bun run dev        # starts daemon + web on this worktree's ports
 ```
 
-`bun run dev` is the **first thing you must run** in a fresh worktree — the `.dev/bin`
-CLI shims hardcode absolute paths, and if they aren't regenerated for the new checkout
-they silently run another worktree's source. `bun run dev` is safe to run in **every**
-worktree at once; ports are assigned per worktree automatically. See [Part 2](#part-2--environment-reference)
+`bun run dev` is safe to run in **every** worktree at once; ports are assigned per
+worktree automatically. See [Part 2](#part-2--environment-reference)
 for what it sets up, port discovery, and how to verify it came up.
 
 Do not copy `.env.local` from another worktree — each checkout needs its own.
@@ -272,7 +270,7 @@ Read this when `bun run dev` fails or you need to find/verify this worktree's po
      them into `.env.local` if absent — it never clobbers a value you set by hand,
    - copies the main worktree's Turbo `teamId` into the gitignored `.turbo/config.json`
      when available; authentication remains in Turbo's machine-level login,
-   - regenerates the `./.dev/bin` CLI shims with this worktree's absolute paths.
+   - installs the `./.dev/bin` CLI shim, which resolves its own worktree from where it sits.
 2. **At dev time**, Bun loads `.env.local` and `bun run dev` starts the repository's
    generated-artifact and persistent development tasks through `turbo watch`.
 3. Turbo generates stale inputs first, then runs `@monad/monad`, `@monad/web`,
@@ -317,10 +315,9 @@ are only the fallbacks for a checkout that hasn't been set up.
 - **Never develop in the main checkout.** Create a worktree first; all edits, commits,
   and test runs happen inside it. The main checkout is for creating worktrees and merging
   — not for writing code.
-- **Always run `bun install && bun run dev` in a freshly-created worktree before anything
-  else.** The `./.dev/bin` shims hardcode absolute paths; if they aren't regenerated for
-  the new checkout they point back at whichever worktree created them, silently running
-  the wrong source.
+- **Run `bun install` in a freshly-created worktree before anything else.** It assigns the
+  worktree its ports and installs its `./.dev/bin` shim. The shim resolves the worktree from
+  its own location, so an inherited copy still runs the source next to it.
 - **`.env.local` is per-worktree and gitignored.** Don't copy one between worktrees — that
   copies the other worktree's ports and reintroduces the clash.
 - **To pin a port** (e.g. an external tool expects a fixed daemon port), set it in that
