@@ -1,7 +1,7 @@
 import type { MonadPaths } from '../../src/paths.ts';
 
 import { afterEach, beforeEach, describe, expect, test } from 'bun:test';
-import { mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { ModelProviderType } from '@monad/protocol';
@@ -73,8 +73,8 @@ function makePaths(base: string): MonadPaths {
 let testDir: string;
 let paths: MonadPaths;
 
-beforeEach(() => {
-  testDir = join(tmpdir(), `monad-test-${Date.now()}`);
+beforeEach(async () => {
+  testDir = await mkdtemp(join(tmpdir(), 'monad-test-'));
   paths = makePaths(testDir);
 });
 
