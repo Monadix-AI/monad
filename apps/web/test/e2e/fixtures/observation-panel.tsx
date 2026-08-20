@@ -50,8 +50,6 @@ const LOREM =
 
 type FixtureProvider = 'claude-code' | 'codex';
 
-let activeFixtureRequestCount: (() => number) | undefined;
-
 configureBuiltinMeshAgentObservationAdapters();
 
 function makeRow(index: number): RawFrameRow {
@@ -317,7 +315,6 @@ function createFixtureRuntime(provider: FixtureProvider, meshSessionId: string, 
   const rawEvents = client.meshAgentRawEvents.bind(client);
   let newestRawPagePromise: ReturnType<typeof rawEvents> | undefined;
   let newestConveniencePagePromise: ReturnType<typeof client.meshAgentConvenienceEvents> | undefined;
-  let convenienceRequestCount = 0;
   const adapter = builtinMeshAgentObservationAdapters.find((candidate) => candidate.provider === provider);
   if (!adapter?.observation) throw new Error(`missing fixture projector for ${provider}`);
 
@@ -355,7 +352,6 @@ function createFixtureRuntime(provider: FixtureProvider, meshSessionId: string, 
   client.streamMeshAgentSessionUsage = () => () => {};
   client.meshAgentConvenienceEvents = async (id, targetId, request) => {
     const requestCursor = request.before ?? fixtureCursor(0);
-    convenienceRequestCount += 1;
     const page = await rawEvents(id, targetId, {
       ...request,
       before: observationCursorSchema.parse(requestCursor)
@@ -402,7 +398,7 @@ function createFixtureRuntime(provider: FixtureProvider, meshSessionId: string, 
   const projectId = 'prj_fixture00001';
   const uiKey = projectSessionUiKey(projectId, transcriptTargetId);
   useChatRoomExperienceStore.getState().followMeshSession(uiKey, projectId, meshSessionId);
-  return { client, fixtureRequestCount: () => convenienceRequestCount, projectId, store, uiKey };
+  return { client, projectId, store, uiKey };
 }
 
 function FixtureObservationRail({
@@ -441,10 +437,8 @@ function FixtureObservationRail({
     }),
     [provider]
   );
-  activeFixtureRequestCount = runtime.fixtureRequestCount;
   useEffect(
     () => () => {
-      if (activeFixtureRequestCount === runtime.fixtureRequestCount) activeFixtureRequestCount = undefined;
       runtime.client.dispose();
       useChatRoomExperienceStore.getState().removeSessionUiState(runtime.uiKey);
     },
@@ -499,7 +493,6 @@ declare global {
   interface Window {
     observationHarness: {
       agent: (agentKey: 'agent-a' | 'agent-b') => void;
-      fixtureRequestCount: () => number;
       prependReset: () => void;
       state: () => {
         distanceFromBottom: number;
@@ -557,7 +550,6 @@ function Harness(): React.ReactElement {
 
   window.observationHarness = {
     agent: setAgentKey,
-    fixtureRequestCount: () => activeFixtureRequestCount?.() ?? 0,
     prependReset: () => {
       loadCountRef.current = 0;
     },
