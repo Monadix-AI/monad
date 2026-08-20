@@ -1,0 +1,70 @@
+name: Release Compatibility Smoke
+
+on:
+  workflow_run:
+    workflows: [Release Please, Beta Release Please, Nightly]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Published release tag to verify.
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  windows-arm64:
+    if: github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'
+    runs-on: windows-11-arm
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+      - name: Resolve published tag
+        id: release
+        env:
+          DISPATCH_TAG: ${{ inputs.tag }}
+          RELEASE_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          tag="${DISPATCH_TAG}"
+          if [[ -z "${tag}" ]]; then
+            tag="$(git tag --points-at "${RELEASE_SHA}" --list 'v*' | sort -V | tail -1)"
+          fi
+          [[ -n "${tag}" ]]
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+      - name: Download published assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: gh release download "${{ steps.release.outputs.tag }}" --dir artifacts --repo "${GITHUB_REPOSITORY}"
+      - name: Test PowerShell installer
+        env:
+          MONAD_DIST_VERSION: ${{ steps.release.outputs.tag }}
+        shell: pwsh
+        run: |
+          Start-Process python -ArgumentList '-m','http.server','8123','--directory','artifacts' -WindowStyle Hidden
+          for ($attempt = 0; $attempt -lt 20; $attempt++) {
+            try { Invoke-WebRequest http://127.0.0.1:8123/ -UseBasicParsing | Out-Null; break } catch { Start-Sleep -Milliseconds 250 }
+          }
+          $env:MONAD_DOWNLOAD_URL = 'http://127.0.0.1:8123'
+          $env:MONAD_INSTALL_DIR = Join-Path $env:RUNNER_TEMP 'monad-install'
+          $env:MONAD_NO_MODIFY_PATH = '1'
+          $env:MONAD_NO_OPEN = '1'
+          $env:MONAD_FORCE_INTERACTIVE = '1'
+          & artifacts/install.ps1 *>&1 | Tee-Object -FilePath (Join-Path $env:RUNNER_TEMP 'install.log')
+          Select-String -SimpleMatch 'Checksum verified' (Join-Path $env:RUNNER_TEMP 'install.log') | Out-Null
+          if (Select-String -SimpleMatch 'no checksums to verify' (Join-Path $env:RUNNER_TEMP 'install.log')) {
+            throw 'installer did not verify the archive checksum'
+          }
+          if (!(Test-Path (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe'))) { throw 'monad.exe was not installed' }
+          $expected = ($env:MONAD_DIST_VERSION -replace '^v','') -replace '\+.*$',''
+          $reported = & (Join-Path $env:MONAD_INSTALL_DIR 'monad.exe') --version
+          if (!($reported | Select-String -SimpleMatch $expected)) {
+            throw "installed binary reported '$reported', expected it to contain '$expected'"
+          }

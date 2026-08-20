@@ -19,8 +19,9 @@ The contributor-facing side of this — how releases are cut — is in
 | `beta` | Early adopters who will report bugs | Same gate, prerelease line | `v0.2.0-beta.1` |
 | `nightly` | Developers tracking `main` | Automatic daily build of `main`'s tip, no human gate | `v0.2.0-nightly.<date>+<sha>` |
 
-Nightly has no release PR and no changelog entry. It is `main` as it stands — use it when
-you want the newest work and can tolerate a broken day.
+Nightly has no release PR or `CHANGELOG.md` update, but its GitHub release contains generated notes
+for the exact commit range. It is `main` as it stands — use it when you want the newest work and can
+tolerate a broken day.
 
 Each dist installer is bound to its release tag. Install stable with the latest installer, then switch an existing install explicitly when needed:
 

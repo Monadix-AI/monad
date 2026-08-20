@@ -1,0 +1,41 @@
+[changelog]
+header = ""
+body = """
+{% for group, commits in commits | group_by(attribute="group") %}
+### {{ group | striptags | trim }}
+
+{% for commit in commits %}
+* {{ commit.message | upper_first }} ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/Monadix-AI/monad/commit/{{ commit.id }}))
+{% endfor %}
+
+{% endfor %}
+{% if previous.version %}
+**Full Changelog**: https://github.com/Monadix-AI/monad/compare/{{ previous.version }}...{{ version }}
+{% else %}
+**Full Changelog**: https://github.com/Monadix-AI/monad/commits/{{ version }}
+{% endif %}
+"""
+footer = ""
+trim = true
+
+[git]
+conventional_commits = true
+filter_unconventional = true
+split_commits = false
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactors" },
+  { message = "^docs", group = "Documentation" },
+  { message = "^test", group = "Tests" },
+  { message = "^build", group = "Build System" },
+  { message = "^ci", group = "Continuous Integration" },
+  { message = "^style", group = "Styles" },
+  { message = "^chore", group = "Maintenance" },
+  { message = "^revert", group = "Reverts" },
+  { message = ".*", group = "Other Changes" },
+]
+protect_breaking_commits = false
+filter_commits = false
+sort_commits = "oldest"
