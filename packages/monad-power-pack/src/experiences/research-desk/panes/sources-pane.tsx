@@ -10,12 +10,16 @@ export function SourcesPane({
   linkedSourceIds,
   onAdd,
   onInspect,
+  onOpenTransformations,
+  onOpenVisibility,
   sources
 }: {
   focused: boolean;
   linkedSourceIds: ReadonlySet<string>;
   onAdd(): void;
   onInspect(source: SourceRef): void;
+  onOpenTransformations?(): void;
+  onOpenVisibility?(): void;
   sources: readonly SourceRef[];
 }) {
   const [typeFilter, setTypeFilter] = useState('all');
@@ -43,13 +47,33 @@ export function SourcesPane({
         <h2 className="pane-heading">
           Sources <small>{sources.length}</small>
         </h2>
-        <button
-          className="pane-add"
-          onClick={onAdd}
-          type="button"
-        >
-          Add source
-        </button>
+        <div className="pane-header-actions">
+          {onOpenTransformations ? (
+            <button
+              className="pane-add"
+              onClick={onOpenTransformations}
+              type="button"
+            >
+              Recipes
+            </button>
+          ) : null}
+          {onOpenVisibility ? (
+            <button
+              className="pane-add"
+              onClick={onOpenVisibility}
+              type="button"
+            >
+              Reading
+            </button>
+          ) : null}
+          <button
+            className="pane-add"
+            onClick={onAdd}
+            type="button"
+          >
+            Add source
+          </button>
+        </div>
       </header>
       <div className="pane-body">
         <div className="pane-toolbar">
