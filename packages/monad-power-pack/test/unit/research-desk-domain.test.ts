@@ -2,16 +2,20 @@ import { describe, expect, test } from 'bun:test';
 
 import {
   addCitation,
+  applyEvidenceContribution,
   blockSource,
   captureSource,
   coverageFor,
   decideClaim,
   isCitable,
   makeEvidenceClaim,
+  makeEvidenceContribution,
   makeReport,
+  makeResearchAssignment,
   makeSourceRef,
   manifestEntries,
   markSourceRot,
+  normalizeEvidenceClaim,
   PublishBlockedError,
   patchBlock,
   publishBlockers,
@@ -19,6 +23,7 @@ import {
   reopenClaim,
   startNextRevision,
   statusFromCitations,
+  transitionResearchAssignment,
   upsertBlock
 } from '../../src/experiences/research-desk/domain/index.ts';
 
@@ -133,6 +138,153 @@ describe('evidence status from material', () => {
 
   test('an uncited claim reads as unverified', () => {
     expect(statusFromCitations([])).toBe('unverified');
+  });
+});
+
+describe('mesh evidence contributions', () => {
+  test('an opposing citation records canonical provenance and contests an existing claim', () => {
+    const contribution = makeEvidenceContribution({
+      id: 'ctb_1',
+      claimId: 'evd_1',
+      assignmentId: 'asg_1',
+      memberId: 'mesh-agent:evidence-engineer',
+      sessionId: 'ses_verify',
+      messageId: 'msg_verify',
+      kind: 'citation',
+      payload: {
+        sourceId: 'src_b',
+        excerpt: 'the comparable cohort retained seat pricing',
+        locator: null,
+        stance: 'oppose'
+      },
+      createdAt: LATER
+    });
+
+    const updated = applyEvidenceContribution(addCitation(claim(), 0, citation(), NOW), 1, contribution, LATER);
+
+    expect(updated.status).toBe('contested');
+    expect(updated.citations).toEqual([
+      { ...citation(), addedAt: NOW },
+      {
+        sourceId: 'src_b',
+        excerpt: 'the comparable cohort retained seat pricing',
+        locator: null,
+        stance: 'oppose',
+        addedByMemberId: 'mesh-agent:evidence-engineer',
+        addedAt: LATER
+      }
+    ]);
+    expect(updated.contributions).toEqual([contribution]);
+    expect(updated.version).toBe(2);
+  });
+
+  test('repeating a contribution id is a no-op with no version or timestamp change', () => {
+    const contribution = makeEvidenceContribution({
+      id: 'ctb_repeat',
+      claimId: 'evd_1',
+      assignmentId: null,
+      memberId: 'mesh-agent:evidence-engineer',
+      sessionId: 'ses_verify',
+      messageId: 'msg_verify',
+      kind: 'challenge',
+      payload: { reason: 'the sample mixes incomparable vendors' },
+      createdAt: NOW
+    });
+    const once = applyEvidenceContribution(claim(), 0, contribution, NOW);
+
+    expect(applyEvidenceContribution(once, 1, contribution, LATER)).toEqual(once);
+  });
+
+  test('a challenge after a human ruling remains visible without reopening the ruling', () => {
+    const accepted = decideClaim(claim(), 0, { status: 'accepted', reason: 'narrowed to the comparable cohort' }, NOW);
+    const challenged = applyEvidenceContribution(
+      accepted,
+      1,
+      makeEvidenceContribution({
+        id: 'ctb_challenge',
+        claimId: 'evd_1',
+        assignmentId: null,
+        memberId: 'mesh-agent:evidence-engineer',
+        sessionId: 'ses_verify',
+        messageId: 'msg_verify',
+        kind: 'challenge',
+        payload: { reason: 'a newly launched vendor falls outside the captured cohort' },
+        createdAt: LATER
+      }),
+      LATER
+    );
+
+    expect(challenged.status).toBe('accepted');
+    expect(challenged.decidedBy).toBe('human');
+    expect(challenged.decisionReason).toBe('narrowed to the comparable cohort');
+    expect(challenged.contributions.map((entry) => entry.kind)).toEqual(['challenge']);
+  });
+
+  test('legacy persisted claims normalize with an empty contribution ledger', () => {
+    const current = claim();
+    const { contributions: _contributions, ...legacy } = current;
+
+    expect(normalizeEvidenceClaim(legacy)).toEqual(current);
+  });
+});
+
+describe('research assignments', () => {
+  test('an assignment moves from queued through running to completed with an audit receipt', () => {
+    const queued = makeResearchAssignment({
+      id: 'asg_1',
+      projectId: 'prj_1',
+      role: 'evidence-engineer',
+      targetClaimId: 'evd_1',
+      sessionId: 'ses_verify',
+      memberId: 'mesh-agent:evidence-engineer',
+      objective: 'Challenge the pricing claim with a comparable cohort',
+      contextReceipt: {
+        brief: 'Decide whether usage pricing fits the launch',
+        sourceIds: ['src_a'],
+        claimIds: ['evd_1'],
+        blockIds: ['blk_landscape']
+      },
+      createdAt: NOW
+    });
+    const running = transitionResearchAssignment(queued, 0, 'running', NOW, { runId: 'run_1' });
+    const completed = transitionResearchAssignment(running, 1, 'completed', LATER);
+
+    expect(completed).toEqual({
+      ...queued,
+      state: 'completed',
+      runId: 'run_1',
+      version: 2,
+      updatedAt: LATER,
+      completedAt: LATER
+    });
+    expect(() => transitionResearchAssignment(completed, 2, 'running', LATER)).toThrow(
+      'a completed assignment is terminal'
+    );
+  });
+
+  test('a queued assignment can fail before a run id exists and records the exact reason', () => {
+    const queued = makeResearchAssignment({
+      id: 'asg_failed',
+      projectId: 'prj_1',
+      role: 'researcher',
+      sessionId: 'ses_research',
+      memberId: 'mesh-agent:researcher',
+      objective: 'Find primary evidence for the missing report block',
+      contextReceipt: { brief: 'Pricing research', sourceIds: [], claimIds: [], blockIds: ['blk_landscape'] },
+      createdAt: NOW
+    });
+
+    expect(
+      transitionResearchAssignment(queued, 0, 'failed', LATER, {
+        errorReason: 'the assigned session could not start'
+      })
+    ).toEqual({
+      ...queued,
+      state: 'failed',
+      version: 1,
+      updatedAt: LATER,
+      errorReason: 'the assigned session could not start'
+    });
   });
 });
 
