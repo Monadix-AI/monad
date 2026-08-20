@@ -42,7 +42,7 @@
     "@playwright/test": "^1.62.1",
     "@storybook/react-vite": "^10.5.8",
     "@tailwindcss/postcss": "^4.3.3",
-    "@tanstack/router-generator": "1.167.31",
+    "@tanstack/router-cli": "1.167.32",
     "@tanstack/router-plugin": "^1.168.33",
     "@testing-library/jest-dom": "^7.0.1",
     "@testing-library/react": "^16.3.2",
@@ -80,7 +80,7 @@
   "scripts": {
     "build": "bunx --bun vite build",
     "build-storybook": "storybook build",
-    "generate": "bun run scripts/generate-route-tree.ts",
+    "generate": "bunx --bun tsr generate",
     "start": "bunx --bun vite preview --host 0.0.0.0 --port ${WEB_PORT:-3000}",
     "start:dev": "LAUNCH_EDITOR=${LAUNCH_EDITOR:-/usr/local/bin/code} bun --env-file=../../.env.local run vite",
     "storybook": "storybook dev -p \"$(bun --env-file=../../.env.local -e 'console.log(process.env.WEB_STORYBOOK_PORT ?? 6006)')\"",
