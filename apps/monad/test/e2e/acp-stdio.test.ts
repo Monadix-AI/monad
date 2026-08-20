@@ -22,9 +22,9 @@ function spawnAcpHelper() {
   });
 
   const output = new WritableStream<Uint8Array>({
-    write(chunk) {
-      proc.stdin.write(chunk);
-      proc.stdin.flush();
+    async write(chunk) {
+      await proc.stdin.write(chunk);
+      await proc.stdin.flush();
     },
     close() {
       proc.stdin.end();
@@ -49,8 +49,13 @@ function spawnAcpHelper() {
 
 const procs: ReturnType<typeof Bun.spawn>[] = [];
 
-afterEach(() => {
-  for (const p of procs.splice(0)) p.kill();
+afterEach(async () => {
+  await Promise.all(
+    procs.splice(0).map(async (proc) => {
+      proc.kill();
+      await proc.exited;
+    })
+  );
 });
 
 test(
