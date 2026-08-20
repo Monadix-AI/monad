@@ -93,9 +93,10 @@ function makeObservationItems(agentKey: string, count = 18): AgentObservationCar
 
 function ToolActivityFixture({ provider }: { provider: FixtureProvider }): React.ReactElement {
   const filePath = `/workspace/${Array.from({ length: 16 }, (_, index) => `directory-segment-${index + 1}`).join('/')}/ObservationCard.tsx`;
-  const sourceLines = Array.from(
-    { length: 32 },
-    (_, index) => `export const observationLine${index + 1} = ${index + 1};`
+  const sourceLines = Array.from({ length: 32 }, (_, index) =>
+    index === 1
+      ? `export const observationLine${index + 1}WithANameLongEnoughToExerciseHorizontalCodeScrolling = ${index + 1};`
+      : `export const observationLine${index + 1} = ${index + 1};`
   );
   const fileSource = sourceLines
     .map((line, index) => (provider === 'claude-code' ? `${index + 11}\t${line}` : line))
