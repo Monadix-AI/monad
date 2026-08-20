@@ -1,6 +1,6 @@
 import type { StartupPlatform, StartupPlatformModule } from './startup-platform-contract.ts';
 
-import { mkdir } from 'node:fs/promises';
+import { mkdir, stat } from 'node:fs/promises';
 import { dirname, join } from 'node:path';
 
 import {
@@ -29,7 +29,7 @@ const platform: StartupPlatform = {
     return null;
   },
   async write(target, context) {
-    await mkdir(dirname(target.path), { recursive: true });
+    await ensureDirectory(dirname(target.path));
     await (context.writeWindowsShortcut ?? writeShortcut)({
       path: target.path,
       name: context.identity.name,
@@ -40,6 +40,14 @@ const platform: StartupPlatform = {
     });
   }
 };
+
+async function ensureDirectory(path: string): Promise<void> {
+  try {
+    await mkdir(path, { recursive: true });
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== 'EEXIST' || !(await stat(path)).isDirectory()) throw error;
+  }
+}
 
 export const startupPlatformModule: StartupPlatformModule = {
   current: platform,

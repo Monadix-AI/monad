@@ -1,22 +1,56 @@
 import type { WorkplaceExperienceApiContext } from '@monad/sdk-atom';
-import type { EvidenceClaim, Report, SourceRef } from './domain/index.ts';
+import type { EvidenceClaim, EvidenceContribution, Report, ResearchAssignment, SourceRef } from './domain/index.ts';
 
 import { createHash } from 'node:crypto';
 
-import { normalizeEvidenceClaim, normalizeReport, normalizeSourceRef } from './domain/index.ts';
+import {
+  applyEvidenceContribution,
+  normalizeEvidenceClaim,
+  normalizeReport,
+  normalizeResearchAssignment,
+  normalizeSourceRef,
+  patchBlock,
+  transitionResearchAssignment
+} from './domain/index.ts';
 
 const SOURCE_PREFIX = 'source/';
 const EVIDENCE_PREFIX = 'evidence/';
 const REPORT_KEY = 'report/current';
+const ASSIGNMENT_PREFIX = 'assignment/';
+const CAS_RETRY_LIMIT = 5;
 
 export function researchDeskId(prefix: string, projectId: string, idempotencyKey: string): string {
   const digest = createHash('sha256').update(`${projectId}\0${idempotencyKey}`).digest('hex');
   return `${prefix}_${digest.slice(0, 20)}`;
 }
 
-interface StateEvent {
+export interface StateEvent {
   type: string;
   [key: string]: unknown;
+}
+
+/** The record's version is the one that counts, so the projection is stamped with the version the
+ *  state store is about to assign. A caller may build several domain transitions in memory before
+ *  persisting (ingest does), and without this its in-flight version would drift from the record's and
+ *  every later read would look corrupt. */
+export async function swapRecord<T extends { version: number }>(
+  context: WorkplaceExperienceApiContext,
+  projectId: string,
+  key: string,
+  expectedVersion: number | null,
+  value: T,
+  event: StateEvent
+): Promise<T> {
+  const stamped = { ...value, version: expectedVersion === null ? 0 : expectedVersion + 1 };
+  const saved = await context.experienceState.compareAndSwap({
+    projectId,
+    key,
+    expectedVersion,
+    value: stamped,
+    event
+  });
+  if (!saved) throw new VersionConflictError(expectedVersion);
+  return stamped;
 }
 
 /** The versioned index behind the three panes. Everything here is a projection: the canonical record
@@ -26,27 +60,14 @@ interface StateEvent {
 export class ResearchDeskStore {
   constructor(readonly context: WorkplaceExperienceApiContext) {}
 
-  /** The record's version is the one that counts, so the projection is stamped with the version the
-   *  state store is about to assign. A caller may build several domain transitions in memory before
-   *  persisting (ingest does), and without this its in-flight version would drift from the record's
-   *  and every later read would look corrupt. */
-  private async swap<T extends { version: number }>(
+  private swap<T extends { version: number }>(
     projectId: string,
     key: string,
     expectedVersion: number | null,
     value: T,
     event: StateEvent
   ): Promise<T> {
-    const stamped = { ...value, version: expectedVersion === null ? 0 : expectedVersion + 1 };
-    const saved = await this.context.experienceState.compareAndSwap({
-      projectId,
-      key,
-      expectedVersion,
-      value: stamped,
-      event
-    });
-    if (!saved) throw new Error(`version conflict: expected ${expectedVersion}`);
-    return stamped;
+    return swapRecord(this.context, projectId, key, expectedVersion, value, event);
   }
 
   async getSource(projectId: string, sourceId: string): Promise<SourceRef | null> {
@@ -113,6 +134,112 @@ export class ResearchDeskStore {
       evidenceId: claim.id,
       status: claim.status
     });
+  }
+
+  async applyContribution(projectId: string, contribution: EvidenceContribution, now: string): Promise<EvidenceClaim> {
+    for (let attempt = 0; attempt < CAS_RETRY_LIMIT; attempt += 1) {
+      const claim = await this.requireClaim(projectId, contribution.claimId);
+      const updated = applyEvidenceContribution(claim, claim.version, contribution, now);
+      if (updated === claim) return claim;
+      try {
+        return await this.putClaim(updated, claim.version);
+      } catch (error) {
+        if (!(error instanceof VersionConflictError)) throw error;
+      }
+    }
+    throw new Error(`could not merge contribution after ${CAS_RETRY_LIMIT} attempts`);
+  }
+
+  async getAssignment(projectId: string, assignmentId: string): Promise<ResearchAssignment | null> {
+    const record = await this.context.experienceState.get<unknown>(projectId, `${ASSIGNMENT_PREFIX}${assignmentId}`);
+    if (!record) return null;
+    const assignment = normalizeResearchAssignment(record.value);
+    if (assignment.projectId !== projectId || assignment.id !== assignmentId || assignment.version !== record.version) {
+      throw new Error(`corrupt Research Desk assignment record: ${assignmentId}`);
+    }
+    return assignment;
+  }
+
+  async requireAssignment(projectId: string, assignmentId: string): Promise<ResearchAssignment> {
+    const assignment = await this.getAssignment(projectId, assignmentId);
+    if (!assignment) throw new NotFoundError(`assignment not found: ${assignmentId}`);
+    return assignment;
+  }
+
+  async listAssignments(projectId: string): Promise<ResearchAssignment[]> {
+    const records = await this.context.experienceState.list<unknown>(projectId, ASSIGNMENT_PREFIX);
+    return records
+      .map((record) => normalizeResearchAssignment(record.value))
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt) || a.id.localeCompare(b.id));
+  }
+
+  async putAssignment(assignment: ResearchAssignment, expectedVersion: number | null): Promise<ResearchAssignment> {
+    return this.swap(assignment.projectId, `${ASSIGNMENT_PREFIX}${assignment.id}`, expectedVersion, assignment, {
+      type: 'assignment.updated',
+      assignmentId: assignment.id,
+      state: assignment.state,
+      role: assignment.role
+    });
+  }
+
+  async completeAssignment(projectId: string, assignmentId: string, now: string): Promise<ResearchAssignment | null> {
+    for (let attempt = 0; attempt < CAS_RETRY_LIMIT; attempt += 1) {
+      const assignment = await this.getAssignment(projectId, assignmentId);
+      if (!assignment) return null;
+      if (assignment.state === 'completed') return assignment;
+      if (assignment.state === 'failed') return assignment;
+      const completed = transitionResearchAssignment(assignment, assignment.version, 'completed', now);
+      try {
+        return await this.putAssignment(completed, assignment.version);
+      } catch (error) {
+        if (!(error instanceof VersionConflictError)) throw error;
+      }
+    }
+    throw new Error(`could not complete assignment after ${CAS_RETRY_LIMIT} attempts`);
+  }
+
+  async linkClaimToAssignmentBlock(
+    projectId: string,
+    assignmentId: string,
+    claimId: string,
+    sessionId: string,
+    now: string
+  ): Promise<Report | null> {
+    const assignment = await this.getAssignment(projectId, assignmentId);
+    if (
+      !assignment ||
+      !['queued', 'running', 'blocked'].includes(assignment.state) ||
+      assignment.sessionId !== sessionId ||
+      !assignment.targetBlockId
+    ) {
+      return null;
+    }
+    for (let attempt = 0; attempt < CAS_RETRY_LIMIT; attempt += 1) {
+      const report = await this.getReport(projectId);
+      if (!report || report.state === 'published') return null;
+      const block = report.blocks.find((entry) => entry.id === assignment.targetBlockId);
+      if (!block) return null;
+      if (block.evidenceIds.includes(claimId)) {
+        await this.completeAssignment(projectId, assignment.id, now);
+        return report;
+      }
+      const updated = patchBlock(
+        report,
+        report.version,
+        block.id,
+        { evidenceIds: [...block.evidenceIds, claimId] },
+        'agent',
+        now
+      );
+      try {
+        const saved = await this.putReport(updated, report.version);
+        await this.completeAssignment(projectId, assignment.id, now);
+        return saved;
+      } catch (error) {
+        if (!(error instanceof VersionConflictError)) throw error;
+      }
+    }
+    throw new Error(`could not link claim after ${CAS_RETRY_LIMIT} attempts`);
   }
 
   async getReport(projectId: string): Promise<Report | null> {
@@ -191,5 +318,12 @@ export class NotFoundError extends Error {
   constructor(message: string) {
     super(message);
     this.name = 'NotFoundError';
+  }
+}
+
+export class VersionConflictError extends Error {
+  constructor(expectedVersion: number | null) {
+    super(`version conflict: expected ${expectedVersion}`);
+    this.name = 'VersionConflictError';
   }
 }

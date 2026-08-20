@@ -1,5 +1,11 @@
 import type { WorkplaceExperienceApi, WorkplaceExperienceApiContext } from '@monad/sdk-atom';
-import type { EvidenceClaim, Report } from './domain/index.ts';
+import type {
+  EvidenceClaim,
+  Report,
+  ResearchAssignment,
+  ResearchAssignmentRole,
+  ResearchContextReceipt
+} from './domain/index.ts';
 
 import { z } from 'zod';
 
@@ -7,6 +13,7 @@ import {
   archiveSource,
   decideClaim,
   makeReport,
+  makeResearchAssignment,
   makeSourceRef,
   manifestEntries,
   PublishBlockedError,
@@ -15,8 +22,10 @@ import {
   REPORT_BLOCK_KINDS,
   reportCoverage,
   SOURCE_KINDS,
-  SOURCE_TYPES
+  SOURCE_TYPES,
+  transitionResearchAssignment
 } from './domain/index.ts';
+import { researchMeshRoutes } from './mesh-api.ts';
 import { NotFoundError, ResearchDeskStore, researchDeskId } from './store.ts';
 
 const RESEARCH_SESSION_TITLE = 'Research';
@@ -33,7 +42,7 @@ function statusFor(error: Error): number {
 
 /** Business failures answer in the shape the pane already renders. A publish refused by the gate is
  *  not an error the operator has to interpret — it is the list of blocks to go fix. */
-async function guard(handler: () => Promise<Response>): Promise<Response> {
+export async function guard(handler: () => Promise<Response>): Promise<Response> {
   try {
     return await handler();
   } catch (error) {
@@ -68,6 +77,83 @@ async function researchSessionId(projectId: string, context: WorkplaceExperience
     idempotencyKey: `research-desk:${projectId}:research`
   });
   return created.id;
+}
+
+interface AssignmentDispatch {
+  role: ResearchAssignmentRole;
+  objective: string;
+  targetClaimId: string | null;
+  targetBlockId: string | null;
+  contextReceipt: ResearchContextReceipt;
+  idempotencyKey: string;
+  prompt: string;
+}
+
+async function dispatchAssignment(
+  projectId: string,
+  input: AssignmentDispatch,
+  context: WorkplaceExperienceApiContext
+): Promise<{ assignment: ResearchAssignment; created: boolean }> {
+  const store = new ResearchDeskStore(context);
+  const assignmentId = researchDeskId('asn', projectId, input.idempotencyKey);
+  const existing = await store.getAssignment(projectId, assignmentId);
+  if (existing) return { assignment: existing, created: false };
+
+  const templates = await context.projectMembers.listTemplates(projectId);
+  const template = templates.find((candidate) => candidate.name === input.role);
+  if (!template) throw new Error(`a ${input.role} project member template is required`);
+  const session = await context.projectSessions.create(projectId, {
+    title: `Research · ${input.role.replace('-', ' ')}`,
+    idempotencyKey: `research-desk:assignment:${assignmentId}`
+  });
+  const invited = await context.projectMembers.inviteSessionMember(session.id, template.id);
+  const queued = await store.putAssignment(
+    makeResearchAssignment({
+      id: assignmentId,
+      projectId,
+      role: input.role,
+      targetClaimId: input.targetClaimId,
+      targetBlockId: input.targetBlockId,
+      sessionId: session.id,
+      memberId: invited.member.id,
+      objective: input.objective,
+      contextReceipt: input.contextReceipt,
+      createdAt: now()
+    }),
+    null
+  );
+  try {
+    const run = await context.projectSessions.runTurn(session.id, {
+      text: input.prompt,
+      idempotencyKey: `research-desk:run:${assignmentId}`
+    });
+    return {
+      assignment: await store.putAssignment(
+        transitionResearchAssignment(queued, queued.version, 'running', now(), { runId: run.runId }),
+        queued.version
+      ),
+      created: true
+    };
+  } catch (error) {
+    return {
+      assignment: await store.putAssignment(
+        transitionResearchAssignment(queued, queued.version, 'failed', now(), {
+          errorReason: error instanceof Error ? error.message : 'the agent run could not start'
+        }),
+        queued.version
+      ),
+      created: true
+    };
+  }
+}
+
+function researchBrief(report: Report | null): string {
+  if (!report) return 'Research Desk evidence review';
+  return `${report.title}: ${report.question}${report.doneWhen ? ` Done when: ${report.doneWhen}` : ''}`;
+}
+
+function unique(values: readonly string[]): string[] {
+  return [...new Set(values)];
 }
 
 export type ResearchStage = 'collecting' | 'verifying' | 'synthesizing' | 'review' | 'published';
@@ -200,6 +286,58 @@ async function listEvidence(request: Request, context: WorkplaceExperienceApiCon
   return guard(async () => json({ evidence: await new ResearchDeskStore(context).listClaims(projectIdOf(request)) }));
 }
 
+async function listAssignments(request: Request, context: WorkplaceExperienceApiContext): Promise<Response> {
+  return guard(async () =>
+    json({ assignments: await new ResearchDeskStore(context).listAssignments(projectIdOf(request)) })
+  );
+}
+
+const challengeEvidenceSchema = z.object({ projectId: z.string().min(1), evidenceId: z.string().min(1) });
+
+async function challengeEvidence(request: Request, context: WorkplaceExperienceApiContext): Promise<Response> {
+  return guard(async () => {
+    const input = await body(request, challengeEvidenceSchema);
+    const store = new ResearchDeskStore(context);
+    const [claim, report] = await Promise.all([
+      store.requireClaim(input.projectId, input.evidenceId),
+      store.getReport(input.projectId)
+    ]);
+    const blockIds =
+      report?.blocks.filter((block) => block.evidenceIds.includes(claim.id)).map((block) => block.id) ?? [];
+    const objective = `Challenge claim ${claim.id}: ${claim.text}`;
+    const assignmentId = researchDeskId('asn', input.projectId, `challenge:${claim.id}:${claim.version}`);
+    const prompt = [
+      'Work only on this bounded Research Desk assignment. Seek counter-evidence, boundary conditions, or a reproducible check; do not decide whether the claim is accepted.',
+      `Assignment ID: ${assignmentId}`,
+      `Claim ID: ${claim.id}`,
+      `Claim: ${claim.text}`,
+      'Return every finding in a fenced research-desk JSON block. Use claim-contribution with this assignmentId and the claimId. Valid kinds are citation, derivation, challenge, and negative-result. Emit a source record before a citation when the source is new.',
+      '```research-desk',
+      `{"record":"claim-contribution","id":"ctb_<stable-id>","claimId":"${claim.id}","assignmentId":"${assignmentId}","kind":"challenge","payload":{"reason":"<specific falsifiable concern>"}}`,
+      '```'
+    ].join('\n');
+    const result = await dispatchAssignment(
+      input.projectId,
+      {
+        role: 'evidence-engineer',
+        objective,
+        targetClaimId: claim.id,
+        targetBlockId: null,
+        contextReceipt: {
+          brief: researchBrief(report),
+          sourceIds: unique(claim.citations.map((citation) => citation.sourceId)),
+          claimIds: [claim.id],
+          blockIds
+        },
+        idempotencyKey: `challenge:${claim.id}:${claim.version}`,
+        prompt
+      },
+      context
+    );
+    return json({ assignment: result.assignment }, result.created ? 201 : 200);
+  });
+}
+
 const decideSchema = z.object({
   projectId: z.string().min(1),
   evidenceId: z.string().min(1),
@@ -276,6 +414,64 @@ async function patchReportBlock(request: Request, context: WorkplaceExperienceAp
   });
 }
 
+const dispatchBlockSchema = z.object({ projectId: z.string().min(1), blockId: z.string().min(1) });
+
+async function dispatchMissingEvidence(request: Request, context: WorkplaceExperienceApiContext): Promise<Response> {
+  return guard(async () => {
+    const input = await body(request, dispatchBlockSchema);
+    const store = new ResearchDeskStore(context);
+    const [report, claims] = await Promise.all([
+      store.requireReport(input.projectId),
+      store.claimsById(input.projectId)
+    ]);
+    const block = report.blocks.find((candidate) => candidate.id === input.blockId);
+    if (!block) throw new NotFoundError(`report block not found: ${input.blockId}`);
+    const blockCoverage = reportCoverage(report, claims).find((candidate) => candidate.blockId === block.id);
+    if (block.kind !== 'factual' || !blockCoverage || blockCoverage.missing === 0) {
+      throw new Error('this report block does not need evidence');
+    }
+    const targetClaims = block.evidenceIds.flatMap((claimId) => {
+      const claim = claims.get(claimId);
+      return claim ? [claim] : [];
+    });
+    const assignmentId = researchDeskId('asn', input.projectId, `missing-evidence:${block.id}:${report.version}`);
+    const objective = `Find accepted-quality evidence for “${block.heading}”`;
+    const prompt = [
+      'Work only on this bounded Research Desk assignment. Find primary, inspectable evidence for the factual report block below. Do not accept your own claim and do not edit the report.',
+      `Assignment ID: ${assignmentId}`,
+      `Report block ID: ${block.id}`,
+      `Heading: ${block.heading}`,
+      `Current text: ${block.markdown}`,
+      targetClaims.length
+        ? `Existing claim IDs: ${targetClaims.map((claim) => claim.id).join(', ')}`
+        : 'There is no existing claim for this block. Create one.',
+      'Emit new sources first. For an existing claim, emit claim-contribution with assignmentId. For a new claim, emit a claim record with assignmentId so it is linked to this block. Record a negative-result if the search fails.',
+      '```research-desk',
+      `{"record":"claim","assignmentId":"${assignmentId}","text":"<narrow factual claim>","citations":[{"sourceLocator":"<exact locator>","excerpt":"<exact excerpt>","stance":"support"}]}`,
+      '```'
+    ].join('\n');
+    const result = await dispatchAssignment(
+      input.projectId,
+      {
+        role: 'researcher',
+        objective,
+        targetClaimId: null,
+        targetBlockId: block.id,
+        contextReceipt: {
+          brief: researchBrief(report),
+          sourceIds: unique(targetClaims.flatMap((claim) => claim.citations.map((citation) => citation.sourceId))),
+          claimIds: targetClaims.map((claim) => claim.id),
+          blockIds: [block.id]
+        },
+        idempotencyKey: `missing-evidence:${block.id}:${report.version}`,
+        prompt
+      },
+      context
+    );
+    return json({ assignment: result.assignment }, result.created ? 201 : 200);
+  });
+}
+
 const publishSchema = z.object({ projectId: z.string().min(1), expectedVersion: z.number().int().nonnegative() });
 
 async function publish(request: Request, context: WorkplaceExperienceApiContext): Promise<Response> {
@@ -342,11 +538,15 @@ export const researchDeskApi: WorkplaceExperienceApi = {
     { method: 'POST', path: '/sources/inspect', handle: inspectSource },
     { method: 'POST', path: '/sources/unreliable', handle: markUnreliable },
     { method: 'GET', path: '/evidence', handle: listEvidence },
+    { method: 'GET', path: '/assignments', handle: listAssignments },
+    { method: 'POST', path: '/evidence/challenge', handle: challengeEvidence },
     { method: 'POST', path: '/evidence/decide', handle: decideEvidence },
     { method: 'POST', path: '/evidence/rerun', handle: rerunEvidence },
     { method: 'GET', path: '/report', handle: getReport },
     { method: 'POST', path: '/report/create', handle: createReport },
     { method: 'POST', path: '/report/blocks/patch', handle: patchReportBlock },
-    { method: 'POST', path: '/report/publish', handle: publish }
+    { method: 'POST', path: '/report/blocks/dispatch', handle: dispatchMissingEvidence },
+    { method: 'POST', path: '/report/publish', handle: publish },
+    ...researchMeshRoutes
   ]
 };

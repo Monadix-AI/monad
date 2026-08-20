@@ -60,9 +60,10 @@ export function resolvePlaywrightDaemonPort(
 }
 
 export function resolvePlaywrightWorkers(
-  env: NodeJS.ProcessEnv | { CI?: string | undefined; PLAYWRIGHT_WORKERS?: string | undefined } = process.env
+  env: NodeJS.ProcessEnv | { CI?: string | undefined; PLAYWRIGHT_WORKERS?: string | undefined } = process.env,
+  platform = process.platform
 ): number {
-  return parsePort(env.PLAYWRIGHT_WORKERS) ?? (env.CI ? 2 : 5);
+  return parsePort(env.PLAYWRIGHT_WORKERS) ?? (env.CI ? 2 : platform === 'win32' ? 1 : 5);
 }
 
 export function resolvePlaywrightTrace(

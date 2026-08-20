@@ -4,6 +4,7 @@ import { DAEMON_RESTART_EXIT_CODE } from '@monad/protocol';
 import {
   daemonSupervisorChildStdout,
   nextDaemonSupervisorAction,
+  readDaemonSupervisorPid,
   releaseDaemonSupervisorLauncherArgv
 } from '../../src/lib/daemon.ts';
 
@@ -39,9 +40,21 @@ test('release daemon supervisor launches outside the short-lived CLI process', (
     "$proc = Start-Process -FilePath 'C:\\Monad O''Brien\\monad.exe' " +
       "-ArgumentList @('daemon-supervisor', '\"C:\\Monad O''Brien\\daemon.log\"') " +
       "-RedirectStandardOutput 'C:\\Monad O''Brien\\startup.log' " +
-      "-RedirectStandardError 'C:\\Monad O''Brien\\supervisor-stderr.log' -WindowStyle Hidden -PassThru; $proc.Id"
+      "-RedirectStandardError 'C:\\Monad O''Brien\\supervisor-stderr.log' -WindowStyle Hidden -PassThru; " +
+      '[Console]::Out.WriteLine($proc.Id)'
   );
 });
+
+test('release launcher reads the supervisor PID without waiting for inherited stdout to close', async () => {
+  const stdout = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(new TextEncoder().encode('12860\n'));
+      // The detached supervisor can inherit this handle and keep it open indefinitely.
+    }
+  });
+
+  expect(await readDaemonSupervisorPid(stdout)).toBe(12860);
+}, 1000);
 
 test('daemon supervisor relays only the first child startup output', () => {
   expect([daemonSupervisorChildStdout(false), daemonSupervisorChildStdout(true)]).toEqual(['pipe', 'ignore']);

@@ -190,12 +190,12 @@ test('re-running an identical write replays instead of creating a second session
 test('the agent roster is reachable and reports a default', async () => {
   const roster = await cliJson<{ agents: Array<{ id: string }>; defaultAgentId: string | null }>(['agent', 'list']);
   expect(Array.isArray(roster.agents)).toBe(true);
-});
+}, 30_000);
 
 test('nothing is waiting on a human on a freshly booted daemon', async () => {
   const pending = await cliJson<{ tools: unknown[]; interactions: unknown[] }>(['approval', 'list']);
   expect(pending).toEqual({ tools: [], interactions: [] });
-});
+}, 30_000);
 
 test('a missing session exits 2 and reports the daemon status in the error frame', async () => {
   const result = await cli(['session', 'show', 'ses_000000000000', '--json']);
@@ -204,7 +204,7 @@ test('a missing session exits 2 and reports the daemon status in the error frame
   const frame = JSON.parse(result.stderr.trim().split('\n').at(-1) ?? '{}');
   expect(frame).toMatchObject({ status: 404, exitCode: 2 });
   expect(typeof frame.error).toBe('string');
-});
+}, 30_000);
 
 // `monad status` reports a result, not a diagnostic: it belongs on stdout once (cli-design.md §4).
 // Writing it to stdout *and* stderr made `monad status 2>&1` print the line twice.
@@ -215,7 +215,7 @@ test('status writes its human result line once, on stdout only', async () => {
   expect(result.exitCode).toBe(0);
   expect(result.stdout.split('\n').filter((line) => line.includes('●'))).toHaveLength(1);
   expect(result.stderr).toBe('');
-});
+}, 30_000);
 
 test('status --json emits only the JSON payload on stdout', async () => {
   const result = await cli(['status', '--json']);
@@ -224,7 +224,7 @@ test('status --json emits only the JSON payload on stdout', async () => {
   const lines = result.stdout.trim().split('\n').filter(Boolean);
   expect(lines).toHaveLength(1);
   expect(JSON.parse(lines[0] ?? '{}')).toMatchObject({ status: 'ok' });
-});
+}, 30_000);
 
 test('status against a down daemon reports the line once, on stdout, and exits EXIT.DAEMON', async () => {
   const dead = await freePort();

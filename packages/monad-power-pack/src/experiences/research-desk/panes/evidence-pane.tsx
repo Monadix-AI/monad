@@ -8,7 +8,10 @@ import { StatusChip } from './status-chip.tsx';
 export function EvidencePane({
   claims,
   focused,
+  onChallenge,
   onDecide,
+  onOpenCrossRead,
+  onOpenNotes,
   onRerun,
   onSelect,
   pendingClaimIds,
@@ -17,7 +20,10 @@ export function EvidencePane({
 }: {
   claims: readonly EvidenceClaim[];
   focused: boolean;
+  onChallenge(claim: EvidenceClaim): Promise<void>;
   onDecide(claim: EvidenceClaim, decision: ClaimDecision): Promise<void>;
+  onOpenCrossRead?(): void;
+  onOpenNotes?(): void;
   onRerun(claim: EvidenceClaim): Promise<void>;
   onSelect(claimId: string): void;
   pendingClaimIds: ReadonlySet<string>;
@@ -34,7 +40,27 @@ export function EvidencePane({
         <h2 className="pane-heading">
           Evidence <small>{claims.length} claims</small>
         </h2>
-        <span className="pane-meta">{claims.filter((claim) => claim.status === 'contested').length} need you</span>
+        <div className="pane-header-actions">
+          <span className="pane-meta">{claims.filter((claim) => claim.status === 'contested').length} need you</span>
+          {onOpenCrossRead ? (
+            <button
+              className="pane-add"
+              onClick={onOpenCrossRead}
+              type="button"
+            >
+              Cross-read
+            </button>
+          ) : null}
+          {onOpenNotes ? (
+            <button
+              className="pane-add"
+              onClick={onOpenNotes}
+              type="button"
+            >
+              Notes
+            </button>
+          ) : null}
+        </div>
       </header>
       <div className="pane-body">
         {claims.length ? (
@@ -63,6 +89,7 @@ export function EvidencePane({
                 {selected ? (
                   <EvidenceDetails
                     claim={claim}
+                    onChallenge={onChallenge}
                     onDecide={onDecide}
                     onRerun={onRerun}
                     pending={pendingClaimIds.has(claim.id)}
@@ -91,12 +118,14 @@ export function EvidencePane({
 
 function EvidenceDetails({
   claim,
+  onChallenge,
   onDecide,
   onRerun,
   pending,
   sourcesById
 }: {
   claim: EvidenceClaim;
+  onChallenge(claim: EvidenceClaim): Promise<void>;
   onDecide(claim: EvidenceClaim, decision: ClaimDecision): Promise<void>;
   onRerun(claim: EvidenceClaim): Promise<void>;
   pending: boolean;
@@ -224,6 +253,13 @@ function EvidenceDetails({
             </p>
           ) : null}
           <div className="decision-actions">
+            <button
+              disabled={pending}
+              onClick={() => void onChallenge(claim)}
+              type="button"
+            >
+              Challenge with Evidence Engineer
+            </button>
             <button
               className="primary"
               disabled={pending}
