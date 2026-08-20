@@ -3,6 +3,7 @@ import type {
   BlockCoverage,
   EvidenceClaim,
   Report,
+  ResearchAssignment,
   SourceRef
 } from '../../src/experiences/research-desk/domain/index.ts';
 
@@ -42,6 +43,9 @@ function memoryState(): ExperienceStateStore {
 
 function fixture({ confirmPublish = true }: { confirmPublish?: boolean } = {}) {
   const sentMessages: Array<{ sessionId: string; text: string }> = [];
+  const createdSessions: Array<{ projectId: string; title: string; idempotencyKey: string }> = [];
+  const invitedMembers: Array<{ sessionId: string; templateId: string }> = [];
+  const runs: Array<{ sessionId: string; text: string; idempotencyKey: string }> = [];
   const interactions: unknown[] = [];
   const context = {
     atomPackId: 'monad-power-pack',
@@ -49,13 +53,19 @@ function fixture({ confirmPublish = true }: { confirmPublish?: boolean } = {}) {
     experienceState: memoryState(),
     projectSessions: {
       list: async () => [{ id: 'ses_research', title: 'Research', state: 'active' }],
-      create: async () => ({ id: 'ses_research' }),
+      create: async (projectId: string, input: { title: string; idempotencyKey: string }) => {
+        createdSessions.push({ projectId, ...input });
+        return { id: `ses_assignment_${createdSessions.length}` };
+      },
       sendMessage: async (sessionId: string, input: { text: string }) => {
         sentMessages.push({ sessionId, text: input.text });
       },
       listMessages: async () => ({ items: [], nextCursor: null }),
       listObservations: async () => ({ items: [], nextCursor: null }),
-      runTurn: async () => ({ runId: 'run_1' }),
+      runTurn: async (sessionId: string, input: { text: string; idempotencyKey: string }) => {
+        runs.push({ sessionId, ...input });
+        return { runId: `run_${runs.length}` };
+      },
       getRun: async () => null,
       pause: async () => {},
       cancel: async () => {},
@@ -73,7 +83,10 @@ function fixture({ confirmPublish = true }: { confirmPublish?: boolean } = {}) {
         }
       ],
       listSessionMembers: async () => [],
-      inviteSessionMember: async () => ({ memberId: 'm', sessionId: 'ses_research' }) as never,
+      inviteSessionMember: async (sessionId: string, templateId: string) => {
+        invitedMembers.push({ sessionId, templateId });
+        return { member: { id: `member_${templateId}` }, binding: {} } as never;
+      },
       removeSessionMember: async () => {}
     },
     requestInteraction: async (request: unknown) => {
@@ -84,7 +97,7 @@ function fixture({ confirmPublish = true }: { confirmPublish?: boolean } = {}) {
     },
     workerScheduler: { schedule: async () => {}, cancel: async () => {} }
   } as unknown as WorkplaceExperienceApiContext;
-  return { context, sentMessages, interactions };
+  return { context, sentMessages, createdSessions, invitedMembers, runs, interactions };
 }
 
 function route(method: string, path: string) {
@@ -330,6 +343,112 @@ describe('evidence decisions', () => {
     expect(response.status).toBe(400);
     expect(await response.json()).toEqual({ error: 'this claim has no verification run to repeat' });
     expect(sentMessages).toEqual([]);
+  });
+});
+
+describe('mesh dispatch', () => {
+  test('challenging a claim creates one bounded Evidence Engineer run and returns its durable assignment', async () => {
+    const { context, createdSessions, invitedMembers, runs } = fixture();
+    await seedReport(context);
+    const claim = await seedClaim(context);
+    await seedFactualBlock(context, [claim.id]);
+
+    const first = await route('POST', '/evidence/challenge')(
+      post('/evidence/challenge', { projectId: PROJECT, evidenceId: claim.id }),
+      context
+    );
+    const firstBody = (await first.json()) as { assignment: ResearchAssignment };
+    const repeated = await route('POST', '/evidence/challenge')(
+      post('/evidence/challenge', { projectId: PROJECT, evidenceId: claim.id }),
+      context
+    );
+    const repeatedBody = (await repeated.json()) as { assignment: ResearchAssignment };
+
+    expect({ firstStatus: first.status, repeatedStatus: repeated.status }).toEqual({
+      firstStatus: 201,
+      repeatedStatus: 200
+    });
+    expect({
+      role: firstBody.assignment.role,
+      state: firstBody.assignment.state,
+      targetClaimId: firstBody.assignment.targetClaimId,
+      targetBlockId: firstBody.assignment.targetBlockId,
+      memberId: firstBody.assignment.memberId,
+      sessionId: firstBody.assignment.sessionId,
+      runId: firstBody.assignment.runId,
+      contextReceipt: firstBody.assignment.contextReceipt
+    }).toEqual({
+      role: 'evidence-engineer',
+      state: 'running',
+      targetClaimId: claim.id,
+      targetBlockId: null,
+      memberId: 'member_tmpl_engineer',
+      sessionId: 'ses_assignment_1',
+      runId: 'run_1',
+      contextReceipt: {
+        brief:
+          'Usage-based pricing for the EU launch: Should a small B2B SaaS adopt usage-based pricing for its next European launch? Done when: 5+ primary sources',
+        sourceIds: ['src_a'],
+        claimIds: [claim.id],
+        blockIds: ['blk_landscape']
+      }
+    });
+    expect(repeatedBody.assignment).toEqual(firstBody.assignment);
+    expect(createdSessions).toEqual([
+      {
+        projectId: PROJECT,
+        title: 'Research · evidence engineer',
+        idempotencyKey: `research-desk:assignment:${firstBody.assignment.id}`
+      }
+    ]);
+    expect(invitedMembers).toEqual([{ sessionId: 'ses_assignment_1', templateId: 'tmpl_engineer' }]);
+    expect(runs.map(({ sessionId, idempotencyKey }) => ({ sessionId, idempotencyKey }))).toEqual([
+      { sessionId: 'ses_assignment_1', idempotencyKey: `research-desk:run:${firstBody.assignment.id}` }
+    ]);
+    expect(runs[0]?.text).toContain(
+      `"claimId":"${claim.id}","assignmentId":"${firstBody.assignment.id}","kind":"challenge"`
+    );
+    const listed = (await (await route('GET', '/assignments')(get('/assignments'), context)).json()) as {
+      assignments: ResearchAssignment[];
+    };
+    expect(listed.assignments).toEqual([firstBody.assignment]);
+  });
+
+  test('a blocked report dispatch targets its exact missing-evidence context to the Researcher', async () => {
+    const { context, invitedMembers, runs } = fixture();
+    await seedReport(context);
+    const claim = await seedClaim(context);
+    await seedFactualBlock(context, [claim.id]);
+
+    const response = await route('POST', '/report/blocks/dispatch')(
+      post('/report/blocks/dispatch', { projectId: PROJECT, blockId: 'blk_landscape' }),
+      context
+    );
+    const body = (await response.json()) as { assignment: ResearchAssignment };
+
+    expect(response.status).toBe(201);
+    expect({
+      role: body.assignment.role,
+      state: body.assignment.state,
+      targetClaimId: body.assignment.targetClaimId,
+      targetBlockId: body.assignment.targetBlockId,
+      contextReceipt: body.assignment.contextReceipt
+    }).toEqual({
+      role: 'researcher',
+      state: 'running',
+      targetClaimId: null,
+      targetBlockId: 'blk_landscape',
+      contextReceipt: {
+        brief:
+          'Usage-based pricing for the EU launch: Should a small B2B SaaS adopt usage-based pricing for its next European launch? Done when: 5+ primary sources',
+        sourceIds: ['src_a'],
+        claimIds: [claim.id],
+        blockIds: ['blk_landscape']
+      }
+    });
+    expect(invitedMembers).toEqual([{ sessionId: 'ses_assignment_1', templateId: 'tmpl_researcher' }]);
+    expect(runs[0]?.text).toContain(`Assignment ID: ${body.assignment.id}`);
+    expect(runs[0]?.text).toContain(`Existing claim IDs: ${claim.id}`);
   });
 });
 

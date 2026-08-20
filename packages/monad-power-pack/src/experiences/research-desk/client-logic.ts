@@ -1,18 +1,37 @@
 import type {
   BlockCoverage,
   ClaimDecision,
+  CrossRead,
   EvidenceClaim,
   EvidenceStatus,
   Report,
   ReportBlock,
+  ResearchAssignment,
+  ResearchNote,
   SourceManifestEntry,
   SourceRef,
-  SourceStatus
+  SourceStatus,
+  SourceVisibility,
+  Transformation,
+  TransformationRun,
+  TransformationSpend,
+  VisibilityCell
 } from './domain/index.ts';
 
 import { z } from 'zod';
 
-import { normalizeEvidenceClaim, normalizeReport, normalizeSourceRef, reportCoverage } from './domain/index.ts';
+import {
+  normalizeCrossRead,
+  normalizeEvidenceClaim,
+  normalizeNote,
+  normalizeReport,
+  normalizeResearchAssignment,
+  normalizeSourceRef,
+  normalizeTransformation,
+  normalizeTransformationRun,
+  normalizeVisibility,
+  reportCoverage
+} from './domain/index.ts';
 
 export type FocusedPane = 'sources' | 'evidence' | 'report';
 export type StatusTone = 'muted' | 'warning' | 'destructive' | 'success';
@@ -99,6 +118,21 @@ const overviewSchema = z.object({
   })
 });
 
+const transformationSpendSchema = z
+  .object({
+    transformationId: z.string(),
+    label: z.string(),
+    tier: z.enum(['fast', 'smart', 'power']),
+    runs: z.number().int().nonnegative(),
+    tokens: z.number().int().nonnegative().nullable(),
+    cost: z.object({ amount: z.number(), currency: z.string() }).strict().nullable()
+  })
+  .strict();
+
+const visibilityCellSchema = z.object({ memberId: z.string(), sourceId: z.string(), canRead: z.boolean() }).strict();
+
+const visibilityScope = 'Controls which sources Research Desk sends to each member. It is not network isolation.';
+
 export function parseOverviewPayload(payload: unknown): ResearchOverview {
   return overviewSchema.parse(named(payload, 'overview'));
 }
@@ -109,6 +143,10 @@ export function parseSourcesPayload(payload: unknown): SourceRef[] {
 
 export function parseEvidencePayload(payload: unknown): EvidenceClaim[] {
   return z.array(z.unknown()).parse(named(payload, 'evidence')).map(normalizeEvidenceClaim);
+}
+
+export function parseAssignmentsPayload(payload: unknown): ResearchAssignment[] {
+  return z.array(z.unknown()).parse(named(payload, 'assignments')).map(normalizeResearchAssignment);
 }
 
 export function parseReportPayload(payload: unknown): { report: Report | null; coverage: BlockCoverage[] } {
@@ -122,6 +160,10 @@ export function parseSourceMutation(payload: unknown): SourceRef {
 
 export function parseEvidenceMutation(payload: unknown): EvidenceClaim {
   return normalizeEvidenceClaim(named(payload, 'evidence'));
+}
+
+export function parseAssignmentMutation(payload: unknown): ResearchAssignment {
+  return normalizeResearchAssignment(named(payload, 'assignment'));
 }
 
 export function parseCoverage(payload: unknown): BlockCoverage[] {
@@ -152,6 +194,103 @@ export function parsePublishResult(payload: unknown): PublishResult {
   return { published: object.published, report: normalizeReport(object.report), manifest: object.manifest };
 }
 
+export function parseTransformationsPayload(payload: unknown): {
+  transformations: Transformation[];
+  runs: TransformationRun[];
+  spend: TransformationSpend[];
+} {
+  const object = z
+    .object({
+      transformations: z.array(z.unknown()),
+      runs: z.array(z.unknown()),
+      spend: z.array(transformationSpendSchema)
+    })
+    .strict()
+    .parse(payload);
+  return {
+    transformations: object.transformations.map(normalizeTransformation),
+    runs: object.runs.map(normalizeTransformationRun),
+    spend: object.spend
+  };
+}
+
+export function parseTransformationMutation(payload: unknown): {
+  run: TransformationRun;
+  transformation: Transformation;
+} {
+  const object = z.object({ run: z.unknown(), transformation: z.unknown() }).strict().parse(payload);
+  return {
+    run: normalizeTransformationRun(object.run),
+    transformation: normalizeTransformation(object.transformation)
+  };
+}
+
+export function parseCrossReadsPayload(payload: unknown): CrossRead[] {
+  return z.array(z.unknown()).parse(named(payload, 'crossReads')).map(normalizeCrossRead);
+}
+
+export function parseCrossReadMutation(payload: unknown): CrossRead {
+  return normalizeCrossRead(named(payload, 'crossRead'));
+}
+
+export function parseCrossReadRuleMutation(payload: unknown): {
+  crossRead: CrossRead;
+  evidence: EvidenceClaim;
+} {
+  const object = z.object({ crossRead: z.unknown(), evidence: z.unknown() }).strict().parse(payload);
+  return {
+    crossRead: normalizeCrossRead(object.crossRead),
+    evidence: normalizeEvidenceClaim(object.evidence)
+  };
+}
+
+export function parseNotesPayload(payload: unknown): ResearchNote[] {
+  return z.array(z.unknown()).parse(named(payload, 'notes')).map(normalizeNote);
+}
+
+export function parseNoteMutation(payload: unknown): ResearchNote {
+  return normalizeNote(named(payload, 'note'));
+}
+
+export function parseNotePromotion(payload: unknown): { note: ResearchNote; evidence: EvidenceClaim } {
+  const object = z.object({ note: z.unknown(), evidence: z.unknown() }).strict().parse(payload);
+  return { note: normalizeNote(object.note), evidence: normalizeEvidenceClaim(object.evidence) };
+}
+
+export function parseNoteDeletion(payload: unknown): { deleted: true; noteId: string } {
+  return z
+    .object({ deleted: z.literal(true), noteId: z.string() })
+    .strict()
+    .parse(payload);
+}
+
+export function parseVisibilityPayload(payload: unknown): {
+  visibility: SourceVisibility;
+  matrix: VisibilityCell[];
+  scope: typeof visibilityScope;
+} {
+  const object = z
+    .object({
+      visibility: z.unknown(),
+      matrix: z.array(visibilityCellSchema),
+      scope: z.literal(visibilityScope)
+    })
+    .strict()
+    .parse(payload);
+  return { visibility: normalizeVisibility(object.visibility), matrix: object.matrix, scope: object.scope };
+}
+
+export function parseVisibilityMutation(payload: unknown): {
+  visibility: SourceVisibility;
+  matrix: VisibilityCell[];
+} {
+  const object = z
+    .object({ visibility: z.unknown(), matrix: z.array(visibilityCellSchema) })
+    .strict()
+    .parse(payload);
+  return { visibility: normalizeVisibility(object.visibility), matrix: object.matrix };
+}
+
 export function researchViewModel(
   evidence: readonly EvidenceClaim[],
   report: Report | null,
@@ -175,6 +314,27 @@ export function replaceClaim(evidence: readonly EvidenceClaim[], updated: Eviden
   const index = evidence.findIndex((claim) => claim.id === updated.id);
   if (index === -1) return [...evidence, updated];
   return evidence.with(index, updated);
+}
+
+export function replaceAssignment(
+  assignments: readonly ResearchAssignment[],
+  updated: ResearchAssignment
+): ResearchAssignment[] {
+  const index = assignments.findIndex((assignment) => assignment.id === updated.id);
+  if (index === -1) return [...assignments, updated];
+  return assignments.with(index, updated);
+}
+
+export function assignmentIsActive(assignment: ResearchAssignment): boolean {
+  return assignment.state === 'queued' || assignment.state === 'running' || assignment.state === 'blocked';
+}
+
+export function assignmentTargetsClaim(assignments: readonly ResearchAssignment[], claimId: string): boolean {
+  return assignments.some((assignment) => assignment.targetClaimId === claimId && assignmentIsActive(assignment));
+}
+
+export function assignmentTargetsBlock(assignments: readonly ResearchAssignment[], blockId: string): boolean {
+  return assignments.some((assignment) => assignment.targetBlockId === blockId && assignmentIsActive(assignment));
 }
 
 export function decisionBody(
@@ -225,6 +385,35 @@ export function coverageByBlock(coverage: readonly BlockCoverage[]): ReadonlyMap
 
 export function reportBlockIsBlocked(block: ReportBlock, coverage: BlockCoverage | undefined): boolean {
   return block.kind === 'factual' && (coverage?.missing ?? 0) > 0;
+}
+
+export function crossReadCanBeRuled(crossRead: CrossRead): boolean {
+  return (
+    crossRead.readings.every((reading) => reading.state !== 'pending') &&
+    crossRead.readings.filter((reading) => reading.state === 'answered').length >= 2
+  );
+}
+
+export function visibleSourceIds(
+  visibility: SourceVisibility,
+  memberId: string,
+  sources: readonly SourceRef[]
+): string[] {
+  const sourceIds = sources.map((source) => source.id);
+  const rule = visibility.rules.find((candidate) => candidate.memberId === memberId);
+  return rule?.sourceIds ? rule.sourceIds.filter((sourceId) => sourceIds.includes(sourceId)) : sourceIds;
+}
+
+export function toggledVisibilityRule(
+  visibility: SourceVisibility,
+  memberId: string,
+  sources: readonly SourceRef[],
+  sourceId: string,
+  canRead: boolean
+): string[] | null {
+  const current = visibleSourceIds(visibility, memberId, sources);
+  const next = canRead ? [...new Set([...current, sourceId])] : current.filter((candidate) => candidate !== sourceId);
+  return next.length === sources.length ? null : next;
 }
 
 export function publishConflict(payload: unknown): PublishConflict | null {

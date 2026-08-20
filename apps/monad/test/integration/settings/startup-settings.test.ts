@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, test } from 'bun:test';
-import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -153,6 +153,32 @@ test('Windows startup setting writes and removes a branded startup shortcut', as
 
   expect((await mod.setStartupSettings({ enabled: false })).enabled).toBe(false);
 });
+
+test.skipIf(process.platform !== 'win32')(
+  'Windows startup setting accepts an existing read-only Startup directory',
+  async () => {
+    const appDataDir = join(dir, 'AppData');
+    const startupDir = join(appDataDir, 'Microsoft', 'Windows', 'Start Menu', 'Programs', 'Startup');
+    await mkdir(startupDir, { recursive: true });
+    await chmod(startupDir, 0o444);
+
+    const mod = createStartupSettingsModule({
+      platform: 'win32',
+      homeDir: dir,
+      appDataDir,
+      monadHome: join(dir, 'Monad Home'),
+      command: ['C:\\Program Files\\Monad\\monad.exe', 'daemon'],
+      logPath: join(dir, 'Monad Home', 'logs', 'startup.log'),
+      writeWindowsShortcut: async (shortcut) => writeFile(shortcut.path, 'shortcut')
+    });
+
+    try {
+      expect(await mod.setStartupSettings({ enabled: true })).toMatchObject({ enabled: true, supported: true });
+    } finally {
+      await chmod(startupDir, 0o777);
+    }
+  }
+);
 
 test('startup setting recognizes and removes legacy startup files', async () => {
   const appDataDir = join(dir, 'AppData');

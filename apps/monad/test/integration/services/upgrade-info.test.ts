@@ -13,6 +13,15 @@ const originalFetch = globalThis.fetch;
 let root: string;
 let paths: MonadPaths;
 
+type UpgradeInfoMonitorDeps = NonNullable<Parameters<typeof createUpgradeInfoMonitor>[1]>;
+
+function createTestUpgradeInfoMonitor(deps: UpgradeInfoMonitorDeps = {}) {
+  return createUpgradeInfoMonitor(paths, {
+    notifyUpdateAvailable: async () => false,
+    ...deps
+  });
+}
+
 function response(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status });
 }
@@ -44,7 +53,7 @@ test('upgrade info monitor normalizes release tags and persists successful check
     return response({ tag_name: 'v9.9.9' });
   }) as unknown as typeof fetch;
 
-  const monitor = await createUpgradeInfoMonitor(paths);
+  const monitor = await createTestUpgradeInfoMonitor();
   await waitFor(() => monitor.getUpgradeInfo()?.latestVersion === '9.9.9');
 
   expect(requestedUrl).toBe('https://api.github.com/repos/Monadix-AI/monad/releases/latest');
@@ -65,7 +74,7 @@ test('upgrade info monitor serves cached data when the network check fails', asy
     throw new Error('offline');
   }) as unknown as typeof fetch;
 
-  const monitor = await createUpgradeInfoMonitor(paths);
+  const monitor = await createTestUpgradeInfoMonitor();
 
   expect(monitor.getUpgradeInfo()).toEqual({
     latestVersion: '8.0.0',
@@ -77,7 +86,7 @@ test('upgrade info monitor ignores malformed cache and empty release payloads', 
   await writeFile(join(paths.cache, 'upgrade-info.json'), '{bad json');
   globalThis.fetch = (async () => response({})) as unknown as typeof fetch;
 
-  const monitor = await createUpgradeInfoMonitor(paths);
+  const monitor = await createTestUpgradeInfoMonitor();
   await Bun.sleep(20);
   expect(monitor.getUpgradeInfo()).toBeNull();
 });
@@ -86,7 +95,7 @@ test('upgrade info monitor notifies once for a newer release and persists the no
   globalThis.fetch = (async () => response({ tag_name: 'v9.9.9' })) as unknown as typeof fetch;
   const notifications: Array<{ latestVersion: string; currentVersion: string }> = [];
 
-  const monitor = await createUpgradeInfoMonitor(paths, {
+  const monitor = await createTestUpgradeInfoMonitor({
     notifyUpdateAvailable: async (latestVersion, currentVersion) => {
       notifications.push({ latestVersion, currentVersion });
       return true;
@@ -115,7 +124,7 @@ test('upgrade info monitor does not repeat a persisted release notification afte
   globalThis.fetch = (async () => response({ tag_name: 'v9.9.9' })) as unknown as typeof fetch;
   let notificationCount = 0;
 
-  await createUpgradeInfoMonitor(paths, {
+  await createTestUpgradeInfoMonitor({
     notifyUpdateAvailable: async () => {
       notificationCount += 1;
       return true;
@@ -130,7 +139,7 @@ test('upgrade info monitor does not notify for an older release', async () => {
   globalThis.fetch = (async () => response({ tag_name: 'v0.0.0' })) as unknown as typeof fetch;
   let notificationCount = 0;
 
-  await createUpgradeInfoMonitor(paths, {
+  await createTestUpgradeInfoMonitor({
     notifyUpdateAvailable: async () => {
       notificationCount += 1;
       return true;
