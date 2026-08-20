@@ -66,6 +66,6 @@ general identity or RBAC system. Sessions without an origin retain legacy behavi
 automation-origin sessions reject transport writes.
 
 Tests:
-[session-write-policy.test.ts](https://github.com/Monadix-AI/monad/blob/main/apps/monad/test/unit/sessions/session-write-policy.test.ts)
+[session-write-policy.test.ts](https://github.com/Monadix-AI/monad/blob/main/apps/monad/test/integration/sessions/session-write-policy.test.ts)
 and
 [session-transport-authority.test.ts](https://github.com/Monadix-AI/monad/blob/main/apps/monad/test/e2e/session-transport-authority.test.ts).

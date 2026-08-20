@@ -233,7 +233,7 @@ test('bridge: open-document ambient context reaches the model over the wire', as
 });
 
 test('bridge: a session-scoped MCP server connects daemon-side and its tool runs in a turn', async () => {
-  const fixture = resolve(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');
+  const fixture = resolve(import.meta.dir, '../integration/tools/fixtures/mock-mcp-server.ts');
   // The model calls the namespaced MCP tool (server "mock" → tool "echo"), then finishes.
   const daemon = bridgeToDaemon(scriptedModel([{ tool: 'mock__echo', input: { text: 'hi-from-mcp' } }, 'done']));
   const { agent, clientStream } = pipe();

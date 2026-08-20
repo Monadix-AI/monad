@@ -90,6 +90,7 @@
     "start:dev": "NODE_ENV=development bun --env-file=../../.env.local ../cli/src/bin.ts daemon --dev",
     "test": "bun ../../scripts/quiet-run.ts bun scripts/run-unit-tests.ts",
     "test:e2e": "bun ../../scripts/quiet-run.ts bun scripts/run-e2e-tests.ts",
+    "test:integration": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
   },
   "type": "module"

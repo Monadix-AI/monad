@@ -12,8 +12,9 @@ All tests live under `test/` inside each package or app.
 ## Quick reference
 
 ```sh
-bun run test            # full unit + e2e suite
+bun run test            # full unit + integration + e2e suite
 bun run test:unit       # all package-local unit suites through Turbo
+bun run test:integration # real local infrastructure boundaries without daemon transports
 bun run test:e2e        # all project e2e suites (daemon + web)
 mise run test:e2e:daemon # daemon/runtime e2e only
 mise run test:e2e:web    # web Playwright e2e only
@@ -43,6 +44,7 @@ packages/{name}/
 ├── src/
 └── test/
     ├── unit/        ← pure-logic, no IO
+    ├── integration/ ← real SQLite/filesystem/local service boundaries, no daemon transport
     ├── e2e/         ← real transports, real SQLite, cross-module flows
     │   └── *.smoke.test.ts   ← one golden-path roundtrip (see §5)
     └── fixtures/    ← (optional) two kinds of content:
@@ -54,6 +56,9 @@ The same layout applies to non-package directories that contain tests — e.g. `
 
 Rules:
 - Test files must not live next to `src/` files (`runner.test.ts` is a legacy exception).
+- Unit tests must not open real databases, listeners, subprocesses, or host filesystem fixtures. Put those
+  cases in `integration/` unless the behavior requires a public daemon or browser transport, in which case
+  it belongs in `e2e/`. Injected in-memory fakes and pure state machines remain unit tests.
 - File naming: `{concern}.test.ts` — name by the behaviour or feature under test, not the source file. One concern may span multiple source files; one source file may be split into multiple concern-focused test files.
 - Platform-specific tests use **separate files**: `{concern}.{platform}.test.ts` where platform is `windows`, `unix`, `macos`, or `linux`. Do not use `if (process.platform === …)` guards inside shared test files. The test runner (`scripts/bun-test.ts`) passes `--path-ignore-patterns` automatically so non-matching platform files are never loaded — no runtime skip needed.
 - Every new or modified test case must execute behavior and assert its observable outcome: returned contracts, state transitions, emitted events, transport responses, user interactions, side effects, or errors. A case that only proves something exists or does not exist is invalid, regardless of whether the subject is a function, field, entity, registry entry, DOM node, file, mock, or component.
@@ -108,8 +113,9 @@ Root `package.json` scripts:
 
 ```json
 {
-  "test": "all unit and e2e suites",
+  "test": "all unit, integration, and e2e suites",
   "test:unit": "all package-local unit suites through Turbo plus root script tests",
+  "test:integration": "all package-local local-boundary integration suites through Turbo",
   "test:e2e": "all project e2e suites"
 }
 ```
@@ -118,11 +124,13 @@ Per-target selectors are mise tasks, not root scripts — `mise run test:e2e:dae
 (apps/monad daemon/runtime e2e) and `mise run test:e2e:web` (apps/web Playwright e2e).
 
 Every package with Bun tests exposes `test` as its unit suite. Add e2e scripts only
-when the matching directory exists:
+when the matching directory exists. Packages with `test/integration/` expose the matching
+integration script:
 
 ```json
 {
   "test":      "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+  "test:integration": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures",
   "test:e2e":  "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/e2e/ --only-failures"
 }
 ```
@@ -140,7 +148,7 @@ script command before the wrapper starts otherwise.
 }
 ```
 
-Keep these names consistent so Turbo can aggregate `test` and `test:e2e` directly
+Keep these names consistent so Turbo can aggregate `test`, `test:integration`, and `test:e2e` directly
 without package-level forwarding aliases.
 
 Verbose output is an invocation option, not a second script tree. For manual
@@ -501,10 +509,10 @@ rendering markup.
 | package | expected | scope |
 |---------|----------|-------|
 | `@monad/protocol` | unit | pure schema / type validators |
-| `apps/monad/src/store` | unit + e2e | every table CRUD + migrations |
-| daemon agent core (`apps/monad/src/agent`) | unit + e2e | loop, tool calls, compaction |
-| `apps/monad` | unit + e2e | every handler, both transports |
-| `apps/monad/src/capabilities/tools` | unit | tool dispatch, fs ops, security boundaries |
+| `apps/monad/src/store` | unit + integration + e2e | pure mapping, every table CRUD, migrations, transport flows |
+| daemon agent core (`apps/monad/src/agent`) | unit + integration + e2e | pure orchestration, persisted state, tool calls, compaction |
+| `apps/monad` | unit + integration + e2e | pure contracts, local infrastructure, every handler over both transports |
+| `apps/monad/src/capabilities/tools` | unit + integration | pure dispatch plus subprocess, filesystem, MCP, and security boundaries |
 | `@monad/sandbox`, `@monad/sandbox-vm` | unit + platform smoke | confinement, egress policy, launchers |
 | `@monad/environment` | unit | path initialisation |
 | `@monad/ui` | unit | exported pure functions behind components |

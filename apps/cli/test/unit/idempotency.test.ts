@@ -4,7 +4,7 @@ import { expect, test } from 'bun:test';
 
 import { command as session } from '../../src/commands/session.ts';
 import { idempotencyHeaders } from '../../src/lib/idempotency.ts';
-import { initializedInitApi } from './initialized-client.ts';
+import { initializedInitApi } from '../helpers/initialized-client.ts';
 
 const SESSION_ID = 'ses_IDEMPOTENT01';
 

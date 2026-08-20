@@ -7,7 +7,7 @@ import { join } from 'node:path';
 
 import { command as session } from '../../src/commands/session.ts';
 import { setOutputMode } from '../../src/lib/output.ts';
-import { initializedInitApi } from './initialized-client.ts';
+import { initializedInitApi } from '../helpers/initialized-client.ts';
 
 const SESSION_ID = 'ses_STRUCTURED1';
 const dirs: string[] = [];

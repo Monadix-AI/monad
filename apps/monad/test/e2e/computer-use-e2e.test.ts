@@ -13,7 +13,7 @@ import { createAgent } from '#/agent/index.ts';
 import { connectMcpServer } from '#/capabilities/tools';
 import { createStore } from '#/store/db/index.ts';
 
-const fixture = join(import.meta.dir, '../unit/tools/fixtures/mock-mcp-server.ts');
+const fixture = join(import.meta.dir, '../integration/tools/fixtures/mock-mcp-server.ts');
 
 // Turn 1: ask for a screenshot. Turn 2+: stop. Records every request so the test can inspect what
 // the model actually received on the turn AFTER the tool ran.

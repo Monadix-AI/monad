@@ -71,6 +71,7 @@
   "scripts": {
     "generate": "rimraf generated/codex-app-server && codex app-server generate-ts --out generated/codex-app-server/ts && codex app-server generate-json-schema --out generated/codex-app-server/schema",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
+    "test:integration": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
   },
   "type": "module"

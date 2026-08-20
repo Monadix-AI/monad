@@ -140,7 +140,7 @@ The `agent_peer_delegate` tool would then become transport-pluggable (`direct` =
 
 ## Testing
 
-- `apps/monad/test/unit/services/peer-delegate.test.ts` — the tool's HTTP/SSE client against a capture server:
+- `apps/monad/test/integration/services/peer-delegate.test.ts` — the tool's HTTP/SSE client against a capture server:
   request construction, agent override, trailing-slash, multi-chunk/`[DONE]`/malformed-frame parsing,
   JSON-vs-non-JSON errors, no-token-leak.
 - `apps/monad/test/unit/approvals/inbound-approval.test.ts` — the gate policy (auto/local/deny + non-delegation /

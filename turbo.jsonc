@@ -112,6 +112,10 @@
       // cache key: a replayed task ran nothing, so having no timing files for it is correct.
       "passThroughEnv": ["MONAD_TEST_JUNIT_DIR"]
     },
+    "test:integration": {
+      "dependsOn": ["generate", "^build"],
+      "passThroughEnv": ["MONAD_TEST_JUNIT_DIR"]
+    },
     "test:e2e": {
       "dependsOn": ["generate", "^build"],
       "env": ["PLAYWRIGHT_SHARD", "PLAYWRIGHT_TRACE", "PLAYWRIGHT_WORKERS"],
