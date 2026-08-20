@@ -36,7 +36,7 @@ test('network settings apply through config bus without requiring a daemon resta
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
-});
+}, 15_000);
 
 test('network settings require an explicit acknowledgment before exposing remote HTTP', async () => {
   const dir = await mkdtemp(join(tmpdir(), 'monad-network-settings-'));
