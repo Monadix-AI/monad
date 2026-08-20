@@ -382,7 +382,7 @@ export async function connectMcpServer(spec: McpServerSpec): Promise<McpConnecti
             ctx?.reportProgress?.(progressText);
           }
         };
-        result = serverSupportsTasks(client)
+        const pendingResult = serverSupportsTasks(client)
           ? await callToolWithTasks({
               client,
               taskTransport: transport,
@@ -406,6 +406,8 @@ export async function connectMcpServer(spec: McpServerSpec): Promise<McpConnecti
                 requestOptions
               )
             );
+        await Promise.resolve();
+        result = pendingResult;
       } catch (error) {
         log.warn(
           {
