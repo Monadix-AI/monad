@@ -1,7 +1,6 @@
 import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 
-import { devCliShimText } from '../../dev-init/cli-shim.ts';
 import { type CodeGraphInitDeps, ensureCodeGraph } from '../../dev-init/codegraph.ts';
 import {
   ensurePortLines,
@@ -14,16 +13,6 @@ import {
 } from '../../dev-init/ports.ts';
 import { syncTurboRemoteCache } from '../../dev-init/turbo-cache.ts';
 import { findMainWorktreePath } from '../../dev-init/worktree.ts';
-
-test('devCliShimText forwards POSIX arguments to the worktree CLI entry point', () => {
-  expect(devCliShimText('/repo with space', 'darwin')).toBe(
-    `#!/bin/sh\nexec bun '/repo with space/apps/cli/src/bin.ts' "$@"\n`
-  );
-});
-
-test('devCliShimText forwards Windows arguments to the worktree CLI entry point', () => {
-  expect(devCliShimText('C:\\repo', 'win32')).toBe('@echo off\r\nbun "C:\\repo\\apps\\cli\\src\\bin.ts" %*\r\n');
-});
 
 test('ensureCodeGraph initializes a missing worktree index with the discovered CLI', async () => {
   const calls: Array<{ command: string[]; cwd: string }> = [];

@@ -143,6 +143,11 @@ users and TUI users are end users too.
    (`apps/cli/src/lib/i18n.ts`) in the CLI, injected `t` in daemon handlers.
 5. Plurals: use `key_one` / `key_other` suffixes; zh only needs `key_other`.
 
+Removing a string is the same steps in reverse. `mise run i18n:prune` reports keys no source
+file references and zh keys that no longer exist in en; `mise run i18n:prune:write` deletes
+them. The search is a static text scan, so review the report first — a key assembled at runtime
+reads as unused.
+
 ### Key namespace conventions
 
 | Prefix | Surface |

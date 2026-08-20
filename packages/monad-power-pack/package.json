@@ -29,6 +29,7 @@
     "build:atom-pack:kanban": "bun build src/experiences/kanban/client.tsx --outfile dist/experiences/kanban.js --target browser --format esm --production",
     "build:atom-pack:research-desk": "bun build src/experiences/research-desk/client.tsx --outfile dist/experiences/research-desk.js --target browser --format esm --production",
     "build:kanban": "bun build src/experiences/kanban/client.tsx --outfile src/experiences/kanban.js --target browser --format esm --production",
+    "generate": "bun run build:kanban",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
     "test:integration": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts bun run typecheck:raw",

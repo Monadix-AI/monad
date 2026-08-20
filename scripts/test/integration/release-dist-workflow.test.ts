@@ -147,3 +147,28 @@ test('nightly gates only unit and integration before generating notes and publis
   expect(releaseSmoke.jobs?.['windows-arm64']?.if).toContain("workflow_run.conclusion == 'success'");
   expect(step(releaseSmoke, 'windows-arm64', 'Test PowerShell installer')?.run).toContain('Checksum verified');
 });
+
+test('the dist toolchain is installed through mise and pinned to one version', async () => {
+  const mise = Bun.TOML.parse(await Bun.file(join(root, 'mise.toml')).text()) as {
+    tools?: Record<string, string>;
+  };
+  const workspace = Bun.TOML.parse(await Bun.file(join(root, 'dist-workspace.toml')).text()) as {
+    dist?: { 'cargo-dist-version'?: string };
+  };
+  const usesMise = (workflow: Workflow, job: string): boolean =>
+    workflow.jobs?.[job]?.steps?.some(
+      (candidate) => candidate.uses?.startsWith('jdx/mise-action@') && candidate.with?.install === true
+    ) === true;
+
+  expect({
+    ciDistTail: usesMise(ci, 'dist-tail'),
+    releaseBuild: usesMise(release, 'build'),
+    releaseInstallers: usesMise(release, 'installers'),
+    toolchainVersion: mise.tools?.['cargo-dist']
+  }).toEqual({
+    ciDistTail: true,
+    releaseBuild: true,
+    releaseInstallers: true,
+    toolchainVersion: workspace.dist?.['cargo-dist-version']
+  });
+});

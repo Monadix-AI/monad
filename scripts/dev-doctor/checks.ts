@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
-import { join, posix, resolve, win32 } from 'node:path';
+import { join, resolve } from 'node:path';
 
+import { devCliShimText } from '../dev-init/cli-shim.ts';
 import { parseEnvFile } from '../dev-init/env.ts';
 import { worktreePortKeys } from '../dev-init/ports.ts';
 import { isTcpPortAvailable } from '../dev-ports.ts';
@@ -79,14 +80,10 @@ export async function runDevDoctor(
   const shimPath = join(root, '.dev', 'bin', deps.platform === 'win32' ? 'monad.cmd' : 'monad');
   const shimExists = await deps.exists(shimPath);
   const shimText = shimExists ? await deps.readText(shimPath) : '';
-  const shimEntrypoint =
-    deps.platform === 'win32'
-      ? win32.join(root, 'apps', 'cli', 'src', 'bin.ts')
-      : posix.join(root, 'apps', 'cli', 'src', 'bin.ts');
   results.push(
-    shimExists && shimText.includes(shimEntrypoint)
-      ? ok('cli-shim', 'CLI shim points to this worktree')
-      : error('cli-shim', 'CLI shim is missing or points to another worktree', 'mise run setup')
+    shimText === devCliShimText(deps.platform)
+      ? ok('cli-shim', 'CLI shim is present and current')
+      : error('cli-shim', 'CLI shim is missing or stale', 'mise run setup')
   );
 
   const generatedPaths = [

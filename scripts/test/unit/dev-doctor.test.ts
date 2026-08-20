@@ -2,6 +2,7 @@ import { expect, test } from 'bun:test';
 import { join } from 'node:path';
 
 import { type DevDoctorDeps, runDevDoctor } from '../../dev-doctor/checks.ts';
+import { devCliShimText } from '../../dev-init/cli-shim.ts';
 
 const root = '/repo';
 const packageJson = JSON.stringify({ packageManager: 'bun@1.3.14' });
@@ -25,7 +26,7 @@ function healthyFiles(): Record<string, string> {
     [join(root, 'package.json')]: packageJson,
     [join(root, 'node_modules')]: '',
     [join(root, '.env.local')]: envLocal,
-    [join(root, '.dev/bin/monad')]: `#!/bin/sh\nexec bun '${root}/apps/cli/src/bin.ts' "$@"\n`,
+    [join(root, '.dev/bin/monad')]: devCliShimText('darwin'),
     [join(root, 'packages/atoms/generated/codex-app-server')]: '',
     [join(root, 'apps/web/src/routeTree.gen.ts')]: '',
     [join(root, 'apps/monad/generated/licenses.json')]: ''
@@ -56,7 +57,8 @@ test('Bun version mismatch reports the pinned version', async () => {
 test('missing environment and stale CLI shim point to setup', async () => {
   const files = healthyFiles();
   delete files[join(root, '.env.local')];
-  files[join(root, '.dev/bin/monad')] = "exec bun '/other/apps/cli/src/bin.ts'\n";
+  // A shim written before the shim format became self-locating.
+  files[join(root, '.dev/bin/monad')] = `#!/bin/sh\nexec bun '/other/apps/cli/src/bin.ts' "$@"\n`;
 
   const results = await runDevDoctor(root, deps(files));
 

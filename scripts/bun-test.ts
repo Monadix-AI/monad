@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { basename, join, relative, resolve } from 'node:path';
 
 import { mapWithConcurrency } from './lib/map-with-concurrency.ts';
+import { ignoredTestPathPatterns } from './lib/platform-test-files.ts';
 import {
   type FailedTestFile,
   githubFailureAnnotations,
@@ -63,20 +64,11 @@ import {
  *   `--loud` skips the quiet reporter/rerun path and injects that same preload for the whole run.
  */
 
-const SUFFIX_PLATFORMS: Record<string, NodeJS.Platform[]> = {
-  unix: ['darwin', 'linux'],
-  macos: ['darwin'],
-  linux: ['linux'],
-  windows: ['win32']
-};
-
-const ignore = Object.entries(SUFFIX_PLATFORMS)
-  .filter(([, platforms]) => !platforms.includes(process.platform))
-  .flatMap(([suffix]) => ['--path-ignore-patterns', `**/*.${suffix}.test.ts`]);
-if (process.env.MONAD_TEST_CONTAINER_DEPS !== '1') {
-  ignore.push('--path-ignore-patterns', '**/*.container.test.ts');
-  ignore.push('--path-ignore-patterns', '**/*.container.*.test.ts');
-}
+const containerDeps = process.env.MONAD_TEST_CONTAINER_DEPS === '1';
+const ignore = ignoredTestPathPatterns(process.platform, { containerDeps }).flatMap((pattern) => [
+  '--path-ignore-patterns',
+  pattern
+]);
 
 const coverage =
   process.env.MONAD_TEST_COVERAGE === '1' ? ['--coverage', '--coverage-reporter=text', '--coverage-reporter=lcov'] : [];
@@ -99,10 +91,7 @@ const autoShardCount =
 const shardCount = shardValue === 'auto' ? autoShardCount : shardValue ? Number.parseInt(shardValue, 10) : 1;
 if (!Number.isInteger(shardCount) || shardCount < 1) throw new Error(`invalid shard count: ${shardValue}`);
 const rawArgs = inputArgs.filter((arg) => arg !== shardArg);
-if (
-  process.env.MONAD_TEST_CONTAINER_DEPS !== '1' &&
-  rawArgs.some((arg) => /\.container(?:\.[^.]+)?\.test\.[cm]?[tj]sx?$/.test(arg))
-) {
+if (!containerDeps && rawArgs.some((arg) => /\.container(?:\.[^.]+)?\.test\.[cm]?[tj]sx?$/.test(arg))) {
   process.stderr.write(
     '[monad-test] container dependency tests require MONAD_TEST_CONTAINER_DEPS=1 and the deps container image.\n'
   );

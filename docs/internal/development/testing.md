@@ -144,7 +144,7 @@ script command before the wrapper starts otherwise.
 
 ```json
 {
-  "test:e2e": "bun ../../scripts/quiet-run.ts playwright test --reporter=dot"
+  "test:e2e": "bun ../../scripts/quiet-run.ts node ./node_modules/@playwright/test/cli.js test --reporter=dot"
 }
 ```
 

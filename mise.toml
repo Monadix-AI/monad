@@ -202,6 +202,18 @@ description = "Regenerate i18n runtime and types"
 raw = true
 run = "bun run scripts/i18n/catalog.ts --write"
 
+[tasks."i18n:prune"]
+description = "Report i18n keys no source file references"
+raw = true
+run = "bun run scripts/i18n/prune.ts --dry-run"
+
+# Separate from the report on purpose: the unused-key search is a static text scan, so a key built at
+# runtime can read as unused. Review the report before letting this delete anything.
+[tasks."i18n:prune:write"]
+description = "Delete the unused i18n keys the prune report lists"
+raw = true
+run = "bun run scripts/i18n/prune.ts"
+
 [tasks."smoke:mesh-agent-managed"]
 description = "Smoke-test an installed managed MeshAgent provider"
 raw = true

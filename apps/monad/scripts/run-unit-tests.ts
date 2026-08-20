@@ -2,9 +2,12 @@ import { readdir } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { mapWithConcurrency } from '../../../scripts/lib/map-with-concurrency.ts';
+import { testFileAppliesToPlatform } from '../../../scripts/lib/platform-test-files.ts';
 
 const runner = join(import.meta.dir, '../../../scripts/bun-test.ts');
 const windowsTestConcurrency = 2;
+const applies = (name: string): boolean =>
+  testFileAppliesToPlatform(name, 'win32', { containerDeps: Bun.env.MONAD_TEST_CONTAINER_DEPS === '1' });
 
 if (process.platform !== 'win32') {
   const proc = Bun.spawn(['bun', runner, 'test/unit/', '--only-failures'], {
@@ -25,12 +28,12 @@ for (const directory of directories) {
     recursive: true,
     withFileTypes: true
   });
-  if (files.some((entry) => entry.isFile() && isApplicableWindowsTest(entry.name))) {
+  if (files.some((entry) => entry.isFile() && applies(entry.name))) {
     groups.push([`test/unit/${directory.name}/`]);
   }
 }
 const rootFiles = entries
-  .filter((entry) => entry.isFile() && isApplicableWindowsTest(entry.name))
+  .filter((entry) => entry.isFile() && applies(entry.name))
   .sort((left, right) => left.name.localeCompare(right.name))
   .map((entry) => `test/unit/${entry.name}`);
 
@@ -47,10 +50,3 @@ const results = await mapWithConcurrency(groups, windowsTestConcurrency, async (
   return await proc.exited;
 });
 process.exit(results.find((code) => code !== 0) ?? 0);
-
-function isApplicableWindowsTest(name: string): boolean {
-  if (!/\.test\.[cm]?[jt]sx?$/.test(name)) return false;
-  if (/\.(?:unix|macos|linux)\.test\./.test(name)) return false;
-  if (/\.container(?:\.[^.]+)?\.test\./.test(name) && Bun.env.MONAD_TEST_CONTAINER_DEPS !== '1') return false;
-  return true;
-}

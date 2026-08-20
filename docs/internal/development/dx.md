@@ -75,8 +75,8 @@ So you know what you should *never* be doing by hand:
 
 - **`bun install` (postinstall → `scripts/dev-init.ts`)** — creates/migrates
   `.env.local`, assigns this worktree stable ports (`MONAD_PORT`, `WEB_PORT`,
-  `MONAD_KV_UI_PORT`, derived from the checkout path), regenerates `.dev/bin` CLI shims
-  with this worktree's absolute paths. Idempotent; never clobbers a value you set.
+  `MONAD_KV_UI_PORT`, derived from the checkout path), installs the `.dev/bin` CLI shim.
+  Idempotent; never clobbers a value you set.
 - **`bun run dev`** — runs generated-artifact tasks and persistent daemon, web,
   Storybook, and devtools tasks through `turbo watch`. Bun loads `.env.local`; Turbo
   owns task ordering, restarts, and child-process cleanup.
@@ -87,7 +87,7 @@ So you know what you should *never* be doing by hand:
   locale keys are never stale when you run the suite.
 - **Git hooks (Lefthook)** — see next section.
 
-If one of these breaks (shims pointing at another worktree, port collisions, `PORT`
+If one of these breaks (a missing shim, port collisions, `PORT`
 falling back to 3000), the recovery reference is
 [worktree development Part 2](worktree.md#part-2--environment-reference).
 
@@ -177,9 +177,6 @@ DX bugs are bugs. File and fix them like functional ones:
 
 Current, verified traps — remove entries when the underlying cause is fixed:
 
-- **Stale `.dev/bin` shims** silently run *another worktree's* source. Always
-  `bun install && bun run dev` first in a fresh worktree; never copy `.env.local`
-  between worktrees. ([worktree development](worktree.md))
 - **`bun` exiting 137** under sandboxed test runs is the sandbox OOM-killing the
   process, not a test failure — re-run with the sandbox disabled.
 - **Phoenix is opt-in.** Run `mise run dev:services` to start the shared Compose
