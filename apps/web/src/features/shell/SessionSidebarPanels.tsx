@@ -9,8 +9,8 @@ import type { SidebarPagerSurface } from './sidebar-trackpad-switch';
 
 import { motion } from 'motion/react';
 
-import { ThemeToggle } from '#/components/ThemeToggle';
 import { DaemonMenu } from './SessionSidebarDaemonMenu';
+import { SidebarUpgradeControl } from './SidebarUpgradeControl';
 import { SettingsSidebarItems, StudioSidebarItems, WorkspaceSidebarItems } from './sidebar';
 import { ArchivedSidebarItems } from './sidebar/archived-items';
 
@@ -149,7 +149,6 @@ export function SessionSidebarPanels({
           daemonStatusClass={footer.daemonStatusClass}
           daemonStatusText={footer.daemonStatusText}
           daemonVersion={footer.daemonStatus === 'online' ? footer.daemonVersion : undefined}
-          hasUpgrade={footer.hasUpgrade}
           menuOpen={footer.menuOpen}
           networkRuntime={footer.networkRuntime}
           onOpenChange={footer.onOpenChange}
@@ -163,7 +162,13 @@ export function SessionSidebarPanels({
           t={t}
           workspacePileActive={footer.workspacePileActive}
         />
-        <ThemeToggle />
+        <SidebarUpgradeControl
+          daemonBaseUrl={footer.daemonBaseUrl}
+          daemonOnline={footer.daemonStatus === 'online'}
+          daemonVersion={footer.daemonVersion}
+          hasUpgradeHint={footer.hasUpgrade}
+          key={footer.daemonBaseUrl}
+        />
       </div>
     </>
   );

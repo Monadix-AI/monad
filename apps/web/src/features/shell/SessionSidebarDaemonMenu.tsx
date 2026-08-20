@@ -1,20 +1,17 @@
-import type { NetworkRuntimeStatus, SystemUpgradeStatus } from '@monad/protocol';
+import type { NetworkRuntimeStatus } from '@monad/protocol';
 import type { useT } from '#/components/I18nProvider';
 
 import {
   Alert01Icon,
-  ArrowRight01Icon,
   CircleCheckIcon,
   GlobeIcon,
   HouseIcon,
-  LoaderPinwheelIcon,
   PlusSignIcon,
   ServerStack01Icon,
   Settings02Icon,
   SlidersHorizontalIcon
 } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon, type IconSvgElement } from '@hugeicons/react';
-import { useGetSystemUpgradeQuery, useStartSystemUpgradeMutation } from '@monad/client-rtk';
 import {
   Button,
   cn,
@@ -41,7 +38,6 @@ import {
   readRemoteDaemonConnections,
   saveRemoteDaemonConnection
 } from '#/lib/daemon-connections';
-import { watchUpgradeRestartAndReload } from '#/lib/monad-store';
 import { RemoteDaemonDialog } from './SessionSidebarRemoteDaemonDialog';
 
 type TFunction = ReturnType<typeof useT>;
@@ -156,7 +152,6 @@ export function DaemonMenu({
   daemonStatusClass: string;
   daemonStatusText: string;
   daemonVersion?: string;
-  hasUpgrade?: boolean;
   networkRuntime?: NetworkRuntimeStatus;
   menuOpen: boolean;
   onOpenChange: (open: boolean) => void;
@@ -176,12 +171,6 @@ export function DaemonMenu({
   const [remoteConnections, setRemoteConnections] = useState<RemoteDaemonConnection[]>([]);
   const [activeConnection, setActiveConnection] = useState(() => getActiveDaemonConnection(daemonBaseUrl));
   const [showConnectionLabel, setShowConnectionLabel] = useState(false);
-  const [upgradePolling, setUpgradePolling] = useState(false);
-  const [startSystemUpgrade, { isLoading: isStartingUpgrade }] = useStartSystemUpgradeMutation();
-  const { data: upgradeStatus } = useGetSystemUpgradeQuery(undefined, {
-    pollingInterval: menuOpen || isStartingUpgrade || upgradePolling ? 1000 : 0,
-    skip: daemonStatus !== 'online' || (!menuOpen && !isStartingUpgrade && !upgradePolling)
-  });
   const hasConnectionChoices = remoteConnections.length > 0;
   const activeConnectionMeta = daemonStatus === 'online' ? 'Connected' : daemonStatusText;
   const activeConnectionVersion = daemonStatus === 'online' ? daemonVersion : undefined;
@@ -198,15 +187,6 @@ export function DaemonMenu({
   const runtimeListeners = networkRuntime?.listeners.map(
     (listener) => `${listener.scheme}://${listener.host}:${listener.port}`
   );
-  const upgradeStage = upgradeStatus?.stage ?? 'idle';
-  const upgradeActive = upgradeStatusIsActive(upgradeStage) || isStartingUpgrade;
-  const upgradeReady = upgradeStatus?.available === true && upgradeStatus.stage === 'ready';
-  const upgradeLabel = upgradeActive ? upgradeDisplayLabel(t, upgradeStage) : t('web.settings.system.updateButton');
-
-  useEffect(() => {
-    setUpgradePolling(upgradeStatusIsActive(upgradeStage) || isStartingUpgrade);
-  }, [isStartingUpgrade, upgradeStage]);
-
   useEffect(() => {
     setRemoteConnections(readRemoteDaemonConnections());
     setActiveConnection(getActiveDaemonConnection(daemonBaseUrl));
@@ -243,16 +223,6 @@ export function DaemonMenu({
 
     event.preventDefault();
     onToggleSettings();
-  };
-
-  const startUpgrade = async () => {
-    if (upgradeActive) return;
-    watchUpgradeRestartAndReload({
-      baseUrl: daemonBaseUrl,
-      currentVersion: daemonVersion,
-      targetVersion: upgradeStatus?.latestVersion
-    });
-    await startSystemUpgrade().unwrap();
   };
 
   return (
@@ -323,40 +293,6 @@ export function DaemonMenu({
           onKeyDown={onMenuKeyDown}
           side="top"
         >
-          {upgradeReady || upgradeActive ? (
-            <>
-              <DropdownMenuItem
-                className="mb-1 flex min-h-16 items-center gap-3 rounded-md border border-border bg-card px-3 py-3 outline-hidden focus:bg-accent"
-                disabled={upgradeActive}
-                onSelect={(event) => {
-                  event.preventDefault();
-                  void startUpgrade();
-                }}
-              >
-                <span className="grid size-10 shrink-0 place-items-center rounded-sm border bg-background">
-                  <HugeiconsIcon
-                    className={cn('size-5', upgradeActive && 'animate-spin')}
-                    icon={upgradeActive ? LoaderPinwheelIcon : CircleCheckIcon}
-                  />
-                </span>
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate font-medium text-base">{upgradeLabel}</span>
-                  {upgradeStatus?.latestVersion ? (
-                    <span className="block truncate font-ui text-muted-foreground text-xs">
-                      v{upgradeStatus.latestVersion}
-                    </span>
-                  ) : null}
-                </span>
-                {!upgradeActive ? (
-                  <HugeiconsIcon
-                    className="size-5 text-muted-foreground"
-                    icon={ArrowRight01Icon}
-                  />
-                ) : null}
-              </DropdownMenuItem>
-              <DropdownMenuSeparator />
-            </>
-          ) : null}
           <DropdownMenuGroup>
             <DropdownMenuLabel className="flex items-center gap-2 font-normal text-base leading-control">
               <span className="text-foreground">{t('web.daemon.label')}</span>
@@ -458,33 +394,4 @@ export function DaemonMenu({
       />
     </>
   );
-}
-
-function upgradeStatusIsActive(stage: SystemUpgradeStatus['stage']): boolean {
-  return (
-    stage === 'checking' ||
-    stage === 'downloading' ||
-    stage === 'verifying' ||
-    stage === 'installing' ||
-    stage === 'restarting'
-  );
-}
-
-function upgradeDisplayLabel(t: TFunction, stage: SystemUpgradeStatus['stage']): string {
-  switch (stage) {
-    case 'checking':
-      return t('web.settings.system.upgradeStage.checking');
-    case 'downloading':
-      return t('web.settings.system.upgradeStage.downloading');
-    case 'verifying':
-      return t('web.settings.system.upgradeStage.verifying');
-    case 'installing':
-      return t('web.settings.system.upgradeStage.installing');
-    case 'restarting':
-      return t('web.settings.system.upgradeStage.restarting');
-    case 'complete':
-      return t('web.settings.system.upgradeStage.complete');
-    default:
-      return t('web.settings.system.upgradeStage.idle');
-  }
 }

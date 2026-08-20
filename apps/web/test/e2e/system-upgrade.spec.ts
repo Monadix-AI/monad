@@ -14,10 +14,11 @@ function json(body: unknown, status = 200) {
 async function installSystemSettingsApiMock(
   page: Page,
   health: { version: string; latestVersion?: string; latestVersionCheckedAt?: string },
-  upgrade: { latestVersion?: string } = {}
+  upgrade: { latestVersion?: string; pauseAtProgress?: number } = {}
 ) {
   let upgradeGets = 0;
   let upgradeStarts = 0;
+  let finishUpgrade: (() => void) | undefined;
   let startup = { enabled: false, supported: true };
   const upgradeLatestVersion = upgrade.latestVersion ?? health.latestVersion;
   let upgradeState = {
@@ -57,6 +58,16 @@ async function installSystemSettingsApiMock(
     }
     if (method === 'POST' && path === '/v1/system/upgrade') {
       upgradeStarts += 1;
+      if (upgrade.pauseAtProgress !== undefined) {
+        upgradeState = {
+          ...upgradeState,
+          progress: upgrade.pauseAtProgress,
+          stage: 'downloading'
+        };
+        await new Promise<void>((resolve) => {
+          finishUpgrade = resolve;
+        });
+      }
       upgradeState = {
         ...upgradeState,
         progress: 90,
@@ -145,6 +156,9 @@ async function installSystemSettingsApiMock(
   });
 
   return {
+    finishUpgrade() {
+      finishUpgrade?.();
+    },
     setExternalStartup(enabled: boolean) {
       startup = { ...startup, enabled };
     },
@@ -174,28 +188,30 @@ test.describe('System upgrade settings', () => {
     await page.goto('/settings/system');
 
     await expect(page.getByText('0.2.0-beta.2 available')).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Update' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Update', exact: true })).toBeVisible();
   });
 
-  test('auto-prepares update from the daemon menu and starts install when ready', async ({ page }) => {
-    const api = await installSystemSettingsApiMock(page, {
-      version: '0.1.1',
-      latestVersion: '0.2.0',
-      latestVersionCheckedAt: '2026-07-01T00:00:00.000Z'
-    });
+  test('downloads an available update from the sidebar chip and reports progress', async ({ page }) => {
+    const api = await installSystemSettingsApiMock(
+      page,
+      {
+        version: '0.1.1',
+        latestVersion: '0.2.0',
+        latestVersionCheckedAt: '2026-07-01T00:00:00.000Z'
+      },
+      { pauseAtProgress: 42 }
+    );
 
     await page.goto('/');
 
-    await expect(page.getByText('Update')).toHaveCount(0);
-
-    await page.getByTestId('daemon-menu-trigger').focus();
-    await page.keyboard.press('Enter');
     await expect.poll(api.upgradeGets).toBeGreaterThan(0);
-    await expect(page.getByText('Update', { exact: true })).toBeVisible();
-    await page.getByText('Update', { exact: true }).click();
+    await page.getByRole('button', { name: 'Update Monad' }).click();
 
     await expect.poll(api.upgradeStarts).toBe(1);
-    await expect(page.getByText('Restarting')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Downloading 42%' })).toHaveText('42%');
+
+    api.finishUpgrade();
+    await expect(page.getByRole('button', { name: 'Restarting 90%' })).toHaveText('90%');
 
     await page.goto('/settings/system');
 
@@ -204,9 +220,9 @@ test.describe('System upgrade settings', () => {
 
     const settingsPage = page.locator('main');
     await expect(settingsPage.getByText('Restarting', { exact: true })).toBeVisible();
-    await expect(page.getByText('90%')).toHaveCount(0);
-    await expect(page.getByText('Checking')).toHaveCount(0);
-    await expect(page.getByText('Verifying')).toHaveCount(0);
+    await expect(settingsPage.getByText('90%')).toHaveCount(0);
+    await expect(settingsPage.getByText('Checking')).toHaveCount(0);
+    await expect(settingsPage.getByText('Verifying')).toHaveCount(0);
   });
 
   test('reloads launch-at-login switch from system state when settings opens', async ({ page }) => {
