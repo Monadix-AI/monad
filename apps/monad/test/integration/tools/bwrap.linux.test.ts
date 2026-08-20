@@ -1,11 +1,10 @@
 if (process.platform !== 'linux') process.exit(0);
-if (!Bun.which('bwrap')) process.exit(0);
 
 // Real bwrap enforcement — requires Linux kernel + bubblewrap installed.
 
 import type { SandboxPolicy } from '@monad/sdk-atom';
 
-import { afterEach, expect, test } from 'bun:test';
+import { afterEach, test as bunTest, expect } from 'bun:test';
 import { existsSync } from 'node:fs';
 import { mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -13,6 +12,8 @@ import { join } from 'node:path';
 import { buildBwrapArgs, bwrapLauncher } from '@monad/sandbox/launchers/bwrap';
 
 import { configureSandboxLauncher, noneLauncher, sandboxedSpawn } from '#/capabilities/tools';
+
+const test = bunTest.skipIf(!Bun.which('bwrap'));
 
 afterEach(() => configureSandboxLauncher(noneLauncher));
 

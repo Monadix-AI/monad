@@ -96,6 +96,7 @@ test('every Bun dependency install restores the package cache first', async () =
     { cacheConfigured: true, job: 'atom-pack-release.yml:release' },
     { cacheConfigured: true, job: 'ci.yml:checks' },
     { cacheConfigured: true, job: 'ci.yml:unit' },
+    { cacheConfigured: true, job: 'ci.yml:integration' },
     { cacheConfigured: true, job: 'ci.yml:hermetic-e2e' },
     { cacheConfigured: true, job: 'ci.yml:web-e2e' },
     { cacheConfigured: true, job: 'ci.yml:dist-tail' },
@@ -127,6 +128,7 @@ test('a failing CI job still persists the dependency cache it just built', async
   ).toEqual([
     { job: 'checks', savesOnFailure: true },
     { job: 'unit', savesOnFailure: true },
+    { job: 'integration', savesOnFailure: true },
     { job: 'hermetic-e2e', savesOnFailure: true },
     { job: 'web-e2e', savesOnFailure: true },
     { job: 'dist-tail', savesOnFailure: true }
@@ -151,7 +153,7 @@ test('Windows jobs move temporary files off the slow system volume', async () =>
         windowsOnly: steps[redirect]?.if === "runner.os == 'Windows'"
       };
     })
-  ).toEqual(['unit', 'hermetic-e2e'].map((job) => ({ job, precedesCheckout: true, windowsOnly: true })));
+  ).toEqual(['unit', 'integration', 'hermetic-e2e'].map((job) => ({ job, precedesCheckout: true, windowsOnly: true })));
   // libuv reads TMP before TEMP, so setting only one leaves os.tmpdir() on the slow volume.
   expect({
     setsBothVariables: ['TMP=', 'TEMP='].every((name) => script.includes(name)),
@@ -177,7 +179,7 @@ test('the Bun cache lives on the same volume as the workspace', async () => {
     allUnderRunnerTemp: cacheSteps.every((step) => String(step.with?.path ?? '').includes('runner.temp')),
     exportsPerJob: exports.length,
     exportsMatchTheCachedPath: exports.every((step) => step.run?.includes('$RUNNER_TEMP/bun-install-cache'))
-  }).toEqual({ steps: 10, allUnderRunnerTemp: true, exportsPerJob: 5, exportsMatchTheCachedPath: true });
+  }).toEqual({ steps: 12, allUnderRunnerTemp: true, exportsPerJob: 6, exportsMatchTheCachedPath: true });
 });
 
 test('CI caches PR tasks while the final release gate forces complete execution', async () => {
@@ -193,6 +195,7 @@ test('CI caches PR tasks while the final release gate forces complete execution'
   expect(ci.env?.TURBO_FORCE).toBe('$'.concat("{{ inputs.force && 'true' || 'false' }}"));
   expect(testRuns).toEqual([
     { forced: false, job: 'unit' },
+    { forced: false, job: 'integration' },
     { forced: false, job: 'hermetic-e2e' },
     { forced: false, job: 'web-e2e' }
   ]);
@@ -221,6 +224,47 @@ test('CI preserves failures while running both unit test scopes', async () => {
   ]);
 });
 
+test('integration tests have a dedicated workspace, Turbo, and full-suite path', async () => {
+  const rootPackage = await Bun.file(join(root, 'package.json')).json();
+  const monadPackage = await Bun.file(join(root, 'apps/monad/package.json')).json();
+  const turbo = Bun.JSONC.parse(await Bun.file(join(root, 'turbo.jsonc')).text()) as {
+    tasks?: Record<string, { passThroughEnv?: string[] }>;
+  };
+  const integrationSteps = (await workflows())
+    .find(({ file }) => file === 'ci.yml')
+    ?.workflow.jobs?.integration?.steps?.filter((step) => step.name?.startsWith('Test '));
+
+  expect({
+    ci: integrationSteps?.map((step) => ({ condition: step.if ?? null, name: step.name, run: step.run })),
+    full: rootPackage.scripts?.['test:raw'],
+    package: monadPackage.scripts?.['test:integration'],
+    root: rootPackage.scripts?.['test:integration:raw'],
+    timingExport: turbo.tasks?.['test:integration']?.passThroughEnv
+  }).toEqual({
+    ci: [
+      {
+        condition: null,
+        name: 'Test workspace integration',
+        run: 'bun scripts/quiet-run.ts bunx --bun turbo run test:integration --output-logs=errors-only'
+      },
+      {
+        condition: "runner.os == 'Linux' && !cancelled()",
+        name: 'Test container integration',
+        run: 'bun scripts/bun-test.ts apps/monad/test/integration/tools/code-exec-docker.container.unix.test.ts --only-failures'
+      },
+      {
+        condition: '$'.concat('{{ !cancelled() }}'),
+        name: 'Test script integration',
+        run: 'bun scripts/bun-test.ts scripts/test/integration/ --only-failures'
+      }
+    ],
+    full: 'bun run test:unit:raw && bun run test:integration:raw && bun run test:e2e:raw',
+    package: 'bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures',
+    root: 'turbo run test:integration --output-logs=errors-only && bun scripts/bun-test.ts scripts/test/integration/ --only-failures',
+    timingExport: ['MONAD_TEST_JUNIT_DIR']
+  });
+});
+
 test('the cross-platform matrix is reachable without publishing a release', async () => {
   const workflow = Bun.YAML.parse(await Bun.file(join(workflowsDir, 'ci.yml')).text()) as Workflow;
   const fullGate = "github.event_name == 'merge_group' || inputs.full";
@@ -234,9 +278,10 @@ test('the cross-platform matrix is reachable without publishing a release', asyn
   // Dispatch defaults `full` to true, so all three matrix gates open on a manual run.
   expect({
     hermeticE2e: workflow.jobs?.['hermetic-e2e']?.if,
+    integrationMatrixGate: String(workflow.jobs?.integration?.strategy?.matrix?.os ?? '').includes(fullGate),
     webE2e: workflow.jobs?.['web-e2e']?.if,
     unitMatrixGate: String(workflow.jobs?.unit?.strategy?.matrix?.os ?? '').includes(fullGate)
-  }).toEqual({ hermeticE2e: fullGate, webE2e: fullGate, unitMatrixGate: true });
+  }).toEqual({ hermeticE2e: fullGate, integrationMatrixGate: true, webE2e: fullGate, unitMatrixGate: true });
 });
 
 test('every Windows job drops Defender scanning before it writes to disk', async () => {
@@ -256,7 +301,7 @@ test('every Windows job drops Defender scanning before it writes to disk', async
       };
     })
   ).toEqual(
-    ['unit', 'hermetic-e2e'].map((job) => ({
+    ['unit', 'integration', 'hermetic-e2e'].map((job) => ({
       job,
       first: { if: "runner.os == 'Windows'", run: '$'.concat('{{ env.WINDOWS_DEFENDER_EXCLUSIONS }}'), shell: 'pwsh' },
       precedesCheckout: true
@@ -350,7 +395,7 @@ test('critical daemon and browser E2E jobs cannot be softened or omitted from th
   // web-e2e was removed from this set on purpose: its Playwright webServer wait times out
   // intermittently on the runners and it now reports without blocking. The exemption is pinned
   // below so it stays visible rather than becoming an unexplained gap in this list.
-  const critical = ['hermetic-e2e', 'e2e-deps'];
+  const critical = ['integration', 'hermetic-e2e', 'e2e-deps'];
 
   expect(
     critical.map((job) => ({
@@ -361,7 +406,15 @@ test('critical daemon and browser E2E jobs cannot be softened or omitted from th
         .map((step) => step.name ?? step.run ?? step.uses)
     }))
   ).toEqual(critical.map((job) => ({ job, continueOnError: null, softenedSteps: [] })));
-  expect(workflow.jobs?.gate?.needs).toEqual(['checks', 'unit', 'hermetic-e2e', 'web-e2e', 'dist-tail', 'e2e-deps']);
+  expect(workflow.jobs?.gate?.needs).toEqual([
+    'checks',
+    'unit',
+    'integration',
+    'hermetic-e2e',
+    'web-e2e',
+    'dist-tail',
+    'e2e-deps'
+  ]);
   expect(JSON.stringify(critical.map((job) => workflow.jobs?.[job]))).not.toMatch(/allow[-_]?failure|quarantine/i);
 });
 

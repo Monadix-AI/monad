@@ -9,8 +9,8 @@ export interface FailedTestFile {
   pattern?: string;
 }
 
-export function testRunExitCode(processExitCode: number, failedFileCount: number): number {
-  return processExitCode !== 0 ? processExitCode : failedFileCount > 0 ? 1 : 0;
+export function testRunExitCode(processExitCode: number, failedFileCount: number, missingReport = false): number {
+  return processExitCode !== 0 ? processExitCode : failedFileCount > 0 || missingReport ? 1 : 0;
 }
 
 export function parseFailedCases(xml: string): FailedTestCase[] {
