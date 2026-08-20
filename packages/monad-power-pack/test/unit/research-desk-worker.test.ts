@@ -2,7 +2,15 @@ import type { ExperienceStateStore, WorkplaceExperienceApiContext } from '@monad
 
 import { afterEach, describe, expect, test } from 'bun:test';
 
-import { captureSource, decideClaim, makeSourceRef } from '../../src/experiences/research-desk/domain/index.ts';
+import {
+  captureSource,
+  decideClaim,
+  makeReport,
+  makeResearchAssignment,
+  makeSourceRef,
+  reportCoverage,
+  upsertBlock
+} from '../../src/experiences/research-desk/domain/index.ts';
 import { parsePayloads } from '../../src/experiences/research-desk/ingest.ts';
 import { ResearchDeskStore } from '../../src/experiences/research-desk/store.ts';
 import { researchDeskWorker } from '../../src/experiences/research-desk/worker.ts';
@@ -16,7 +24,9 @@ afterEach(() => {
   globalThis.fetch = nativeFetch;
 });
 
-function memoryState(): ExperienceStateStore {
+function memoryState(
+  beforeSwap: (input: { key: string; expectedVersion: number | null }) => Promise<void> = async () => {}
+): ExperienceStateStore {
   const records = new Map<string, { value: unknown; version: number }>();
   return {
     get: async <T>(projectId: string, key: string) =>
@@ -28,6 +38,7 @@ function memoryState(): ExperienceStateStore {
           : []
       ),
     compareAndSwap: async ({ projectId, key, expectedVersion, value }) => {
+      await beforeSwap({ key, expectedVersion });
       const compound = `${projectId}:${key}`;
       const current = records.get(compound);
       if (expectedVersion === null ? current !== undefined : current?.version !== expectedVersion) return false;
@@ -38,12 +49,12 @@ function memoryState(): ExperienceStateStore {
   };
 }
 
-function fixture() {
+function fixture(experienceState = memoryState()) {
   const scheduled: Array<{ key: string; runAt: string }> = [];
   const context = {
     atomPackId: 'monad-power-pack',
     experienceId: 'research-desk',
-    experienceState: memoryState(),
+    experienceState,
     projectSessions: { list: async () => [], listMessages: async () => ({ items: [], nextCursor: null }) },
     projectMembers: { listTemplates: async () => [] },
     requestInteraction: async () => ({ status: 'cancelled', reason: 'unavailable' }) as const,
@@ -57,14 +68,14 @@ function fixture() {
   return { context, scheduled };
 }
 
-function messageEvent(text: string, id = 'msg_1') {
+function messageEvent(text: string, id = 'msg_1', memberId = 'mesh-agent:researcher') {
   return {
     id: `evt_${id}`,
     projectId: PROJECT,
     sessionId: 'ses_research',
     type: 'session.message.completed',
     createdAt: NOW,
-    payload: { message: { id, role: 'assistant', text, memberId: 'mesh-agent:researcher' } }
+    payload: { message: { id, role: 'assistant', text, memberId } }
   };
 }
 
@@ -155,6 +166,265 @@ describe('ingesting agent messages', () => {
     const [after] = await store.listClaims(PROJECT);
     expect(after?.status).toBe('rejected');
     expect(after?.decisionReason).toBe('sample not comparable');
+  });
+
+  test('a second mesh member appends an opposing contribution with worker-owned provenance', async () => {
+    const { context } = fixture();
+    const store = new ResearchDeskStore(context);
+    await researchDeskWorker.onEvent(messageEvent(SOURCE_BLOCK), context);
+    await researchDeskWorker.onEvent(messageEvent(CLAIM_BLOCK, 'msg_claim'), context);
+    const [before] = await store.listClaims(PROJECT);
+    if (!before) throw new Error('expected an ingested claim');
+    const contribution = `\`\`\`research-desk
+{"record":"claim-contribution","id":"ctb_oppose","claimId":"${before.id}","kind":"citation","payload":{"sourceLocator":"https://a.test/pricing","excerpt":"the comparable cohort kept seat pricing","stance":"oppose"},"memberId":"spoofed","sessionId":"spoofed","messageId":"spoofed"}
+\`\`\``;
+
+    await researchDeskWorker.onEvent(messageEvent(contribution, 'msg_verify', 'mesh-agent:evidence-engineer'), context);
+
+    const after = await store.requireClaim(PROJECT, before.id);
+    expect(after.status).toBe('contested');
+    expect(after.contributions).toEqual([
+      {
+        id: 'ctb_oppose',
+        claimId: before.id,
+        assignmentId: null,
+        memberId: 'mesh-agent:evidence-engineer',
+        sessionId: 'ses_research',
+        messageId: 'msg_verify',
+        kind: 'citation',
+        payload: {
+          sourceId: after.citations[0]?.sourceId,
+          excerpt: 'the comparable cohort kept seat pricing',
+          locator: null,
+          stance: 'oppose'
+        },
+        createdAt: NOW
+      }
+    ]);
+    expect(after.citations.at(-1)?.addedByMemberId).toBe('mesh-agent:evidence-engineer');
+  });
+
+  test('replaying the same contribution leaves the claim byte-for-byte unchanged', async () => {
+    const { context } = fixture();
+    const store = new ResearchDeskStore(context);
+    await researchDeskWorker.onEvent(messageEvent(CLAIM_BLOCK, 'msg_claim'), context);
+    const [claim] = await store.listClaims(PROJECT);
+    if (!claim) throw new Error('expected an ingested claim');
+    const contribution = `\`\`\`research-desk
+{"record":"claim-contribution","id":"ctb_once","claimId":"${claim.id}","kind":"challenge","payload":{"reason":"sample mismatch"}}
+\`\`\``;
+    await researchDeskWorker.onEvent(messageEvent(contribution, 'msg_verify'), context);
+    const once = await store.requireClaim(PROJECT, claim.id);
+
+    await researchDeskWorker.onEvent(messageEvent(contribution, 'msg_replayed'), context);
+
+    expect(await store.requireClaim(PROJECT, claim.id)).toEqual(once);
+  });
+
+  test('concurrent distinct contributions merge after a compare-and-swap conflict', async () => {
+    let arrivals = 0;
+    let release: (() => void) | undefined;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const state = memoryState(async ({ key, expectedVersion }) => {
+      if (!key.startsWith('evidence/') || expectedVersion !== 0) return;
+      arrivals += 1;
+      if (arrivals === 2) release?.();
+      await gate;
+    });
+    const { context } = fixture(state);
+    const store = new ResearchDeskStore(context);
+    await researchDeskWorker.onEvent(messageEvent(CLAIM_BLOCK, 'msg_claim'), context);
+    const [claim] = await store.listClaims(PROJECT);
+    if (!claim) throw new Error('expected an ingested claim');
+    const block = (id: string, reason: string) => `\`\`\`research-desk
+{"record":"claim-contribution","id":"${id}","claimId":"${claim.id}","kind":"challenge","payload":{"reason":"${reason}"}}
+\`\`\``;
+
+    await Promise.all([
+      researchDeskWorker.onEvent(messageEvent(block('ctb_a', 'cohort mismatch'), 'msg_a'), context),
+      researchDeskWorker.onEvent(messageEvent(block('ctb_b', 'date mismatch'), 'msg_b'), context)
+    ]);
+
+    const merged = await store.requireClaim(PROJECT, claim.id);
+    expect(merged.contributions.map((entry) => entry.id).sort()).toEqual(['ctb_a', 'ctb_b']);
+    expect(merged.version).toBe(2);
+    expect(merged.status).toBe('contested');
+  });
+
+  test('a contribution completes its referenced assignment', async () => {
+    const { context } = fixture();
+    const store = new ResearchDeskStore(context);
+    await researchDeskWorker.onEvent(messageEvent(CLAIM_BLOCK, 'msg_claim'), context);
+    const [claim] = await store.listClaims(PROJECT);
+    if (!claim) throw new Error('expected an ingested claim');
+    const assignment = await store.putAssignment(
+      makeResearchAssignment({
+        id: 'asg_verify',
+        projectId: PROJECT,
+        role: 'evidence-engineer',
+        targetClaimId: claim.id,
+        sessionId: 'ses_research',
+        memberId: 'mesh-agent:evidence-engineer',
+        objective: 'Challenge the claim',
+        contextReceipt: { brief: 'Pricing research', sourceIds: [], claimIds: [claim.id], blockIds: [] },
+        createdAt: NOW
+      }),
+      null
+    );
+    const contribution = `\`\`\`research-desk
+{"record":"claim-contribution","id":"ctb_done","claimId":"${claim.id}","assignmentId":"${assignment.id}","kind":"negative-result","payload":{"attempt":"searched comparable launches","outcome":"no opposing primary source found"}}
+\`\`\``;
+
+    await researchDeskWorker.onEvent(messageEvent(contribution, 'msg_done', 'mesh-agent:evidence-engineer'), context);
+
+    expect(await store.requireAssignment(PROJECT, assignment.id)).toEqual({
+      ...assignment,
+      state: 'completed',
+      version: 1,
+      updatedAt: NOW,
+      completedAt: NOW
+    });
+  });
+
+  test('a missing-block assignment links its new claim once and completes after preserving coverage semantics', async () => {
+    const { context } = fixture();
+    const store = new ResearchDeskStore(context);
+    await researchDeskWorker.onEvent(messageEvent(SOURCE_BLOCK), context);
+    const report = await store.putReport(
+      upsertBlock(
+        makeReport({
+          id: 'rep_1',
+          projectId: PROJECT,
+          title: 'Pricing research',
+          question: 'Should the launch use consumption pricing?',
+          sessionId: 'ses_report',
+          createdAt: NOW
+        }),
+        0,
+        {
+          id: 'blk_missing',
+          kind: 'factual',
+          heading: 'Competitive landscape',
+          markdown: 'Comparable vendors use consumption pricing.',
+          evidenceIds: [],
+          kindChangedByHuman: false
+        },
+        NOW
+      ),
+      null
+    );
+    const assignment = await store.putAssignment(
+      makeResearchAssignment({
+        id: 'asg_missing',
+        projectId: PROJECT,
+        role: 'researcher',
+        targetBlockId: 'blk_missing',
+        sessionId: 'ses_research',
+        memberId: 'mesh-agent:researcher',
+        objective: 'Find evidence for the missing competitive landscape block',
+        contextReceipt: { brief: 'Pricing research', sourceIds: [], claimIds: [], blockIds: ['blk_missing'] },
+        createdAt: NOW
+      }),
+      null
+    );
+    const assignedClaim = `\`\`\`research-desk
+{"record":"claim","assignmentId":"${assignment.id}","text":"Comparable vendors retained seat pricing","citations":[{"sourceLocator":"https://a.test/pricing","excerpt":"pricing remains per seat","stance":"oppose"}]}
+\`\`\``;
+
+    await researchDeskWorker.onEvent(messageEvent(assignedClaim, 'msg_assigned'), context);
+    await researchDeskWorker.onEvent(messageEvent(assignedClaim, 'msg_replayed'), context);
+
+    const [claim] = await store.listClaims(PROJECT);
+    if (!claim) throw new Error('expected the assigned claim');
+    const linked = await store.requireReport(PROJECT);
+    expect(linked.blocks[0]?.evidenceIds).toEqual([claim.id]);
+    expect(reportCoverage(linked, new Map([[claim.id, claim]]))).toEqual([
+      {
+        blockId: 'blk_missing',
+        heading: 'Competitive landscape',
+        kind: 'factual',
+        accepted: 0,
+        contested: 1,
+        missing: 1
+      }
+    ]);
+    const accepted = await store.putClaim(
+      decideClaim(claim, claim.version, { status: 'accepted', reason: 'human accepted the counterexample' }, LATER),
+      claim.version
+    );
+    expect(reportCoverage(linked, new Map([[accepted.id, accepted]]))).toEqual([
+      {
+        blockId: 'blk_missing',
+        heading: 'Competitive landscape',
+        kind: 'factual',
+        accepted: 1,
+        contested: 0,
+        missing: 0
+      }
+    ]);
+    expect(await store.requireAssignment(PROJECT, assignment.id)).toEqual({
+      ...assignment,
+      state: 'completed',
+      version: 1,
+      updatedAt: NOW,
+      completedAt: NOW
+    });
+    expect(linked.version).toBe(report.version + 1);
+  });
+
+  test('an assignment from another session does not capture the claim or complete', async () => {
+    const { context } = fixture();
+    const store = new ResearchDeskStore(context);
+    const report = await store.putReport(
+      upsertBlock(
+        makeReport({
+          id: 'rep_1',
+          projectId: PROJECT,
+          title: 'Pricing research',
+          question: 'Should the launch use consumption pricing?',
+          sessionId: 'ses_report',
+          createdAt: NOW
+        }),
+        0,
+        {
+          id: 'blk_missing',
+          kind: 'factual',
+          heading: 'Competitive landscape',
+          markdown: '',
+          evidenceIds: [],
+          kindChangedByHuman: false
+        },
+        NOW
+      ),
+      null
+    );
+    const assignment = await store.putAssignment(
+      makeResearchAssignment({
+        id: 'asg_other_session',
+        projectId: PROJECT,
+        role: 'researcher',
+        targetBlockId: 'blk_missing',
+        sessionId: 'ses_other',
+        memberId: 'mesh-agent:researcher',
+        objective: 'Find missing evidence',
+        contextReceipt: { brief: 'Pricing research', sourceIds: [], claimIds: [], blockIds: ['blk_missing'] },
+        createdAt: NOW
+      }),
+      null
+    );
+    const assignedClaim = `\`\`\`research-desk
+{"record":"claim","assignmentId":"${assignment.id}","text":"A new claim from the wrong session"}
+\`\`\``;
+
+    await researchDeskWorker.onEvent(messageEvent(assignedClaim, 'msg_wrong_session'), context);
+
+    expect((await store.listClaims(PROJECT)).map((claim) => claim.text)).toEqual([
+      'A new claim from the wrong session'
+    ]);
+    expect(await store.requireReport(PROJECT)).toEqual(report);
+    expect(await store.requireAssignment(PROJECT, assignment.id)).toEqual(assignment);
   });
 
   test('a user message is not ingested', async () => {

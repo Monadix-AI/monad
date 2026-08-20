@@ -1,25 +1,35 @@
 import type {
+  CrossRead,
   EvidenceClaim,
   Report,
   ReportBlock,
-  SourceRef
+  SourceRef,
+  SourceVisibility
 } from '../../src/experiences/research-desk/domain/index.ts';
 
 import { describe, expect, test } from 'bun:test';
 
 import {
+  crossReadCanBeRuled,
   decisionBody,
   firstBlockedBlock,
   parseCoverage,
+  parseCrossReadsPayload,
+  parseNotesPayload,
   parseOverviewPayload,
   parsePublishResult,
+  parseTransformationsPayload,
+  parseVisibilityPayload,
   publishConflict,
   replaceClaim,
   reportBlockIsBlocked,
   researchViewModel,
   sourceStatusDetail,
-  sourceStatusTone
+  sourceStatusTone,
+  toggledVisibilityRule,
+  visibleSourceIds
 } from '../../src/experiences/research-desk/client-logic.ts';
+import { BUILT_IN_TRANSFORMATIONS } from '../../src/experiences/research-desk/domain/index.ts';
 
 const claim = (status: EvidenceClaim['status'] = 'contested'): EvidenceClaim => ({
   schemaVersion: 1,
@@ -74,6 +84,52 @@ const report: Report = {
   createdAt: '2026-08-13T10:00:00.000Z',
   updatedAt: '2026-08-13T10:00:00.000Z'
 };
+
+const source = (id: string): SourceRef => ({
+  schemaVersion: 1,
+  id,
+  projectId: 'project-a',
+  kind: 'url',
+  type: 'primary',
+  title: id,
+  locator: `https://example.com/${id}`,
+  statusReason: null,
+  status: 'available',
+  sessionId: 'session-research',
+  messageId: null,
+  artifactPath: null,
+  capturedByMemberId: 'researcher',
+  recheckedAt: null,
+  capturedAt: '2026-08-13T09:14:00.000Z',
+  fingerprint: `fingerprint-${id}`,
+  version: 0,
+  createdAt: '2026-08-13T09:10:00.000Z',
+  updatedAt: '2026-08-13T09:10:00.000Z'
+});
+
+const crossRead = (states: Array<'pending' | 'answered' | 'failed'>): CrossRead => ({
+  schemaVersion: 1,
+  id: 'cross-read-a',
+  projectId: 'project-a',
+  question: 'Do the vendors describe the same pricing model?',
+  sourceIds: ['source-a'],
+  readings: states.map((state, index) => ({
+    memberId: `member-${index + 1}`,
+    provider: `provider-${index + 1}`,
+    sessionId: `session-${index + 1}`,
+    answer: state === 'answered' ? `Answer ${index + 1}` : null,
+    citations: [],
+    state,
+    failureReason: state === 'failed' ? 'The reader failed.' : null,
+    answeredAt: state === 'answered' ? '2026-08-13T10:04:00.000Z' : null
+  })),
+  verdict: null,
+  verdictReason: null,
+  producedEvidenceId: null,
+  version: 0,
+  createdAt: '2026-08-13T10:00:00.000Z',
+  updatedAt: '2026-08-13T10:00:00.000Z'
+});
 
 describe('research desk client logic', () => {
   test('selecting evidence links its exact source and report block while retaining publish coverage', () => {
@@ -280,5 +336,111 @@ describe('research desk client logic', () => {
         }
       )
     ).toBe(false);
+  });
+
+  test('cross-read ruling stays locked until two independent readers answer', () => {
+    expect([
+      crossReadCanBeRuled(crossRead(['answered', 'pending'])),
+      crossReadCanBeRuled(crossRead(['answered', 'failed'])),
+      crossReadCanBeRuled(crossRead(['answered', 'answered']))
+    ]).toEqual([false, false, true]);
+  });
+
+  test('visibility defaults to every source and collapses an all-selected rule back to null', () => {
+    const sources = [source('source-a'), source('source-b')];
+    const visibility: SourceVisibility = {
+      schemaVersion: 1,
+      projectId: 'project-a',
+      rules: [],
+      version: 0,
+      updatedAt: '2026-08-13T10:00:00.000Z'
+    };
+    const restricted = toggledVisibilityRule(visibility, 'member-a', sources, 'source-a', false);
+    const explicit: SourceVisibility = {
+      ...visibility,
+      rules: [{ memberId: 'member-a', sourceIds: restricted }]
+    };
+
+    expect({
+      defaultSourceIds: visibleSourceIds(visibility, 'member-a', sources),
+      restricted,
+      restored: toggledVisibilityRule(explicit, 'member-a', sources, 'source-a', true)
+    }).toEqual({
+      defaultSourceIds: ['source-a', 'source-b'],
+      restricted: ['source-b'],
+      restored: null
+    });
+  });
+
+  test('mesh collection envelopes preserve independent readings, scratch notes, and the exact visibility scope', () => {
+    const researchNote = {
+      schemaVersion: 1 as const,
+      id: 'note-a',
+      projectId: 'project-a',
+      text: 'Check the annual contract assumption.',
+      authoredBy: 'human' as const,
+      authorMemberId: null,
+      sourceId: 'source-a',
+      evidenceId: null,
+      promotedEvidenceId: null,
+      version: 0,
+      createdAt: '2026-08-13T10:00:00.000Z',
+      updatedAt: '2026-08-13T10:00:00.000Z'
+    };
+    const visibility: SourceVisibility = {
+      schemaVersion: 1,
+      projectId: 'project-a',
+      rules: [{ memberId: 'member-1', sourceIds: ['source-a'] }],
+      version: 1,
+      updatedAt: '2026-08-13T10:00:00.000Z'
+    };
+    const matrix = [{ memberId: 'member-1', sourceId: 'source-a', canRead: true }];
+    const scope = 'Controls which sources Research Desk sends to each member. It is not network isolation.';
+
+    expect({
+      crossReads: parseCrossReadsPayload({ crossReads: [crossRead(['answered', 'answered'])] }),
+      notes: parseNotesPayload({ notes: [researchNote] }),
+      visibility: parseVisibilityPayload({ visibility, matrix, scope })
+    }).toEqual({
+      crossReads: [crossRead(['answered', 'answered'])],
+      notes: [researchNote],
+      visibility: { visibility, matrix, scope }
+    });
+  });
+
+  test('transformation envelopes retain null provider usage instead of producing a partial total', () => {
+    const transformation = BUILT_IN_TRANSFORMATIONS[1];
+    if (!transformation) throw new Error('the counterexample transformation is required');
+    const run = {
+      schemaVersion: 1 as const,
+      id: 'run-a',
+      projectId: 'project-a',
+      transformationId: transformation.id,
+      sourceId: 'source-a',
+      memberId: 'member-2',
+      sessionId: 'session-run-a',
+      state: 'settled' as const,
+      producedEvidenceIds: ['evidence-4'],
+      tokens: null,
+      cost: null,
+      failureReason: null,
+      version: 1,
+      startedAt: '2026-08-13T10:00:00.000Z',
+      settledAt: '2026-08-13T10:02:00.000Z'
+    };
+    const spend = {
+      transformationId: transformation.id,
+      label: transformation.label,
+      tier: transformation.tier,
+      runs: 1,
+      tokens: null,
+      cost: null
+    };
+
+    expect(parseTransformationsPayload({ transformations: [transformation], runs: [run], spend: [spend] })).toEqual({
+      transformations: [transformation],
+      runs: [run],
+      spend: [spend]
+    });
   });
 });

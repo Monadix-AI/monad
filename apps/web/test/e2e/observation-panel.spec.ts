@@ -95,7 +95,11 @@ test('tool activities stay collapsed until their summary is opened', async ({ pa
   await contentCopyButton.click();
   await expect(contentCopyButton).toHaveAttribute('data-copied', 'true');
   expect((await page.evaluate(() => navigator.clipboard.readText())).replaceAll('\r\n', '\n')).toBe(
-    Array.from({ length: 32 }, (_, index) => `export const observationLine${index + 1} = ${index + 1};`).join('\n')
+    Array.from({ length: 32 }, (_, index) =>
+      index === 1
+        ? `export const observationLine${index + 1}WithANameLongEnoughToExerciseHorizontalCodeScrolling = ${index + 1};`
+        : `export const observationLine${index + 1} = ${index + 1};`
+    ).join('\n')
   );
   const commandCard = cards.filter({
     hasText: 'grep -rln "WorkplaceProjectMemberSettings" packages/protocol/src | head'
