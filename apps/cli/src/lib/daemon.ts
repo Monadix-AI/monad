@@ -98,7 +98,8 @@ export function releaseDaemonSupervisorLauncherArgv(
       `$proc = Start-Process -FilePath ${literal(supervisorPath)} ` +
       `-ArgumentList @('daemon-supervisor', ${literal(`"${logPath}"`)}) ` +
       `-RedirectStandardOutput ${literal(startupOutputPath)} ` +
-      `-RedirectStandardError ${literal(supervisorErrorPath)} -WindowStyle Hidden -PassThru; $proc.Id`;
+      `-RedirectStandardError ${literal(supervisorErrorPath)} -WindowStyle Hidden -PassThru; ` +
+      '[Console]::Out.WriteLine($proc.Id)';
     return [
       'powershell',
       '-NoProfile',
@@ -117,6 +118,26 @@ export function releaseDaemonSupervisorLauncherArgv(
     logPath,
     startupOutputPath
   ];
+}
+
+/** Read the launcher's one-line handoff without waiting for EOF. On Windows the detached
+ * supervisor can inherit an stdout handle, so EOF may not arrive until the daemon stops. */
+export async function readDaemonSupervisorPid(stdout: ReadableStream<Uint8Array>): Promise<number> {
+  const reader = stdout.getReader();
+  const decoder = new TextDecoder();
+  let value = '';
+  try {
+    while (!value.includes('\n')) {
+      const chunk = await reader.read();
+      if (chunk.done) break;
+      value += decoder.decode(chunk.value, { stream: true });
+    }
+    value += decoder.decode();
+  } finally {
+    await reader.cancel().catch(() => undefined);
+    reader.releaseLock();
+  }
+  return Number.parseInt(value.trim(), 10);
 }
 
 export function daemonSupervisorChildStdout(readyOnce: boolean): 'pipe' | 'ignore' {
@@ -218,15 +239,15 @@ export async function startDaemon(options: DaemonLifecycleOptions = {}): Promise
     stderr: 'pipe',
     stdout: 'pipe'
   });
-  const [pidText, launcherError, launcherExitCode] = await Promise.all([
-    new Response(launcher.stdout).text(),
-    new Response(launcher.stderr).text(),
+  const [supervisorPid, launcherExitCode] = await Promise.all([
+    readDaemonSupervisorPid(launcher.stdout),
     launcher.exited
   ]);
-  const supervisorPid = Number.parseInt(pidText.trim(), 10);
   if (launcherExitCode !== 0 || !Number.isInteger(supervisorPid) || supervisorPid <= 0) {
-    throw new Error(`failed to start daemon supervisor: ${launcherError.trim() || pidText.trim()}`);
+    await launcher.stderr.cancel().catch(() => undefined);
+    throw new Error(`failed to start daemon supervisor (launcher exit ${launcherExitCode})`);
   }
+  await launcher.stderr.cancel().catch(() => undefined);
   await Bun.write(getPidPath(), String(supervisorPid));
 
   const ready = await waitUntilReady(supervisorPid, logPath, presentation.reportLifecycle);

@@ -607,8 +607,7 @@ export class MeshSessionEventRuntimeLauncher {
       );
       if (result.state !== 'available' || result.view !== 'convenience') return 'line:0';
       const trailing = result.nextCursor?.match(/^line:(\d+)$/);
-      const total = trailing ? Number(trailing[1]) + 1 : result.events.length;
-      return `line:${total}`;
+      return trailing ? `line:${Number(trailing[1]) + 1}` : undefined;
     } catch {
       return undefined;
     }

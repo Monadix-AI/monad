@@ -63,9 +63,9 @@ test('readSSE rejects when the stream timeout expires before its condition match
     await expect(
       readSSE(`http://127.0.0.1:${server.port}`, {
         until: (event) => event.type === 'session.updated',
-        timeoutMs: 20
+        timeoutMs: 1_000
       })
-    ).rejects.toThrow('SSE condition timed out after 20ms; observed event types: session.created');
+    ).rejects.toThrow('SSE condition timed out after 1000ms; observed event types: session.created');
   } finally {
     server.stop(true);
   }

@@ -1,8 +1,16 @@
-import type { BlockCoverage, BlockPatch, Report, ReportBlock, ReportBlockKind } from '../domain/index.ts';
+import type {
+  BlockCoverage,
+  BlockPatch,
+  Report,
+  ReportBlock,
+  ReportBlockKind,
+  TransformationSpend
+} from '../domain/index.ts';
 
 import { useEffect, useRef, useState } from 'react';
 
 import { coverageByBlock, reportBlockIsBlocked } from '../client-logic.ts';
+import { TransformationLedger } from './transformations.tsx';
 
 const BLOCK_KINDS: ReportBlockKind[] = ['factual', 'analysis', 'limitation', 'method'];
 
@@ -16,7 +24,8 @@ export function ReportPane({
   onSelectEvidence,
   pendingBlockIds,
   report,
-  selectedBlockId
+  selectedBlockId,
+  transformationSpend = []
 }: {
   coverage: readonly BlockCoverage[];
   focused: boolean;
@@ -28,6 +37,7 @@ export function ReportPane({
   pendingBlockIds: ReadonlySet<string>;
   report: Report | null;
   selectedBlockId: string | null;
+  transformationSpend?: readonly TransformationSpend[];
 }) {
   const byBlock = coverageByBlock(coverage);
   const coveredCount = coverage.filter((item) => item.missing === 0).length;
@@ -135,6 +145,7 @@ export function ReportPane({
             ) : null}
           </div>
         )}
+        <TransformationLedger spend={transformationSpend} />
       </div>
     </section>
   );
