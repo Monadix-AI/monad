@@ -52,9 +52,10 @@ test('monitor_watch waits for file content to change', async () => {
   const path = join(dir, 'state.txt');
   try {
     await writeFile(path, 'one');
+    const baseHash = new Bun.CryptoHasher('sha256').update('one').digest('hex');
     setTimeout(() => void writeFile(path, 'two'), 30);
     const result = (
-      await monitorWatchTool.run({ target: 'file', path, condition: 'changes', timeoutMs: 1000 }, ctx([dir]))
+      await monitorWatchTool.run({ target: 'file', path, condition: 'changes', baseHash, timeoutMs: 1000 }, ctx([dir]))
     ).metadata;
     expect(result).toMatchObject({ target: 'file', path, matched: true, changed: true, exists: true });
   } finally {

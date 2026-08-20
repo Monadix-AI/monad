@@ -1,5 +1,5 @@
 import type { FocusedPane, PublishConflict, ResearchOverview } from '../client-logic.ts';
-import type { BlockCoverage, Report, SourceKind, SourceType } from '../domain/index.ts';
+import type { BlockCoverage, Report, ResearchAssignment, SourceKind, SourceType } from '../domain/index.ts';
 
 import { useState } from 'react';
 
@@ -107,6 +107,31 @@ export function FocusSwitcher({ focused, onFocus }: { focused: FocusedPane; onFo
   );
 }
 
+export function AssignmentStrip({ assignments }: { assignments: readonly ResearchAssignment[] }) {
+  const visible = assignments.slice(-4).toReversed();
+  if (!visible.length) return null;
+  return (
+    <section
+      aria-label="Mesh assignments"
+      className="assignment-strip"
+    >
+      <strong>Mesh work</strong>
+      {visible.map((assignment) => (
+        <span
+          className="assignment-item"
+          data-state={assignment.state}
+          key={assignment.id}
+          title={assignment.objective}
+        >
+          <span>{assignment.role.replace('-', ' ')}</span>
+          <small>{assignment.targetClaimId ?? assignment.targetBlockId ?? 'research brief'}</small>
+          <b>{assignment.state}</b>
+        </span>
+      ))}
+    </section>
+  );
+}
+
 export function ActivityBar({ activity }: { activity: readonly string[] }) {
   const [open, setOpen] = useState(false);
   const latest = activity.at(-1) ?? 'Waiting for the first research activity.';
@@ -162,10 +187,14 @@ export function ActivityBar({ activity }: { activity: readonly string[] }) {
 export function PublishBlockedDialog({
   conflict,
   onClose,
+  onDispatch,
+  dispatching,
   onGoToBlock
 }: {
   conflict: PublishConflict;
   onClose(): void;
+  onDispatch(blockId: string): Promise<void>;
+  dispatching: boolean;
   onGoToBlock(blockId: string): void;
 }) {
   const count = conflict.blockedBlocks.length;
@@ -197,6 +226,13 @@ export function PublishBlockedDialog({
             type="button"
           >
             Close
+          </button>
+          <button
+            disabled={dispatching}
+            onClick={() => void onDispatch(first.blockId)}
+            type="button"
+          >
+            {dispatching ? 'Dispatching…' : 'Dispatch missing evidence'}
           </button>
           <button
             className="primary"

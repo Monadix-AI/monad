@@ -33,6 +33,44 @@ const derivationSchema = z.object({
 
 export type EvidenceDerivation = z.infer<typeof derivationSchema>;
 
+const contributionCitationSchema = z.object({
+  sourceId: z.string().min(1),
+  excerpt: z.string().min(1),
+  locator: z.string().min(1).nullable(),
+  stance: citationStanceSchema
+});
+
+const contributionDerivationSchema = z.object({
+  script: z.string().min(1),
+  inputFingerprints: z.array(z.string().min(1)).min(1),
+  artifactPath: z.string().min(1)
+});
+
+const evidenceContributionBaseSchema = z.object({
+  id: z.string().min(1),
+  claimId: z.string().min(1),
+  assignmentId: z.string().min(1).nullable(),
+  memberId: z.string().min(1),
+  sessionId: z.string().min(1),
+  messageId: z.string().min(1),
+  createdAt: z.string().min(1)
+});
+
+export const evidenceContributionSchema = z.discriminatedUnion('kind', [
+  evidenceContributionBaseSchema.extend({ kind: z.literal('citation'), payload: contributionCitationSchema }),
+  evidenceContributionBaseSchema.extend({ kind: z.literal('derivation'), payload: contributionDerivationSchema }),
+  evidenceContributionBaseSchema.extend({
+    kind: z.literal('challenge'),
+    payload: z.object({ reason: z.string().min(1) })
+  }),
+  evidenceContributionBaseSchema.extend({
+    kind: z.literal('negative-result'),
+    payload: z.object({ attempt: z.string().min(1), outcome: z.string().min(1) })
+  })
+]);
+
+export type EvidenceContribution = z.infer<typeof evidenceContributionSchema>;
+
 const evidenceClaimSchema = z.object({
   schemaVersion: z.literal(1),
   id: z.string().min(1),
@@ -41,6 +79,7 @@ const evidenceClaimSchema = z.object({
   status: evidenceStatusSchema,
   citations: z.array(citationSchema),
   derivations: z.array(derivationSchema),
+  contributions: z.array(evidenceContributionSchema).default([]),
   proposedByMemberId: z.string().min(1),
   sessionId: z.string().min(1),
   messageId: z.string().min(1).nullable(),
@@ -65,6 +104,7 @@ export function makeEvidenceClaim(
     status: 'unverified',
     citations: [],
     derivations: [],
+    contributions: [],
     messageId: null,
     decidedBy: null,
     decisionReason: null,
@@ -78,6 +118,10 @@ export function makeEvidenceClaim(
 
 export function normalizeEvidenceClaim(value: unknown): EvidenceClaim {
   return evidenceClaimSchema.parse(value);
+}
+
+export function makeEvidenceContribution(input: EvidenceContribution): EvidenceContribution {
+  return evidenceContributionSchema.parse(input);
 }
 
 function assertVersion(claim: EvidenceClaim, expectedVersion: number): void {
@@ -99,6 +143,60 @@ export function statusFromCitations(citations: readonly Citation[]): EvidenceSta
   return 'unverified';
 }
 
+function statusFromMaterial(
+  citations: readonly Citation[],
+  contributions: readonly EvidenceContribution[],
+  derivations: readonly EvidenceDerivation[]
+): EvidenceStatus {
+  if (contributions.some((contribution) => contribution.kind === 'challenge')) return 'contested';
+  const citationStatus = statusFromCitations(citations);
+  if (citationStatus !== 'unverified') return citationStatus;
+  if (derivations.length > 0) return 'supported';
+  return 'unverified';
+}
+
+export function applyEvidenceContribution(
+  claim: EvidenceClaim,
+  expectedVersion: number,
+  contribution: EvidenceContribution,
+  now: string
+): EvidenceClaim {
+  assertVersion(claim, expectedVersion);
+  const parsed = evidenceContributionSchema.parse(contribution);
+  if (parsed.claimId !== claim.id) throw new Error(`contribution targets another claim: ${parsed.claimId}`);
+  if (claim.contributions.some((entry) => entry.id === parsed.id)) return claim;
+
+  const citations = [...claim.citations];
+  const derivations = [...claim.derivations];
+  if (parsed.kind === 'citation') {
+    citations.push(
+      citationSchema.parse({
+        ...parsed.payload,
+        addedByMemberId: parsed.memberId,
+        addedAt: parsed.createdAt
+      })
+    );
+  } else if (parsed.kind === 'derivation') {
+    derivations.push(
+      derivationSchema.parse({
+        ...parsed.payload,
+        ranByMemberId: parsed.memberId,
+        ranAt: parsed.createdAt
+      })
+    );
+  }
+  const contributions = [...claim.contributions, parsed];
+  return {
+    ...claim,
+    citations,
+    derivations,
+    contributions,
+    status: isDecided(claim) ? claim.status : statusFromMaterial(citations, contributions, derivations),
+    version: claim.version + 1,
+    updatedAt: now
+  };
+}
+
 export function addCitation(
   claim: EvidenceClaim,
   expectedVersion: number,
@@ -112,7 +210,7 @@ export function addCitation(
     citations,
     // A human decision is not silently reopened by newly arriving material; the decision record stays
     // and the operator sees the new citation against it.
-    status: isDecided(claim) ? claim.status : statusFromCitations(citations),
+    status: isDecided(claim) ? claim.status : statusFromMaterial(citations, claim.contributions, claim.derivations),
     version: claim.version + 1,
     updatedAt: now
   };
@@ -125,9 +223,11 @@ export function attachDerivation(
   now: string
 ): EvidenceClaim {
   assertVersion(claim, expectedVersion);
+  const derivations = [...claim.derivations, derivationSchema.parse(derivation)];
   return {
     ...claim,
-    derivations: [...claim.derivations, derivationSchema.parse(derivation)],
+    derivations,
+    status: isDecided(claim) ? claim.status : statusFromMaterial(claim.citations, claim.contributions, derivations),
     version: claim.version + 1,
     updatedAt: now
   };
@@ -172,7 +272,7 @@ export function reopenClaim(claim: EvidenceClaim, expectedVersion: number, now: 
   if (!isDecided(claim)) return claim;
   return {
     ...claim,
-    status: statusFromCitations(claim.citations),
+    status: statusFromMaterial(claim.citations, claim.contributions, claim.derivations),
     decidedBy: null,
     decisionReason: null,
     decidedAt: null,

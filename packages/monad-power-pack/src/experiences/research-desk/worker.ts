@@ -1,8 +1,10 @@
 import type { ExperienceWorker, WorkplaceExperienceApiContext } from '@monad/sdk-atom';
 import type { SourceRef } from './domain/index.ts';
 
-import { isCitable, markSourceRot } from './domain/index.ts';
-import { claimFromPayload, parsePayloads, sourceFromPayload } from './ingest.ts';
+import { failRun, isCitable, markSourceRot, recordReading, settleRun } from './domain/index.ts';
+import { claimFromPayload, contributionFromPayload, parsePayloads, sourceFromPayload } from './ingest.ts';
+import { citationsFor, parseMeshPayloads } from './mesh-ingest.ts';
+import { ResearchMeshStore } from './mesh-store.ts';
 import { ResearchDeskStore } from './store.ts';
 
 const RECHECK_KEY = 'source-recheck';
@@ -33,12 +35,66 @@ async function ingestMessage(
       byLocator.set(source.locator, source.id);
       continue;
     }
+    if (payload.record === 'claim-contribution') {
+      const contribution = contributionFromPayload(payload, input, (locator) => byLocator.get(locator) ?? null);
+      if (!contribution) continue;
+      await store.applyContribution(input.projectId, contribution, input.now);
+      if (contribution.assignmentId) {
+        await store.completeAssignment(input.projectId, contribution.assignmentId, input.now);
+      }
+      continue;
+    }
     const claim = claimFromPayload(payload, input, (locator) => byLocator.get(locator) ?? null);
     const existing = await store.getClaim(input.projectId, claim.id);
-    // A claim the agent repeats is the same claim; re-ingesting it would silently discard the human
-    // ruling already recorded against it.
-    if (existing) continue;
-    await store.putClaim(claim, null);
+    // A repeated claim keeps the existing aggregate and human ruling, but still retries an idempotent
+    // assignment link in case the worker stopped after saving the claim and before updating the report.
+    const stored = existing ?? (await store.putClaim(claim, null));
+    if (payload.assignmentId) {
+      await store.linkClaimToAssignmentBlock(
+        input.projectId,
+        payload.assignmentId,
+        stored.id,
+        input.sessionId,
+        input.now
+      );
+    }
+  }
+}
+
+/** Route a member's answer back to the cross-read its session was opened for. The agent never quotes
+ *  a cross-read id — the session it is answering in is the routing key, which keeps one reader from
+ *  being able to file an answer against another reader's question. */
+async function ingestMeshMessage(
+  context: WorkplaceExperienceApiContext,
+  input: { projectId: string; sessionId: string; text: string; now: string }
+): Promise<void> {
+  const payloads = parseMeshPayloads(input.text);
+  if (payloads.length === 0) return;
+  const store = new ResearchMeshStore(context);
+
+  for (const payload of payloads) {
+    if (payload.record === 'crossread-answer') {
+      const crossRead = await store.pendingCrossReadFor(input.projectId, input.sessionId);
+      if (!crossRead) continue;
+      const reading = crossRead.readings.find((entry) => entry.sessionId === input.sessionId);
+      if (!reading) continue;
+      await store.putCrossRead(
+        recordReading(
+          crossRead,
+          crossRead.version,
+          { memberId: reading.memberId, answer: payload.answer, citations: citationsFor(payload) },
+          input.now
+        ),
+        crossRead.version
+      );
+      continue;
+    }
+    const run = await store.getRun(input.projectId, payload.runId);
+    if (run?.state !== 'running') continue;
+    const settled = payload.failureReason
+      ? failRun(run, run.version, payload.failureReason, input.now)
+      : settleRun(run, run.version, { producedEvidenceIds: [], tokens: payload.tokens, cost: payload.cost }, input.now);
+    await store.putRun(settled, run.version);
   }
 }
 
@@ -84,6 +140,12 @@ export const researchDeskWorker: ExperienceWorker = {
       sessionId: event.sessionId,
       messageId: message.id,
       memberId: message.memberId ?? 'agent',
+      text: message.text,
+      now: event.createdAt
+    });
+    await ingestMeshMessage(context, {
+      projectId: event.projectId,
+      sessionId: event.sessionId,
       text: message.text,
       now: event.createdAt
     });
