@@ -150,7 +150,9 @@ test('sessionDelete keeps the session hidden while native cleanup is in progress
     expect(await d.session.undoDelete({ id: sessionId })).toEqual({ undone: false });
 
     releaseCleanup.resolve();
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => store.getSession(sessionId) === null, {
+      message: 'native session storage was not deleted after cleanup completed'
+    });
     expect(store.getSession(sessionId)).toBeNull();
   } finally {
     releaseCleanup.resolve();
@@ -232,7 +234,9 @@ test('project session archive, unarchive, and delete apply provider lifecycle ho
 
     await d.session.delete({ id: sessionId });
     expect(deleteCalls).toEqual([]);
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => deleteCalls.length === 1, {
+      message: 'project session provider deletion was not applied'
+    });
     expect(deleteCalls).toEqual([
       expect.objectContaining({
         meshSessionId: 'mesh_lifecycle000',
@@ -320,7 +324,9 @@ test('non-project session archive, unarchive, and delete apply matching provider
       })
     ]);
     await d.session.delete({ id: sessionId });
-    await new Promise((resolve) => setTimeout(resolve, 20));
+    await waitFor(() => deleteCalls.length === 1, {
+      message: 'non-project session provider deletion was not applied'
+    });
     expect(deleteCalls).toEqual([
       expect.objectContaining({
         meshSessionId: 'mesh_chatunarchive',
