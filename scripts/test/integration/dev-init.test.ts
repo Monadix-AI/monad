@@ -100,7 +100,7 @@ test('mise owns worktree tool and environment activation', async () => {
       idiomatic_version_file_enable_tools: ['bun'],
       status: { show_tools: true }
     },
-    tools: { 'cargo-dist': '0.32.0' }
+    tools: { 'cargo-dist': '0.32.0', node: '22' }
   });
 });
 

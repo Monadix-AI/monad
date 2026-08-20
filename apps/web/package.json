@@ -85,7 +85,7 @@
     "start:dev": "LAUNCH_EDITOR=${LAUNCH_EDITOR:-/usr/local/bin/code} bun --env-file=../../.env.local run vite",
     "storybook": "storybook dev -p \"$(bun --env-file=../../.env.local -e 'console.log(process.env.WEB_STORYBOOK_PORT ?? 6006)')\"",
     "test": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/unit/ --only-failures",
-    "test:e2e": "bun ../../scripts/quiet-run.ts playwright test --reporter=dot",
+    "test:e2e": "bun ../../scripts/quiet-run.ts node ./node_modules/@playwright/test/cli.js test --reporter=dot",
     "test:integration": "bun ../../scripts/quiet-run.ts bun ../../scripts/bun-test.ts test/integration/ --only-failures",
     "typecheck": "bun ../../scripts/quiet-run.ts tsc --noEmit"
   },

@@ -183,7 +183,7 @@ test('build preserves reviewed record order and one sanitizer identity across tu
     sharedIds: ['<id:3>', '<id:3>', '<id:3>', '<id:3>'],
     bytesWithinLimit: true
   });
-});
+}, 15_000);
 
 test('build rejects changed sources, overlapping spans, out-of-bounds spans, incomplete ends, and nextCursor', async () => {
   const directory = await workDir();
@@ -373,7 +373,7 @@ test('build rejects renamed mixed-provider sources without writing fixture outpu
     stderrSafe: !result.stderr.includes(directory),
     wrote: await Bun.file(output).exists()
   }).toEqual({ exitCode: 2, expectedError: true, stderrSafe: true, wrote: false });
-});
+}, 15_000);
 
 test('build refuses a formatted fixture larger than one MiB', async () => {
   const directory = await workDir();

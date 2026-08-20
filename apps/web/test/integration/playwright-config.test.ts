@@ -99,10 +99,11 @@ test('the resolved runtime falls back to PATH lookup when no candidate exists on
 
 test('resolvePlaywrightWorkers keeps local runs fast and limits CI runner contention', () => {
   expect({
-    local: resolvePlaywrightWorkers({}),
+    localWindows: resolvePlaywrightWorkers({}, 'win32'),
+    localLinux: resolvePlaywrightWorkers({}, 'linux'),
     ci: resolvePlaywrightWorkers({ CI: '1' }),
     explicit: resolvePlaywrightWorkers({ CI: '1', PLAYWRIGHT_WORKERS: '3' })
-  }).toEqual({ local: 5, ci: 2, explicit: 3 });
+  }).toEqual({ localWindows: 1, localLinux: 5, ci: 2, explicit: 3 });
 });
 
 test('resolvePlaywrightTrace keeps routine local runs lean and preserves opt-in and CI diagnostics', () => {
