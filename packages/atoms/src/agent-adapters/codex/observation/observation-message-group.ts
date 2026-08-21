@@ -14,6 +14,7 @@ import {
   codexAppServerToolCallObservation,
   codexAppServerToolResultObservation,
   hasCodexAppServerToolOutput,
+  isCodexAppServerImageViewItem,
   isCodexAppServerToolLikeItem
 } from './observation-app-server-tool.ts';
 
@@ -323,7 +324,7 @@ function codexToolGroupEvents(id: string, group: CodexToolGroup): MeshAgentObser
   };
   const completedRecord = group.completedRecord ?? group.raw.at(-1);
   if (!completedRecord) return call;
-  if (!hasCodexAppServerToolOutput(completedItem)) {
+  if (!hasCodexAppServerToolOutput(completedItem) && !isCodexAppServerImageViewItem(completedItem)) {
     return codexAppServerToolCallObservation({
       id,
       recordIndex: 0,

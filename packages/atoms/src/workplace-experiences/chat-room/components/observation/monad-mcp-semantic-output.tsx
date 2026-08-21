@@ -97,7 +97,11 @@ function MonadMcpReceipt({ emptyLabel, falseLabel, output, trueLabel }: Semantic
 
 function MonadMcpInbox({ emptyLabel, output }: { emptyLabel: string; output: unknown }) {
   const record = recordValue(output);
-  const messages = Array.isArray(record?.messages) ? record.messages.flatMap(messageRecord) : [];
+  const messages = Array.isArray(record?.messages)
+    ? record.messages.flatMap(messageRecord)
+    : Array.isArray(record?.items)
+      ? record.items.flatMap(inboxItemRecord)
+      : [];
   if (messages.length === 0)
     return (
       <EmptyState
@@ -149,6 +153,17 @@ function MonadMcpInbox({ emptyLabel, output }: { emptyLabel: string; output: unk
       ) : null}
     </div>
   );
+}
+
+function inboxItemRecord(value: unknown) {
+  const item = recordValue(value);
+  const message = recordValue(item?.message);
+  if (!message) return messageRecord(value);
+  return messageRecord({
+    ...message,
+    createdAt: message.createdAt ?? item?.createdAt,
+    ingressSeq: message.ingressSeq ?? item?.ingressSeq
+  });
 }
 
 function MonadMcpMembers({

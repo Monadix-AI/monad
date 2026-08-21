@@ -103,6 +103,14 @@ export function hasCodexAppServerToolOutput(item: Record<string, unknown>): bool
   );
 }
 
+export function isCodexAppServerImageViewItem(item: Record<string, unknown>): boolean {
+  return (
+    textValue(item.type, item.kind, item.itemType)
+      ?.replace(/[-_\s]/g, '')
+      .toLowerCase() === 'imageview'
+  );
+}
+
 function codexMcpContentText(value: unknown): string | undefined {
   const record = recordValue(value);
   if (!record || !Array.isArray(record.content)) return undefined;
@@ -215,6 +223,7 @@ export function codexAppServerToolResultObservation(args: {
   // The rendered `text` above is already flattened for display; the tool payload keeps the item's
   // structured value so a consumer can render it richly.
   const structuredOutput = codexAppServerToolOutput(args.item);
+  const toolFields = codexItemToolFields(args.item);
   return observation({
     id: `${args.id}:json:${recordKey}${args.itemIndex === undefined ? '' : `:${args.itemIndex}`}:tool-result`,
     role: 'tool',
@@ -223,7 +232,8 @@ export function codexAppServerToolResultObservation(args: {
     providerEventType: 'function_call_output',
     createdAt: args.createdAt,
     tool: {
-      ...codexItemToolFields(args.item),
+      ...toolFields,
+      ...(toolFields.status === undefined && args.method === 'item/completed' ? { status: 'completed' as const } : {}),
       ...(structuredOutput === undefined ? {} : { output: structuredOutput })
     },
     raw: args.record
