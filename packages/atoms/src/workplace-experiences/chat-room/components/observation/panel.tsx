@@ -160,7 +160,7 @@ export function MeshAgentObservationPanel({
     presence: stream?.status === 'running' ? ('working' as const) : ('online' as const),
     tag: stream?.tag ?? 'Agent'
   };
-  const identity = resolveAgentIdentity?.({ id: stream?.id, name: fallbackAgent.name });
+  const identity = resolveAgentIdentity?.({ id: fallbackAgent.id, name: fallbackAgent.name });
   const displayAgent = {
     ...fallbackAgent,
     av: identity?.av ?? fallbackAgent.av,
