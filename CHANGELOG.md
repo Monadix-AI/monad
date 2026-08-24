@@ -1,5 +1,34 @@
 # Changelog
 
+## [0.1.7](https://github.com/Monadix-AI/monad/compare/v0.1.6...v0.1.7) (2026-08-24)
+
+
+### Features
+
+* **mesh-agent:** add steer-aware member delivery ([f79c52c](https://github.com/Monadix-AI/monad/commit/f79c52cb6de25786310d700d350f9f6ff1e33a69))
+* synchronize latest origin changes ([eea0f09](https://github.com/Monadix-AI/monad/commit/eea0f09706b8cf7ee69c2a7bdffe1559007d7643))
+
+
+### Bug Fixes
+
+* **atoms:** render inbox messages and settle image views ([38291be](https://github.com/Monadix-AI/monad/commit/38291be908f55527fcd8460c9ad6e9bc66a98a81))
+* **mcp:** preserve progress delivery ordering ([a085b40](https://github.com/Monadix-AI/monad/commit/a085b40d5a38b90d5b8cf83da47b3d445fc18415))
+* **observation:** match room agent avatar ([2131a3b](https://github.com/Monadix-AI/monad/commit/2131a3b75d967dede9cb05f0c44778034e7a3973))
+* **release:** stabilize cross-platform CI ([3243bb7](https://github.com/Monadix-AI/monad/commit/3243bb77583682161275df77541fb596226d02ce))
+* **release:** stabilize cross-platform CI ([d833837](https://github.com/Monadix-AI/monad/commit/d83383764c98f6e1bffb916770c93c6a3a4a5e1e))
+* **runtime:** pin Elysia TypeBox peer dependency ([736bbf5](https://github.com/Monadix-AI/monad/commit/736bbf5fae904eb0c6e6684a38d7bd619826455f))
+* **runtime:** remove unused direct target normalizer ([80ce693](https://github.com/Monadix-AI/monad/commit/80ce6931bf4c047d6644075f3dd8b6d64068bb23))
+* **runtime:** serialize managed resident turns ([1e7c182](https://github.com/Monadix-AI/monad/commit/1e7c1829283107157fee9134af682a8522740464))
+* **studio:** align loading skeletons with final layouts ([8a8934f](https://github.com/Monadix-AI/monad/commit/8a8934fb0d43fc9c073175fcbe401a4cbc4d7759))
+* synchronize origin fixes with upstream ([0438710](https://github.com/Monadix-AI/monad/commit/0438710d8746d07b35aa61940a12eff48a5bda87))
+* **web:** align upgrade progress with user actions ([792d334](https://github.com/Monadix-AI/monad/commit/792d3340e81e4a9a22f45077354619e9712fc535))
+
+
+### Refactors
+
+* **tooling:** simplify cross-platform development scripts ([cbde442](https://github.com/Monadix-AI/monad/commit/cbde44234527a3bcda6f4b56cfe02347e1291664))
+* **tooling:** simplify cross-platform development scripts ([1f3a311](https://github.com/Monadix-AI/monad/commit/1f3a311a3bb24c63c95135b674381c803286f445))
+
 ## [0.1.6](https://github.com/Monadix-AI/monad/compare/v0.1.5...v0.1.6) (2026-08-14)
 
 
