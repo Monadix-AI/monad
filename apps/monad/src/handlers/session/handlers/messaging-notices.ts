@@ -35,10 +35,6 @@ export function meshAgentInputText(input: string): string {
   return input.endsWith('\n') ? input : `${input}\n`;
 }
 
-export function normalizeManagedMeshAgentDirectTarget(to: string): string {
-  return to.startsWith('mesh-agent:') ? to.slice('mesh-agent:'.length) : to;
-}
-
 export function channelNextPrompt(target: ChannelResponseNextTarget): string {
   return CHANNEL_NEXT_PROMPT.render(target);
 }
