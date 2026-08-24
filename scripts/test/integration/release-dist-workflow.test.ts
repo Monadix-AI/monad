@@ -79,6 +79,7 @@ test('the post-merge workflow verifies, builds, attests, uploads, and publishes 
   const publish = step(release, 'publish', 'Publish release')?.run;
 
   expect(buildMatrix).toContainEqual({ runner: 'ubuntu-latest', target: 'aarch64-pc-windows-msvc' });
+  expect(release.jobs?.preflight?.permissions).toEqual({ contents: 'write' });
   expect(preflight).toContain('gh release view');
   expect(preflight).toContain('select(.isDraft == true)');
   expect(release.jobs?.publish?.needs).toEqual(['atom-pack', 'installers']);
@@ -132,6 +133,9 @@ test('nightly gates only unit and integration before generating notes and publis
   const quality = nightly.jobs?.quality;
   const caller = nightly.jobs?.['release-assets'];
   const gate = step(ci, 'gate', 'Verify required jobs')?.run;
+  const resolvePublishedTag = step(releaseSmoke, 'windows-arm64', 'Resolve published tag');
+  const downloadPublishedAssets = step(releaseSmoke, 'windows-arm64', 'Download published assets');
+  const testPowerShellInstaller = step(releaseSmoke, 'windows-arm64', 'Test PowerShell installer');
 
   expect(quality?.with).toEqual({ nightly: true, sha: '$'.concat('{{ needs.check.outputs.sha }}') });
   expect(caller?.needs).toEqual(['check', 'quality']);
@@ -144,8 +148,18 @@ test('nightly gates only unit and integration before generating notes and publis
   expect(nightly.jobs?.['live-e2e']).toBeUndefined();
   expect(nightly.jobs?.['installer-arm64']).toBeUndefined();
   expect(step(release, 'publish', 'Generate nightly release notes')?.uses).toContain('git-cliff-action@');
-  expect(releaseSmoke.jobs?.['windows-arm64']?.if).toContain("workflow_run.conclusion == 'success'");
-  expect(step(releaseSmoke, 'windows-arm64', 'Test PowerShell installer')?.run).toContain('Checksum verified');
+  expect({
+    downloadIf: downloadPublishedAssets?.if,
+    jobIf: releaseSmoke.jobs?.['windows-arm64']?.if,
+    resolveAllowsUntaggedRun: resolvePublishedTag?.run?.includes('[[ -n "$'.concat('{tag}" ]]')) === false,
+    testIf: testPowerShellInstaller?.if
+  }).toEqual({
+    downloadIf: "steps.release.outputs.tag != ''",
+    jobIf: "github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success'",
+    resolveAllowsUntaggedRun: true,
+    testIf: "steps.release.outputs.tag != ''"
+  });
+  expect(testPowerShellInstaller?.run).toContain('Checksum verified');
 });
 
 test('the dist toolchain is installed through mise and pinned to one version', async () => {
