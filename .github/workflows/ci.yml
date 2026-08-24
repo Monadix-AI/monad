@@ -198,7 +198,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: "${{ fromJSON((github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending')) && '[\"ubuntu-latest\",\"macos-latest\",\"windows-latest\"]' || '[\"ubuntu-latest\"]') }}"
+        os: '${{ fromJSON((github.event_name == ''merge_group'' || inputs.full || contains(github.event.pull_request.labels.*.name, ''autorelease: pending'')) && ''["ubuntu-latest","macos-latest","windows-latest"]'' || ''["ubuntu-latest"]'') }}'
     steps:
       # Runs before checkout so the dependency-cache extraction and install are covered too.
       - name: Exclude the workspace from Defender scanning
@@ -297,7 +297,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: "${{ fromJSON((github.event_name == 'merge_group' || inputs.full || contains(github.event.pull_request.labels.*.name, 'autorelease: pending')) && '[\"ubuntu-latest\",\"macos-latest\",\"windows-latest\"]' || '[\"ubuntu-latest\"]') }}"
+        os: '${{ fromJSON((github.event_name == ''merge_group'' || inputs.full || contains(github.event.pull_request.labels.*.name, ''autorelease: pending'')) && ''["ubuntu-latest","macos-latest","windows-latest"]'' || ''["ubuntu-latest"]'') }}'
     steps:
       - name: Exclude the workspace from Defender scanning
         if: runner.os == 'Windows'
@@ -694,7 +694,17 @@ jobs:
   gate:
     name: merge gate
     if: always()
-    needs: [release-notes, checks, unit, integration, hermetic-e2e, web-e2e, dist-tail, e2e-deps]
+    needs:
+      [
+        release-notes,
+        checks,
+        unit,
+        integration,
+        hermetic-e2e,
+        web-e2e,
+        dist-tail,
+        e2e-deps,
+      ]
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:

@@ -684,6 +684,149 @@ test('active project-message fan-out returns after queueing without waiting for 
   ]);
 });
 
+function projectSteerHarness(steerAccepted: boolean) {
+  const transitions: string[] = [];
+  const text = steerAccepted ? 'urgent correction' : 'fallback correction';
+  const store = {
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_steer0000000',
+        memberId: 'sonnet',
+        templateId: null,
+        type: 'mesh-agent',
+        meshSessionId: 'mesh_sonnet000000',
+        data: {
+          name: 'sonnet',
+          displayName: 'Sonnet',
+          settings: { managedProjectAgent: true }
+        },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ],
+    messageSeq: () => 22,
+    enqueueNativeAgentIngressItem: () => {
+      transitions.push('ingress-persisted');
+      return { id: 'ingress_steer0000', deliveryId: 'deliv_steer000000' };
+    },
+    claimNativeAgentIngressForSteer: () => {
+      transitions.push('steer-claimed');
+      return true;
+    },
+    settleNativeAgentIngressSteer: (_id: string, accepted: boolean) => {
+      transitions.push(`steer-settled:${accepted}`);
+      return true;
+    },
+    claimNativeAgentIngressBatch: ({ id }: { id: string }) => {
+      transitions.push('batch-claimed');
+      return { id, highWaterSeq: 1, itemIds: ['ingress_steer0000'] };
+    },
+    listClaimedNativeAgentIngress: () => [
+      {
+        ingressSeq: 1,
+        source: 'project' as const,
+        deliveryId: 'deliv_steer000000',
+        text,
+        createdAt: '2026-08-22T00:00:00.000Z',
+        messageSeq: 22,
+        messageId: 'msg_steer0000000',
+        sender: { kind: 'human' as const, name: 'Human' }
+      }
+    ],
+    markNativeAgentIngressBatchDelivered: () => true,
+    consumeNativeAgentIngressBatch: () => transitions.push('batch-consumed'),
+    releaseNativeAgentIngressBatch: () => transitions.push('batch-released'),
+    bindNativeAgentIngressDelivery: () => true,
+    getNativeAgentMemberGate: () => null,
+    markMeshAgentInboxDelivered: () => transitions.push('inbox-delivered'),
+    markMeshAgentInboxVisible: () => transitions.push('inbox-visible'),
+    findManagedMeshAgentStreamingMessage: () => undefined
+  };
+  const meshAgentHost = {
+    list: () => ({
+      sessions: [
+        {
+          id: 'mesh_sonnet000000',
+          agentName: 'sonnet',
+          projectMemberId: 'sonnet',
+          runtimeRole: 'managed-project-agent',
+          lifecycle: { state: 'active' },
+          activity: { state: 'running', pid: 123, queuedTurnCount: 0 },
+          lastDeliveredSeq: 21,
+          lastVisibleSeq: 21
+        } as unknown as MeshSessionView
+      ]
+    }),
+    trySteer: async () => {
+      transitions.push(`steer-attempted:${steerAccepted}`);
+      return steerAccepted;
+    },
+    input: async () => transitions.push('input-started'),
+    preflight: async () => ({ state: 'ready' as const })
+  };
+  const ctx = {
+    deps: { store, log: undefined, meshAgentHost },
+    messageIngress: {
+      begin: () => Promise.resolve({ id: 'msg_sonnet_thinking' }),
+      deliver: rejectUnexpectedDeliveryError
+    },
+    makeEmit: () => () => {},
+    persistAndRetire: () => {},
+    managedAgentSessions: {
+      queue: () => transitions.push('session-queued'),
+      startTurn: () => transitions.push('turn-started'),
+      settleTurn: () => transitions.push('turn-settled')
+    }
+  } as unknown as SessionContext;
+  const deliver = () =>
+    createManagedMeshAgentDelivery(ctx).deliverProjectMessageToManagedMeshAgentMembers({
+      session: {
+        id: 'ses_steer0000000',
+        cwd: tmpdir(),
+        origin: { client: 'workplace' }
+      } as unknown as Session,
+      meshAgents: [
+        {
+          name: 'sonnet',
+          provider: 'claude-code',
+          command: 'claude',
+          enabled: true
+        } as unknown as MeshAgentConfig
+      ],
+      text,
+      triggerMessageId: 'msg_steer0000000',
+      deliveryMode: 'steer'
+    });
+  return { deliver, transitions };
+}
+
+test('active project-message steer consumes only the steered ingress without starting a queued turn', async () => {
+  const { deliver, transitions } = projectSteerHarness(true);
+  await deliver();
+  expect(transitions).toEqual(['ingress-persisted', 'steer-claimed', 'steer-attempted:true', 'steer-settled:true']);
+});
+
+test('rejected project-message steer falls back to the normal ingress turn', async () => {
+  const { deliver, transitions } = projectSteerHarness(false);
+  await deliver();
+  await Bun.sleep(0);
+
+  expect(transitions).toEqual([
+    'ingress-persisted',
+    'steer-claimed',
+    'steer-attempted:false',
+    'steer-settled:false',
+    'batch-claimed',
+    'session-queued',
+    'turn-started',
+    'input-started',
+    'batch-consumed',
+    'inbox-delivered',
+    'inbox-visible',
+    'turn-settled'
+  ]);
+});
+
 test('project-message fan-out resumes a pending unauthenticated member after login resolves', async () => {
   const bus = new EventBus();
   const inputs: Array<{ id: string; input: string }> = [];
@@ -1051,6 +1194,23 @@ test('direct managed MeshAgent delivery emits connection_required when the proje
   const emitted: Event[] = [];
   const store = {
     getSession: () => ({ id: 'ses_missing00000', projectId: 'prj_missing00000' }),
+    listSessionMembers: () => [
+      {
+        sessionId: 'ses_missing00000',
+        memberId: 'pmem_claude_sonnet',
+        templateId: null,
+        type: 'mesh-agent',
+        meshSessionId: null,
+        data: {
+          name: 'claude-code',
+          instanceId: 'pmem_claude_sonnet',
+          displayName: 'Sonnet',
+          settings: { managedProjectAgent: true }
+        },
+        createdAt: '',
+        updatedAt: ''
+      }
+    ],
     listSessionBindings: () => [
       { sessionId: 'ses_missing00000', projectMemberId: 'pmem_claude_sonnet', lifecycle: 'active' }
     ],

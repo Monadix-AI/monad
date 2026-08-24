@@ -223,10 +223,9 @@ describe('streams', () => {
     expect(res).toEqual([['rd', [['2-0', ['b', '2']]]]]);
   });
 
-  test('XREAD non-blocking with no new data returns empty', async () => {
+  test('XREAD non-blocking with no new data returns null', async () => {
     await redis.send('XADD', ['rd2', '1-0', 'a', '1']);
-    // Wire format is a null array (*-1); Bun's client surfaces that as [].
-    expect(await redis.send('XREAD', ['STREAMS', 'rd2', '1-0'])).toEqual([]);
+    expect(await redis.send('XREAD', ['STREAMS', 'rd2', '1-0'])).toBeNull();
   });
 
   test('XREAD BLOCK wakes when a later XADD lands', async () => {
@@ -250,10 +249,10 @@ describe('streams', () => {
     writer.close();
   });
 
-  test('XREAD BLOCK times out to empty', async () => {
+  test('XREAD BLOCK times out to null', async () => {
     await redis.send('XADD', ['to', '1-0', 'a', '1']);
     const res = await redis.send('XREAD', ['BLOCK', '60', 'STREAMS', 'to', '$']);
-    expect(res).toEqual([]); // null array on timeout, surfaced as [] by the client
+    expect(res).toBeNull();
   });
 
   test('XINFO STREAM returns a summary map', async () => {

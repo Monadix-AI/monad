@@ -146,12 +146,18 @@ export class SessionEventRuntimeExecutor {
     }
   }
 
-  input(input: MeshAgentTurnInput, options?: { waitForSettlement?: boolean }): Promise<void> {
+  input(
+    input: MeshAgentTurnInput,
+    options?: { waitForPriorSettlement?: boolean; waitForSettlement?: boolean }
+  ): Promise<void> {
     if (this.lifecycle.state !== 'active') return Promise.reject(new Error('MeshAgent session is not active'));
     const parsed = meshAgentTurnInputSchema.parse(input);
     if (this.definition.plan.processModel === 'resident') {
-      this.clearIdleTimer();
-      return this.ensureResidentActive().then(async () => {
+      const run = async () => {
+        if (options?.waitForPriorSettlement) await this.waitForResidentTurnSettlements();
+        if (this.lifecycle.state !== 'active') throw new Error('MeshAgent session is not active');
+        this.clearIdleTimer();
+        await this.ensureResidentActive();
         const activation = this.activation;
         if (!activation) throw new Error('MeshAgent resident session failed to activate');
         this.activity = {
@@ -170,7 +176,11 @@ export class SessionEventRuntimeExecutor {
           throw error;
         }
         if (options?.waitForSettlement) await settlement.promise;
-      });
+      };
+      if (!options?.waitForPriorSettlement) return run();
+      const job = this.turnTail.then(run);
+      this.turnTail = job.catch(() => {});
+      return job;
     }
     this.queuedTurnCount += 1;
     this.updateQueuedActivity();
@@ -451,6 +461,10 @@ export class SessionEventRuntimeExecutor {
 
   private resolveResidentTurnSettlements(): void {
     for (const settlement of this.residentTurnSettlements.splice(0)) settlement.resolve();
+  }
+
+  private async waitForResidentTurnSettlements(): Promise<void> {
+    while (this.residentTurnSettlements[0]) await this.residentTurnSettlements[0].promise;
   }
 
   private residentDriver(): Extract<SessionEventRuntimeDefinition, { plan: { processModel: 'resident' } }>['driver'] {

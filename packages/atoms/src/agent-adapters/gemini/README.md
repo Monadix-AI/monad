@@ -13,7 +13,7 @@
 | Hosted agents / ACP delivery | No hosted-agent discovery or separate ACP wrapper. The native session runtime itself speaks Gemini's built-in ACP mode. |
 | Managed runtime | Writes an isolated system-settings file and points `GEMINI_CLI_SYSTEM_SETTINGS_PATH` at it; native ACP receives the managed MCP server. |
 | Session runtime | Resident `gemini --acp` child-stdio JSON-RPC driver. It maps `session/new`, `session/load`, `session/prompt`, cancel, and permission requests/responses. |
-| Runtime controls | Supports input, steering, interrupt, approval resolution, continuation, restoration, and reopen. |
+| Runtime controls | Supports input, interrupt, approval resolution, continuation, restoration, and reopen. ACP does not expose same-turn steering. |
 | Events and observation | Projects ACP/live provider records; history scans exact Gemini JSON/JSONL session records and normalizes checkpoint-style records when needed. |
 | Usage | Aggregates persisted Gemini token records, including cache, thought tokens, and context estimates. Account-level `usage()` is absent. |
 | Environment/observation helpers | Uses shared defaults. |

@@ -726,14 +726,24 @@ test('native agent project command schemas allow runtime-bound project defaults 
       requestId: 'project-post-1',
       sessionId: 'ses_PROJECT00000',
       replyToMessageId: 'msg_PARENT000000',
+      deliveryMode: 'steer',
       text: 'hello project'
     })
   ).toEqual({
     requestId: 'project-post-1',
     sessionId: 'ses_PROJECT00000',
     replyToMessageId: 'msg_PARENT000000',
+    deliveryMode: 'steer',
     text: 'hello project'
   });
+
+  expect(
+    nativeAgentProjectPostRequestSchema.safeParse({
+      requestId: 'project-post-invalid-mode',
+      deliveryMode: 'interrupt',
+      text: 'hello project'
+    }).success
+  ).toBe(false);
 
   expect(
     nativeAgentProjectPostRequestSchema.safeParse({
@@ -888,28 +898,37 @@ test('projectMemberId wire fields reject empty and oversized ids in runtime-info
 });
 
 test('native agent direct message schemas stay separate from project transcript', () => {
-  expect(nativeAgentSendRequestSchema.parse({ requestId: 'direct-send-1', to: 'human', text: 'private note' })).toEqual(
-    {
+  expect(
+    nativeAgentSendRequestSchema.parse({
       requestId: 'direct-send-1',
-      to: 'human',
+      to: 'pmem_reviewer',
+      deliveryMode: 'steer',
       text: 'private note'
-    }
-  );
-  expect(nativeAgentSendRequestSchema.safeParse({ to: 'human', text: 'private note' }).success).toBe(false);
+    })
+  ).toEqual({ requestId: 'direct-send-1', to: 'pmem_reviewer', deliveryMode: 'steer', text: 'private note' });
+  expect(nativeAgentSendRequestSchema.safeParse({ to: 'pmem_reviewer', text: 'private note' }).success).toBe(false);
+  expect(
+    nativeAgentSendRequestSchema.safeParse({
+      requestId: 'direct-send-invalid-mode',
+      to: 'pmem_reviewer',
+      deliveryMode: 'interrupt',
+      text: 'private note'
+    }).success
+  ).toBe(false);
 
   const message = nativeAgentDirectMessageSchema.parse({
     id: 'msg_DIRECT000000',
     sessionId: 'ses_PROJECT00000',
     meshSessionId: 'mesh_100000000000',
-    fromAgent: 'codex',
-    peer: 'human',
+    fromAgent: 'pmem_codex',
+    peer: 'pmem_reviewer',
     text: 'private note',
     createdAt: '2026-06-28T00:00:00.000Z'
   });
 
   expect(message.sessionId).toBe('ses_PROJECT00000');
   expect('projectSessionId' in message).toBe(false);
-  expect(message.peer).toBe('human');
+  expect(message.peer).toBe('pmem_reviewer');
 });
 
 test('direct-message address contract admits ids up to the projectMemberId ceiling and rejects longer', () => {
@@ -917,7 +936,7 @@ test('direct-message address contract admits ids up to the projectMemberId ceili
   const at201 = 'p'.repeat(201);
   const at512 = 'p'.repeat(PROJECT_MEMBER_ID_MAX_LENGTH);
   const at513 = 'p'.repeat(PROJECT_MEMBER_ID_MAX_LENGTH + 1);
-  // `to` / `with` inputs accept anything up to a canonical id's length (200/201/512), reject beyond it.
+  // ProjectMember ids may occupy the full shared id bound; the service then verifies exact membership.
   for (const ok of [at200, at201, at512]) {
     expect(
       nativeAgentSendRequestSchema.safeParse({ requestId: 'direct-address-boundary', to: ok, text: 'x' }).success

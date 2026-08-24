@@ -23,7 +23,7 @@ import {
   NATIVE_AGENT_INLINE_TEXT_MAX
 } from './mesh-agent-attachments.ts';
 import { meshAgentProductIconSchema, meshAgentProviderSchema } from './mesh-agent-config.ts';
-import { nativeAgentDirectMessageSchema } from './mesh-agent-direct-messaging.ts';
+import { nativeAgentDeliveryModeSchema, nativeAgentDirectMessageSchema } from './mesh-agent-direct-messaging.ts';
 import { nativeAgentTurnPointerSchema } from './mesh-agent-observation.ts';
 
 // `text` is the inline body; `attachments` reference local files whose content is the
@@ -34,6 +34,7 @@ export const nativeAgentProjectPostRequestSchema = z
     requestId: z.string().min(1).max(200),
     sessionId: sessionIdSchema.optional(),
     replyToMessageId: messageIdSchema.optional(),
+    deliveryMode: nativeAgentDeliveryModeSchema.optional(),
     text: z.string().min(1).max(NATIVE_AGENT_INLINE_TEXT_MAX).optional(),
     attachments: attachmentInputsSchema.optional()
   })

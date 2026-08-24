@@ -390,6 +390,7 @@ for (const kind of TRANSPORTS) {
       // The runtime's agentName ('codex') is only its provider alias; its owning ProjectMember is
       // 'pmem_codex'. Both project AND direct attribution now record the canonical id, never the alias.
       addSessionMember(handlers, sessionId, 'pmem_codex', 'Lily');
+      addBoundMember(handlers, sessionId, 'pmem_claude', 'Steve');
       createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
       try {
         const projectFile = join(dir, 'project.md');
@@ -409,7 +410,7 @@ for (const kind of TRANSPORTS) {
         await writeFile(directFile, 'direct attachment body', 'utf8');
         const sent = await t.fetch(
           '/v1/internal/native-agent/agent/send',
-          directSendJson({ to: 'human:zeke', attachments: [{ path: directFile }] }, bindingHeaders(sessionId))
+          directSendJson({ to: 'pmem_claude', attachments: [{ path: directFile }] }, bindingHeaders(sessionId))
         );
         expect(sent.status).toBe(200);
         const sentMessage = (
@@ -658,6 +659,7 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-attachment-')));
+      addBoundMember(handlers, sessionId, 'pmem_claude', 'Steve');
       createManagedNativeSession(handlers, sessionId, 'mesh_test00000000', 'codex', 'running', dir);
       try {
         const longBody = `PRIVATE ${'y'.repeat(140_000)}`;
@@ -666,13 +668,13 @@ for (const kind of TRANSPORTS) {
 
         const sent = await t.fetch(
           '/v1/internal/native-agent/agent/send',
-          directSendJson({ to: 'human:zeke', attachments: [{ path: filePath }] }, bindingHeaders(sessionId))
+          directSendJson({ to: 'pmem_claude', attachments: [{ path: filePath }] }, bindingHeaders(sessionId))
         );
         expect(sent.status).toBe(200);
 
         const read = await t.fetch(
           '/v1/internal/native-agent/agent/read',
-          json({ with: 'human:zeke' }, bindingHeaders(sessionId))
+          json({ with: 'pmem_claude' }, bindingHeaders(sessionId))
         );
         const { messages: direct } = (await read.json()) as {
           messages: Array<{ text: string; attachments?: Array<{ id: string; path: string }> }>;
@@ -682,7 +684,7 @@ for (const kind of TRANSPORTS) {
         expect(direct[0]?.text.startsWith('PRIVATE ')).toBe(true);
         expect(direct[0]?.text).not.toContain('[Attachment');
         expect(direct[0]?.text.length ?? 0).toBeLessThan(3_000);
-        expect(await messages(t, sessionId)).toEqual([]);
+        expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'codex sent Steve a DM.' }]);
       } finally {
         await rm(dir, { recursive: true, force: true });
       }
@@ -1230,43 +1232,45 @@ for (const kind of TRANSPORTS) {
       ]);
     });
 
-    test('agent send stays out of the Workplace Project transcript', async () => {
+    test('agent send keeps the private body out of the transcript while recording a receipt', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
+      addBoundMember(handlers, sessionId, 'pmem_claude', 'Steve');
       createManagedNativeSession(handlers, sessionId);
 
       const res = await t.fetch(
         '/v1/internal/native-agent/agent/send',
-        directSendJson({ to: 'human:zeke', text: 'private note' }, bindingHeaders(sessionId))
+        directSendJson({ to: 'pmem_claude', text: 'private note' }, bindingHeaders(sessionId))
       );
 
       expect(res.status).toBe(200);
-      expect(await messages(t, sessionId)).toEqual([]);
+      expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'codex sent Steve a DM.' }]);
     });
 
-    test('agent send and read use a direct private ledger', async () => {
+    test('agent send and read use a canonical member-id direct ledger', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
+      addBoundMember(handlers, sessionId, 'pmem_claude', 'Steve');
       createManagedNativeSession(handlers, sessionId);
 
       const sent = await t.fetch(
         '/v1/internal/native-agent/agent/send',
-        directSendJson({ to: 'human:zeke', text: 'private note' }, bindingHeaders(sessionId))
+        directSendJson({ to: 'pmem_claude', text: 'private note' }, bindingHeaders(sessionId))
       );
       expect(sent.status).toBe(200);
 
       const read = await t.fetch(
         '/v1/internal/native-agent/agent/read',
-        json({ with: 'human:zeke' }, bindingHeaders(sessionId))
+        json({ with: 'pmem_claude' }, bindingHeaders(sessionId))
       );
 
       expect(read.status).toBe(200);
       expect(((await read.json()) as { messages: Array<{ peer: string; text: string }> }).messages).toMatchObject([
-        { peer: 'human:zeke', text: 'private note' }
+        { peer: 'pmem_claude', text: 'private note' }
       ]);
-      expect(await messages(t, sessionId)).toEqual([]);
+      expect(await messages(t, sessionId)).toEqual([{ role: 'assistant', text: 'codex sent Steve a DM.' }]);
     });
 
     test('agent send replays after handler recreation without a second recipient delivery', async () => {
@@ -1280,7 +1284,7 @@ for (const kind of TRANSPORTS) {
       createManagedNativeSession(handlers, sessionId, 'mesh_claude000000', 'claude');
       const request = {
         requestId: 'direct-replay-after-recreation',
-        to: 'claude',
+        to: 'pmem_claude',
         text: 'durable private handoff'
       };
 
@@ -1373,19 +1377,21 @@ for (const kind of TRANSPORTS) {
       t = serveTransport(kind, createHttpTransport(handlers));
       const sessionId = await createSession(t);
       addSessionMember(handlers, sessionId, 'codex', 'Lily');
-      addSessionMember(handlers, sessionId, 'claude', 'Steve');
+      addBoundMember(handlers, sessionId, 'pmem_claude', 'Steve');
       createManagedNativeSession(handlers, sessionId, 'mesh_codex0000000', 'codex');
 
       const sent = await t.fetch(
         '/v1/internal/native-agent/agent/send',
         directSendJson(
-          { to: 'claude', text: 'offline handoff' },
+          { to: 'pmem_claude', text: 'offline handoff' },
           bindingHeaders(sessionId, 'mesh_codex0000000', 'codex')
         )
       );
 
       expect(sent.status).toBe(200);
-      expect(handlers.store.listMessages(sessionId)).toEqual([]);
+      expect(handlers.store.listMessages(sessionId).map(({ text, type }) => ({ text, type }))).toEqual([
+        { text: 'codex sent Steve a DM.', type: 'mesh_agent_direct_message' }
+      ]);
     });
 
     test('direct message stays private and queued while the recipient has an unresolved ask', async () => {
@@ -1476,14 +1482,14 @@ for (const kind of TRANSPORTS) {
       });
     });
 
-    test('an ambiguous direct send (with attachment) is a stable 409 with zero direct/attachment/ingress writes', async () => {
+    test('a non-member direct target is a stable 404 with zero direct/attachment/ingress writes', async () => {
       const handlers = buildHandlers(mockModel());
       t = serveTransport(kind, createHttpTransport(handlers));
       const dir = await realpath(await mkdtemp(join(tmpdir(), 'monad-amb-')));
       try {
         const sessionId = await createSession(t);
         createManagedNativeSession(handlers, sessionId, 'mesh_codex0000000', 'codex');
-        // Two canonical members share the display-name alias 'Rev' — addressing it is genuinely ambiguous.
+        // Even when members share a display name, aliases are never valid direct-message targets.
         addBoundMember(handlers, sessionId, 'pmem_reva0000001', 'Rev');
         addBoundMember(handlers, sessionId, 'pmem_revb0000001', 'Rev');
         const file = join(dir, 'attach.md');
@@ -1499,15 +1505,15 @@ for (const kind of TRANSPORTS) {
             bindingHeaders(sessionId, 'mesh_codex0000000', 'codex')
           )
         );
-        expect(sent.status).toBe(409);
-        expect(await responseError(sent)).toMatchObject({ code: 'AMBIGUOUS_MEMBER_TARGET' });
+        expect(sent.status).toBe(404);
+        expect(await responseError(sent)).toMatchObject({ code: 'DIRECT_MESSAGE_TARGET_NOT_FOUND' });
 
         const read = await t.fetch(
           '/v1/internal/native-agent/agent/read',
           json({ with: 'Rev' }, bindingHeaders(sessionId, 'mesh_codex0000000', 'codex'))
         );
-        expect(read.status).toBe(409);
-        expect(await responseError(read)).toMatchObject({ code: 'AMBIGUOUS_MEMBER_TARGET' });
+        expect(read.status).toBe(404);
+        expect(await responseError(read)).toMatchObject({ code: 'DIRECT_MESSAGE_TARGET_NOT_FOUND' });
 
         // Zero durable footprint across all three write surfaces, and nothing in the transcript.
         expect({
@@ -1671,7 +1677,7 @@ for (const kind of TRANSPORTS) {
       expect(await messages(t, sessionId)).toEqual([]);
       const staleDirect = await t.fetch(
         '/v1/internal/native-agent/agent/send',
-        directSendJson({ to: 'human:zeke', text: 'stale dm' }, bindingHeaders(sessionId, 'mesh_oldrun000000'))
+        directSendJson({ to: 'pmem_missing', text: 'stale dm' }, bindingHeaders(sessionId, 'mesh_oldrun000000'))
       );
       expect(staleDirect.status).toBe(403);
       expect(await responseError(staleDirect)).toMatchObject({ code: 'MESH_SESSION_NOT_CURRENT' });
@@ -1783,14 +1789,15 @@ for (const kind of TRANSPORTS) {
       const projectId = handlers.store.getSession(sessionId)?.projectId;
       if (!projectId) throw new Error('missing project id');
       createManagedNativeSession(handlers, sessionId, 'mesh_mixedinbox00', 'codex');
+      addBoundMember(handlers, sessionId, 'pmem_reviewer', 'Reviewer');
       handlers.store.insertMessage('msg_MIXEDROOM001', sessionId, 'room context', '2026-07-22T02:00:00.000Z', 'user');
       handlers.store.enqueueMeshAgentInboxItem('mesh_mixedinbox00', 1, { memberInstanceId: 'pmem_codex' });
       handlers.store.insertNativeAgentDirectMessage({
         id: 'msg_MIXEDDIRECT1',
         sessionId,
         meshSessionId: 'mesh_reviewersrc1',
-        fromAgent: 'reviewer',
-        peer: 'codex',
+        fromAgent: 'pmem_reviewer',
+        peer: 'pmem_codex',
         text: 'private context',
         createdAt: '2026-07-22T02:00:01.000Z'
       });
@@ -1807,7 +1814,7 @@ for (const kind of TRANSPORTS) {
       );
       const directHistory = await t.fetch(
         '/v1/internal/native-agent/agent/read',
-        json({ with: 'reviewer' }, bindingHeaders(sessionId, 'mesh_mixedinbox00'))
+        json({ with: 'pmem_reviewer' }, bindingHeaders(sessionId, 'mesh_mixedinbox00'))
       );
       expect(projectHistory.status).toBe(200);
       expect(directHistory.status).toBe(200);

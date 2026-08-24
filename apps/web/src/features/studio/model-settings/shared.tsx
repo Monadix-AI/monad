@@ -95,7 +95,7 @@ export function ModelSettingsSkeleton() {
   return (
     <div
       aria-busy="true"
-      className="mx-auto flex max-w-5xl flex-col gap-5 p-5"
+      className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-5"
     >
       <SkeletonSection
         cardClassName="h-[4.5rem]"

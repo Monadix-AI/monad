@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { messageIdSchema, PROJECT_MEMBER_ID_MAX_LENGTH, projectMemberIdSchema, sessionIdSchema } from '../ids.ts';
+import { messageIdSchema, projectMemberIdSchema, sessionIdSchema } from '../ids.ts';
 import {
   attachmentInputsSchema,
   messageAttachmentRefSchema,
@@ -8,22 +8,17 @@ import {
 } from './mesh-agent-attachments.ts';
 import { nativeAgentRuntimeSchema } from './mesh-session.ts';
 
-// One shared address contract for every direct-message identity string: the `to`/`with` addressing input,
-// the stored `peer`, and the resolved `with` in the read response. A peer is EITHER a canonical project
-// member (resolved to its projectMemberId) OR a free-form private label (e.g. a human the agent keeps a
-// private ledger with, delivered nowhere) — no reliable syntax tells them apart, so this is a bounded
-// string, not projectMemberIdSchema. The ceiling must be at least a canonical id's, or a resolved member
-// peer/`with` could exceed it and fail response validation; private labels share the same bound.
-const directMessageAddressSchema = z.string().min(1).max(PROJECT_MEMBER_ID_MAX_LENGTH);
+export const nativeAgentDeliveryModeSchema = z.enum(['queue', 'steer']);
+export type NativeAgentDeliveryMode = z.infer<typeof nativeAgentDeliveryModeSchema>;
 
 export const nativeAgentDirectMessageSchema = z.object({
   id: messageIdSchema,
   sessionId: sessionIdSchema,
   meshSessionId: z.string().min(1),
-  // The sender is always a canonical projectMemberId (null only for system-injected messages). The peer
-  // is a member pmid when it resolves to one, else the raw private label — see directMessagePeerSchema.
+  // Both endpoints are canonical project-member identities. Direct messaging never performs alias/name
+  // addressing and never stores a free-form private-label peer.
   fromAgent: projectMemberIdSchema.nullable(),
-  peer: directMessageAddressSchema,
+  peer: projectMemberIdSchema,
   text: z.string(),
   attachments: z.array(messageAttachmentRefSchema).optional(),
   createdAt: z.string()
@@ -41,7 +36,8 @@ export type MeshAgentDirectMessageMessageData = z.infer<typeof meshAgentDirectMe
 export const nativeAgentSendRequestSchema = z
   .object({
     requestId: z.string().min(1).max(200),
-    to: directMessageAddressSchema,
+    to: projectMemberIdSchema,
+    deliveryMode: nativeAgentDeliveryModeSchema.optional(),
     text: z.string().min(1).max(NATIVE_AGENT_INLINE_TEXT_MAX).optional(),
     attachments: attachmentInputsSchema.optional()
   })
@@ -56,7 +52,7 @@ export const nativeAgentSendResponseSchema = z.object({
 export type NativeAgentSendResponse = z.infer<typeof nativeAgentSendResponseSchema>;
 
 export const nativeAgentReadRequestSchema = z.object({
-  with: directMessageAddressSchema,
+  with: projectMemberIdSchema,
   before: z.string().optional(),
   after: z.string().optional(),
   limit: z.number().int().positive().max(200).optional()
@@ -64,10 +60,8 @@ export const nativeAgentReadRequestSchema = z.object({
 export type NativeAgentReadRequest = z.infer<typeof nativeAgentReadRequestSchema>;
 
 export const nativeAgentReadResponseSchema = z.object({
-  // The resolved peer for this conversation: a canonical member pmid when `with` matched a member, else the
-  // raw private label. Reply by passing it straight back as `to`; map a member pmid to a display name via
-  // `session_members`, not a daemon-side projection.
-  with: directMessageAddressSchema,
+  // The canonical member id used to key this conversation. Reply by passing it straight back as `to`.
+  with: projectMemberIdSchema,
   messages: z.array(nativeAgentDirectMessageSchema),
   before: z.string().optional(),
   after: z.string().optional()

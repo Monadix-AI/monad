@@ -1863,6 +1863,50 @@ test('Codex app-server observation projects item tool lifecycle and output delta
   ]);
 });
 
+test('Codex app-server observation settles a completed image view without an explicit output', () => {
+  const records = [
+    {
+      method: 'item/started',
+      params: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        item: { id: 'image_view_1', type: 'imageView', path: '/tmp/page-17.png' }
+      }
+    },
+    {
+      method: 'item/completed',
+      params: {
+        threadId: 'thread_1',
+        turnId: 'turn_1',
+        item: { id: 'image_view_1', type: 'imageView', path: '/tmp/page-17.png' }
+      }
+    }
+  ];
+
+  const events = meshAgentNeutralStreamItems({
+    id: 'mesh_codex_image_view',
+    provider: 'codex',
+    mode: 'live',
+    output: records.map((record) => JSON.stringify(record)).join('\n')
+  });
+  const card = agentObservationCards(events, 'codex').find((candidate) => candidate.kind === 'tool');
+  if (!card) throw new Error('Expected image view tool card');
+  const call = card.payload.call as AgentObservationEvent | undefined;
+  const result = card.payload.result as AgentObservationEvent | undefined;
+
+  expect({
+    callId: call?.tool?.callId,
+    resultCallId: result?.tool?.callId,
+    resultStatus: result?.tool?.status,
+    streaming: card.streaming
+  }).toEqual({
+    callId: 'image_view_1',
+    resultCallId: 'image_view_1',
+    resultStatus: 'completed',
+    streaming: false
+  });
+});
+
 test('Codex app-server observation folds a command lifecycle into one ordered tool card', () => {
   const records = [
     {

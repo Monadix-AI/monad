@@ -738,7 +738,7 @@ describe('Monad resident session-event runtime', () => {
 });
 
 describe('Gemini resident ACP session-event runtime', () => {
-  test('owns ACP session setup, steer, interrupt, output, and approval correlation', async () => {
+  test('owns ACP session setup, interrupt, output, and approval correlation without advertising steer', async () => {
     const definition = geminiMeshAgentAdapter.createSessionRuntime?.(agent('gemini'), {
       workingPath: '/workspace',
       extraWorkingPaths: ['/managed'],
@@ -765,7 +765,7 @@ describe('Gemini resident ACP session-event runtime', () => {
     expect(await definition.driver.openSession({ workingPath: '/workspace' })).toEqual({
       capabilities: {
         input: true,
-        steer: true,
+        steer: false,
         interrupt: true,
         approvalResolution: true,
         providerSessionContinuation: true,
@@ -810,9 +810,7 @@ describe('Gemini resident ACP session-event runtime', () => {
       text: 'hello',
       attachments: [{ id: 'att_spec', name: 'spec.md', path: '/workspace/spec.md', mime: 'text/markdown', bytes: 42 }]
     });
-    const steer = definition.driver.controls.steer;
-    if (!steer) throw new Error('Gemini steer control required');
-    await steer.send({ text: 'focus on tests', attachments: [] });
+    expect(definition.driver.controls.steer).toBe(false);
     const interrupt = definition.driver.controls.interrupt;
     if (!interrupt) throw new Error('Gemini interrupt control required');
     await interrupt.run();
@@ -824,8 +822,7 @@ describe('Gemini resident ACP session-event runtime', () => {
         update: { sessionUpdate: 'agent_message_chunk', content: { type: 'text', text: 'done' } }
       }
     });
-    await accept({ jsonrpc: '2.0', id: 3, result: { stopReason: 'cancelled' } });
-    await accept({ jsonrpc: '2.0', id: 4, result: { stopReason: 'end_turn' } });
+    await accept({ jsonrpc: '2.0', id: 3, result: { stopReason: 'end_turn' } });
     await accept({
       jsonrpc: '2.0',
       id: 'permission-1',
@@ -884,12 +881,6 @@ describe('Gemini resident ACP session-event runtime', () => {
             }
           ]
         }
-      },
-      {
-        jsonrpc: '2.0',
-        id: 4,
-        method: 'session/prompt',
-        params: { sessionId: 'gemini-1', prompt: [{ type: 'text', text: 'focus on tests' }] }
       },
       { jsonrpc: '2.0', method: 'session/cancel', params: { sessionId: 'gemini-1' } },
       {

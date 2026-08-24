@@ -183,6 +183,7 @@ export function createNativeAgentProjectApi(
         await handlers.session.notifyManagedMeshAgentProjectMembers({
           sessionId: sessionId,
           text: noticeText,
+          deliveryMode: args.body.deliveryMode ?? 'queue',
           sender: {
             kind: 'mesh-agent',
             name: args.binding.projectMemberId,

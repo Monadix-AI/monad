@@ -1387,6 +1387,59 @@ test('renders a placeholder when a Monad MCP card has no displayable fields', ()
   expect(visibleText(markup)).toEqual('Checked project inbox Completed No details');
 });
 
+test('renders project inbox item message bodies and identities', () => {
+  const call = toolEvent({
+    id: 'call',
+    kind: 'tool-call',
+    name: 'mcp__monad__project_inbox_check',
+    callId: 'call_inbox',
+    input: {}
+  });
+  const result = toolEvent({
+    id: 'result',
+    kind: 'tool-result',
+    name: 'mcp__monad__project_inbox_check',
+    callId: 'call_inbox',
+    output: {
+      items: [
+        {
+          ingressSeq: 3,
+          createdAt: '2026-08-21T06:12:36.729Z',
+          message: {
+            id: 'msg_claude',
+            role: 'assistant',
+            text: 'Claude public reply body',
+            data: { agentName: 'claude-code', agentDisplayName: 'Claude' }
+          }
+        }
+      ],
+      cursor: 3
+    },
+    status: 'completed'
+  });
+  const view = monadMcpToolView(call, result, []);
+  if (!view) throw new Error('Expected Monad project_inbox_check view');
+
+  const markup = renderToStaticMarkup(
+    React.createElement(
+      'div',
+      undefined,
+      React.createElement(MonadMcpToolHeader, { view }),
+      React.createElement(MonadMcpToolCard, { view })
+    )
+  );
+
+  expect({
+    inbox: markup.includes('data-slot="monad-mcp-inbox"'),
+    message: markup.includes('data-slot="monad-mcp-inbox-message"'),
+    text: visibleText(markup)
+  }).toEqual({
+    inbox: true,
+    message: true,
+    text: 'Checked project inbox Completed CC Claude Code 2026-08-21T06:12:36.729Z Claude public reply body Cursor 3'
+  });
+});
+
 test('renders every project question and its choices before the ask result', () => {
   const input = {
     requestId: 'ask_input_contract',

@@ -16,7 +16,7 @@ export function MeshOverview() {
     <PanelShell>
       <StudioBreadcrumbHeader title={t('web.studio.meshOverview')} />
       <PanelShellBody className="overflow-y-auto">
-        <div className="mx-auto grid max-w-5xl gap-5 p-4 pb-24 lg:p-6 lg:pb-24">
+        <div className="mx-auto grid w-full max-w-5xl gap-5 p-4 pb-24 lg:p-6 lg:pb-24">
           <main className="flex min-w-0 flex-col gap-5">
             <MeshUsage />
           </main>
@@ -43,7 +43,7 @@ export function MeshPlaceholder({ kind }: { kind: 'members' | 'tasks' }) {
     <PanelShell>
       <StudioBreadcrumbHeader title={copy.title} />
       <PanelShellBody>
-        <div className="mx-auto flex max-w-2xl flex-col gap-4 p-6 pb-24">
+        <div className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-6 pb-24">
           <div className="rounded-xl border bg-card px-5 py-5">
             <div className="flex items-start gap-3">
               <span className="flex size-9 shrink-0 items-center justify-center rounded-md bg-[color-mix(in_srgb,var(--info)_10%,transparent)] text-[color-mix(in_srgb,var(--info)_70%,var(--foreground))]">

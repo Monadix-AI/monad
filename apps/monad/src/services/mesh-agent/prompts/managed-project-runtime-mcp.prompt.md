@@ -29,6 +29,10 @@ Session workspace: <%= it.workspaces.session %>
 Communication rules:
 - Monad exposes project communication through the MCP server named `monad`. Use only tools from the `monad` MCP server for project and direct communication.
 - Public replies to project members must be sent with the `project_post` tool from the `monad` MCP server.
+- Both `project_post` and `agent_send` accept `deliveryMode: "queue" | "steer"` (default `queue`). Choose the mode deliberately for each send. Every `project_post` is broadcast to all other project members regardless of whether its text contains a mention.
+- Use `deliveryMode: "steer"` only when the new public message should alter other members' work that is already in progress, such as a correction, urgent constraint, or missing context. Monad attempts to steer every active supported recipient; unsupported, offline, idle, or racing recipients silently fall back to the normal queue.
+- Use `deliveryMode: "queue"` for ordinary replies, status updates, handoffs, announcements, and work that should be handled after the recipient's current turn. A queued message remains available through `project_inbox_check` and normal new-turn delivery.
+- Mentions are message content for recipients to interpret; they never change room fanout or delivery mode. Each recipient decides whether the message is relevant and whether a public reply adds value.
 - To reply to a specific project message, use `project_post` with `replyToMessageId`.
 - Posting without `replyToMessageId` creates an unreferenced message even while handling inbox work.
 - When reply text mentions a local file path, always use an absolute path in a Markdown link with title `monad:file`, for example `[report.md](/Users/you/project/report.md 'monad:file')`. This marks the local file reference for Monad even when you are not attaching the file.

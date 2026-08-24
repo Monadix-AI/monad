@@ -26,6 +26,7 @@ function directSendFingerprint(body: NativeAgentSendRequest, binding: NativeAgen
           meshSessionId: binding.meshSessionId
         },
         recipient: body.to,
+        deliveryMode: body.deliveryMode ?? 'queue',
         text: body.text ?? null,
         attachments: (body.attachments ?? []).map(({ path, name, mime }) => ({
           path,
@@ -49,14 +50,13 @@ export function createNativeAgentDirectApi(
       attachmentRoots: readonly string[];
     }): Promise<NativeAgentSendResponse> {
       const requestFingerprint = directSendFingerprint(args.body, args.binding);
-      // The sender is always the runtime's own verified owner (canonical pmid). The peer is classified at
-      // the boundary: a member's pmid (delivery-eligible), or a verbatim private label — an agent's private
-      // ledger with a non-member (e.g. a human), delivered nowhere. AMBIGUOUS_MEMBER_TARGET surfaces as-is.
+      // Resolve before materializing attachments or writing the ledger. Only an exact canonical member id
+      // is accepted, so an invalid target leaves no direct-message, attachment, or ingress footprint.
       const target = handlers.session.resolveManagedMeshAgentDirectTarget({
         sessionId: args.binding.sessionId,
         target: args.body.to
       });
-      const peer = target.kind === 'project_member' ? target.projectMemberId : target.label;
+      const peer = target.projectMemberId;
       const { text, noticeText, attachments } = await resolveAttachmentPayload(
         args.body,
         { sessionId: args.binding.sessionId, createdBy: args.binding.projectMemberId },
@@ -88,29 +88,28 @@ export function createNativeAgentDirectApi(
       if (inserted.replayed) {
         store.deleteMessageAttachments(attachments.map((ref) => ref.id));
       }
-      // Only a member peer drives runtime delivery/receipt. A private label is ledger-only: no delivery, no
-      // member .find, no attribution inference — a miss here is fail-closed (zero outbound), by design.
-      if (target.kind === 'project_member') {
-        await writeNativeAgentDirectMessageReceipt({
+      await writeNativeAgentDirectMessageReceipt({
+        message: inserted.message,
+        store,
+        messageIngress: handlers._messageIngress
+      });
+      if (!inserted.replayed) {
+        await handlers.session.notifyManagedMeshAgentDirectMessage({
           message: inserted.message,
-          store,
-          messageIngress: handlers._messageIngress
+          noticeText,
+          deliveryMode: args.body.deliveryMode ?? 'queue'
         });
-        if (!inserted.replayed) {
-          await handlers.session.notifyManagedMeshAgentDirectMessage({ message: inserted.message, noticeText });
-        }
       }
       return { ok: true, direct: true, message: inserted.message };
     },
 
     read(args: { body: NativeAgentReadRequest; binding: NativeAgentRuntimeBinding }): NativeAgentReadResponse {
-      // Resolve `with` to the same canonical peer the ledger stores: a member's pmid, or the raw private
-      // label. The conversation is then keyed identically on read and write.
+      // Reads use the same exact canonical ProjectMember id contract as sends.
       const target = handlers.session.resolveManagedMeshAgentDirectTarget({
         sessionId: args.binding.sessionId,
         target: args.body.with
       });
-      const peer = target.kind === 'project_member' ? target.projectMemberId : target.label;
+      const peer = target.projectMemberId;
       const messages = store.listNativeAgentDirectMessages(args.binding.meshSessionId, peer, {
         before: args.body.before,
         after: args.body.after,

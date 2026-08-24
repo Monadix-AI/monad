@@ -2,7 +2,6 @@ import type { AcpAgentConfig, McpServerConfig, MeshAgentConfig } from '@monad/en
 import type { Session, SessionId, SessionMcpServer, WorkplaceProjectMemberSettings } from '@monad/protocol';
 import type { Store } from '#/store/db/index.ts';
 
-import { normalizeManagedMeshAgentDirectTarget } from '#/handlers/session/handlers/messaging-notices.ts';
 import { sessionMcpServersToAcp, toAcpMcpServers } from '#/services/delegation/acp-delegate.ts';
 
 const CONTROL_ROOM_SESSION_PREFIX = 'Control Room: ';
@@ -101,19 +100,7 @@ export function resolveManagedMember<
   return aliasMatches[0];
 }
 
-// A direct-message target is either a canonical project member or a free-form private label (the private
-// ledger an agent keeps with a non-member, e.g. a human — delivered nowhere). Kept as a discriminated union
-// so callers branch on the kind explicitly rather than guessing from an id shape that has no reliable syntax.
-export type DirectMessageTarget =
-  | { kind: 'project_member'; projectMemberId: string }
-  | { kind: 'private_label'; label: string };
-
-interface DirectMemberCandidate {
-  projectMemberId: string;
-  runtimeAgentName: string;
-  templateAgentName: string;
-  displayName: string;
-}
+export type DirectMessageTarget = { kind: 'project_member'; projectMemberId: string };
 
 // The session's direct-message members, resolved from the CANONICAL identity graph only: a non-left
 // SessionBinding joined to its ProjectMember (mesh-agent). Existence is never inferred from a legacy
@@ -132,22 +119,31 @@ export function canonicalDirectMembers(
   const projectId = store.getSession(sessionId)?.projectId;
   if (!projectId) return { available, unavailable };
   const configuredByName = new Map(meshAgents.map((agent) => [agent.name, agent]));
+  const sessionMembersById = new Map(
+    workplaceProjectMembers(store, sessionId).map((member) => [member.memberId, member])
+  );
   for (const binding of store.listSessionBindings(sessionId)) {
     if (binding.lifecycle === 'left') continue;
     const member = store.getProjectMember(projectId, binding.projectMemberId);
     if (member?.type !== 'mesh-agent' || member.launchOverrides.managedProjectAgent === false) continue;
-    const spec = configuredByName.get(member.profileId);
+    // ProjectMember.profileId is the stable Profile/template id (for example
+    // `pmem_claude-code_...`), not necessarily the provider config name. Resolve the config name from the
+    // exact same session member binding; membership still comes exclusively from SessionBinding +
+    // ProjectMember, while session_members supplies only the template metadata needed to start its runtime.
+    const sessionMember = sessionMembersById.get(member.id);
+    const templateAgentName = sessionMember ? meshAgentProjectMemberTemplateName(sessionMember) : member.profileId;
+    const spec = configuredByName.get(templateAgentName) ?? configuredByName.get(member.profileId);
     if (!spec || spec.enabled === false) {
       unavailable.push({
         projectMemberId: member.id,
         runtimeAgentName: member.id,
-        templateAgentName: spec?.name ?? member.profileId,
+        templateAgentName: spec?.name ?? templateAgentName,
         displayName: member.displayName,
-        provider: (spec?.provider ?? member.profileId) as MeshAgentConfig['provider'],
+        provider: (spec?.provider ?? templateAgentName) as MeshAgentConfig['provider'],
         code: spec ? 'provider_disabled' : 'provider_unavailable',
         reason: spec
           ? `MeshAgent adapter "${spec.name}" is disabled. Enable it in Studio before using it in this project.`
-          : `MeshAgent adapter "${member.profileId}" is not configured. Reconnect it in Studio before using it in this project.`
+          : `MeshAgent adapter "${templateAgentName}" is not configured. Reconnect it in Studio before using it in this project.`
       });
       continue;
     }
@@ -175,44 +171,17 @@ export function canonicalDirectMembers(
   return { available, unavailable };
 }
 
-// Split the session's direct members (available + unavailable) into resolver candidates. A member's own
-// canonical fields (pmid, spec.name template alias, displayName) drive resolution; a legacy session_members
-// row for the SAME pmid only supplies its runtime instance alias, never a new member.
-function activeDirectMessageMembers(
-  store: Store,
-  sessionId: SessionId,
-  meshAgents: readonly MeshAgentConfig[]
-): DirectMemberCandidate[] {
-  const { available, unavailable } = canonicalDirectMembers(store, sessionId, meshAgents);
-  const legacyRuntimeName = new Map(
-    workplaceProjectMembers(store, sessionId)
-      .filter((member) => member.type === 'mesh-agent')
-      .map((member) => [member.memberId, meshAgentProjectMemberRuntimeName(member)] as const)
-  );
-  return [...available, ...unavailable].map((member) => ({
-    projectMemberId: member.projectMemberId,
-    runtimeAgentName: legacyRuntimeName.get(member.projectMemberId) ?? member.runtimeAgentName,
-    templateAgentName: member.templateAgentName,
-    displayName: member.displayName
-  }));
-}
-
-// Classify a `to`/`with` addressing string at the boundary against the session's canonical members. Exact
-// pmid or unique alias → a member; a shared alias → AmbiguousMemberTargetError; anything that matches no
-// member → a private label kept verbatim. Only a member target may drive runtime delivery/attribution.
+// Direct messaging is intentionally strict: only an exact ProjectMember id in the current session is a
+// valid target. Names, display names, runtime aliases and arbitrary private labels never resolve here.
 export function resolveDirectMessageTarget(
   store: Store,
   sessionId: SessionId,
   meshAgents: readonly MeshAgentConfig[],
   requestedTarget: string
-): DirectMessageTarget {
-  const member = resolveManagedMember(
-    activeDirectMessageMembers(store, sessionId, meshAgents),
-    normalizeManagedMeshAgentDirectTarget(requestedTarget)
-  );
-  return member
-    ? { kind: 'project_member', projectMemberId: member.projectMemberId }
-    : { kind: 'private_label', label: requestedTarget };
+): DirectMessageTarget | undefined {
+  const { available, unavailable } = canonicalDirectMembers(store, sessionId, meshAgents);
+  const member = [...available, ...unavailable].find((candidate) => candidate.projectMemberId === requestedTarget);
+  return member ? { kind: 'project_member', projectMemberId: member.projectMemberId } : undefined;
 }
 
 export function isChannelStructuredSession(session: Pick<Session, 'origin' | 'title'>): boolean {

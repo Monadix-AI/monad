@@ -5,12 +5,12 @@ import { type DevDoctorDeps, runDevDoctor } from '../../dev-doctor/checks.ts';
 import { devCliShimText } from '../../dev-init/cli-shim.ts';
 
 const root = '/repo';
-const packageJson = JSON.stringify({ packageManager: 'bun@1.3.14' });
+const packageJson = JSON.stringify({ packageManager: 'bun@1.4.0' });
 const envLocal = 'MONAD_PORT=52147\nWEB_PORT=3247\n';
 
 function deps(files: Record<string, string> = {}, overrides: Partial<DevDoctorDeps> = {}): DevDoctorDeps {
   return {
-    bunVersion: '1.3.14',
+    bunVersion: '1.4.0',
     exists: async (path) => Object.hasOwn(files, path),
     isPortAvailable: async () => true,
     platform: 'linux',
@@ -46,10 +46,10 @@ test('missing dependencies point directly to bun install', async () => {
 });
 
 test('Bun version mismatch reports the pinned version', async () => {
-  const results = await runDevDoctor(root, deps(healthyFiles(), { bunVersion: '1.3.15' }));
+  const results = await runDevDoctor(root, deps(healthyFiles(), { bunVersion: '1.4.1' }));
 
   expect(results.find((result) => result.id === 'bun-version')).toMatchObject({
-    message: 'Bun 1.3.15 is active; this repository pins 1.3.14',
+    message: 'Bun 1.4.1 is active; this repository pins 1.4.0',
     status: 'error'
   });
 });

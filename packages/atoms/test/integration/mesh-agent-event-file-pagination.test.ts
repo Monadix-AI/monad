@@ -22,7 +22,9 @@ const projection = { recordProjectors: [] } as unknown as MeshAgentObservationPr
 const context = { providerSessionRef: 'session-lines', workingPath: '/tmp/project' };
 const codexAppServerTurn = {
   id: 'turn_1',
-  items: [{ type: 'agentMessage', id: 'msg_1', text: 'from app-server', phase: null, memoryCitation: null }],
+  items: [
+    { type: 'agentMessage', id: 'msg_1', text: 'from app-server', phase: null, memoryCitation: null, delivery: null }
+  ],
   itemsView: 'full',
   status: 'completed',
   error: null,
@@ -33,7 +35,7 @@ const codexAppServerTurn = {
 const codexAppServerSecondTurn = {
   ...codexAppServerTurn,
   id: 'turn_2',
-  items: [{ type: 'agentMessage', id: 'msg_2', text: 'second turn', phase: null, memoryCitation: null }]
+  items: [{ type: 'agentMessage', id: 'msg_2', text: 'second turn', phase: null, memoryCitation: null, delivery: null }]
 };
 
 function objectValue(value: unknown): Record<string, unknown> | undefined {
@@ -50,7 +52,9 @@ function fixtureCodexTurns(
       const data = objectValue(record.data);
       const item = data?.type === 'item.completed' ? objectValue(data.item) : undefined;
       if (item?.type !== 'agent_message' || typeof item.id !== 'string' || typeof item.text !== 'string') return [];
-      return [{ type: 'agentMessage', id: item.id, text: item.text, phase: null, memoryCitation: null }];
+      return [
+        { type: 'agentMessage', id: item.id, text: item.text, phase: null, memoryCitation: null, delivery: null }
+      ];
     });
     return {
       id: `fixture-turn-${turnIndex}`,

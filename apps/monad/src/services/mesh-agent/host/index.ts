@@ -384,7 +384,10 @@ export class MeshAgentHost {
     try {
       const completion = live.sessionEventRuntime.input(
         { text: req.input, attachments: [] },
-        { waitForSettlement: live.runtimeRole === 'managed-project-agent' }
+        {
+          waitForPriorSettlement: live.runtimeRole === 'managed-project-agent',
+          waitForSettlement: live.runtimeRole === 'managed-project-agent'
+        }
       );
       options?.onAccepted?.();
       await completion;
@@ -419,6 +422,22 @@ export class MeshAgentHost {
     if (!live.sessionEventRuntime.snapshot().capabilities.steer)
       throw new MeshAgentError('unsupported_capability', `MeshAgent provider does not support steering: ${id}`);
     void live.sessionEventRuntime.steer({ text: req.input, attachments: [] });
+  }
+
+  /** Best-effort same-turn delivery for managed ingress. Unsupported, idle, and provider-race cases
+   *  return false so the durable queue remains authoritative and the caller can use normal input later. */
+  async trySteer(id: string, req: MeshAgentInputRequest): Promise<boolean> {
+    const live = this.live.get(id);
+    const runtime = live?.sessionEventRuntime;
+    if (!runtime) return false;
+    const snapshot = runtime.snapshot();
+    if (!snapshot.capabilities.steer || snapshot.activity.state !== 'running') return false;
+    try {
+      await runtime.steer({ text: req.input, attachments: [] });
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   get(id: string): MeshSessionView {

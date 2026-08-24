@@ -19,6 +19,7 @@ import {
   codexAppServerToolResultObservation,
   hasCodexAppServerToolInput,
   hasCodexAppServerToolOutput,
+  isCodexAppServerImageViewItem,
   isCodexAppServerToolLikeItem
 } from './observation-app-server-tool.ts';
 import { codexResponseItem, isCodexObservationResponseItem } from './observation-response-item.ts';
@@ -190,7 +191,7 @@ export function codexAppServerRecordEvents(
       if (responseItem.length > 0) return responseItem;
     }
     if (!isCodexAppServerToolLikeItem(item)) return [];
-    if (!hasCodexAppServerToolOutput(item)) {
+    if (!hasCodexAppServerToolOutput(item) && !isCodexAppServerImageViewItem(item)) {
       return codexAppServerToolCallObservation({ id, recordIndex, method, record, item, createdAt });
     }
     const result = codexAppServerToolResultObservation({ id, recordIndex, method, record, item, createdAt });

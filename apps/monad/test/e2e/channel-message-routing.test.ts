@@ -1137,7 +1137,7 @@ for (const kind of TRANSPORTS) {
       expect(((await listed.json()) as { sessions: unknown[] }).sessions).toEqual([]);
     });
 
-    test('managed MeshAgent project posts return before the strictly mentioned peer finishes', async () => {
+    test('managed MeshAgent project posts broadcast regardless of mentions and return before recipients finish', async () => {
       const projectDir = join(dir, 'project');
       await mkdir(projectDir, { recursive: true });
       const { stdinLog: codexStdinLog } = await configureMockMeshAgent(t, dir, {
@@ -1252,17 +1252,20 @@ for (const kind of TRANSPORTS) {
         sender: { id: codexMember.id, kind: 'mesh-agent', name: 'codex' },
         text: mentionedText
       });
-      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
-      await Bun.sleep(100);
-      // presence-ok: a strict managed-agent mention targets Claude, so the unrelated reviewer receives no input.
-      expect(await readLogIfExists(reviewerStdinLog)).toBe(reviewerInputBeforePost);
+      const reviewerMentionedInput = await waitForFile(reviewerStdinLog, 'please inspect this');
+      expect(reviewerMentionedInput).not.toBe(reviewerInputBeforePost);
 
       const unmentionedText = 'codex public update';
       const post = await t.fetch(
         '/v1/internal/native-agent/project/post',
         json(
           'POST',
-          { requestId: 'channel-routing-unmentioned-post', projectId: sessionId, text: unmentionedText },
+          {
+            requestId: 'channel-routing-unmentioned-post',
+            projectId: sessionId,
+            deliveryMode: 'steer',
+            text: unmentionedText
+          },
           managedBindingHeaders(sessionId, codexSession.id, 'codex', codexToken)
         )
       );
@@ -1276,10 +1279,10 @@ for (const kind of TRANSPORTS) {
           createdAt: expect.any(String)
         }
       });
-      // biome-ignore lint/plugin: no event marks work that must NOT happen; the delay gives it its chance to appear before the assertion denies it.
-      await Bun.sleep(100);
-      expect(await readLogIfExists(reviewerStdinLog)).toBe(reviewerInputBeforePost);
-      expect(await readLogIfExists(claudeStdinLog)).toBe(claudeInput);
+      const reviewerUnmentionedInput = await waitForFile(reviewerStdinLog, unmentionedText);
+      const claudeUnmentionedInput = await waitForFile(claudeStdinLog, unmentionedText);
+      expect(reviewerUnmentionedInput).not.toBe(reviewerMentionedInput);
+      expect(claudeUnmentionedInput).not.toBe(claudeInput);
       expect(claudeInput).not.toBe(claudeInputBeforePost);
       const transcriptMessages = handlers.store
         .listMessages(sessionId, { latest: true })
@@ -1299,7 +1302,7 @@ for (const kind of TRANSPORTS) {
         '/v1/internal/native-agent/agent/send',
         json(
           'POST',
-          { requestId: 'channel-routing-direct-send', to: 'claude', text: 'codex private note' },
+          { requestId: 'channel-routing-direct-send', to: claudeMember.id, text: 'codex private note' },
           managedBindingHeaders(sessionId, codexSession.id, 'codex', codexToken)
         )
       );
