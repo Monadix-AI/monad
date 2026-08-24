@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.1.8](https://github.com/Monadix-AI/monad/compare/v0.1.7...v0.1.8) (2026-08-24)
+
+
+### Bug Fixes
+
+* **release:** gate draft and smoke workflows correctly ([7710495](https://github.com/Monadix-AI/monad/commit/77104959b48adbd7d78fe7bd72d1840636ad8029))
+* **release:** gate draft and smoke workflows correctly ([7a0e6be](https://github.com/Monadix-AI/monad/commit/7a0e6be22decd703b9b973e4101b452f65c7d174))
+
 ## [0.1.7](https://github.com/Monadix-AI/monad/compare/v0.1.6...v0.1.7) (2026-08-24)
 
 
