@@ -5,7 +5,7 @@ import { createStore } from '#/store/db/index.ts';
 
 test('direct send replays durable request identity after capability recreation and rejects changed intent', async () => {
   const store = createStore();
-  const notifications: string[] = [];
+  const notifications: Array<{ messageId: string; deliveryMode: string }> = [];
   const handlers = {
     _nativeAgentStore: store,
     session: {
@@ -13,8 +13,14 @@ test('direct send replays durable request identity after capability recreation a
         kind: 'project_member' as const,
         projectMemberId: target
       }),
-      notifyManagedMeshAgentDirectMessage: async ({ message }: { message: { id: string } }) => {
-        notifications.push(message.id);
+      notifyManagedMeshAgentDirectMessage: async ({
+        message,
+        deliveryMode
+      }: {
+        message: { id: string };
+        deliveryMode: string;
+      }) => {
+        notifications.push({ messageId: message.id, deliveryMode });
       }
     }
   };
@@ -49,7 +55,8 @@ test('direct send replays durable request identity after capability recreation a
     const first = await createNativeAgentDirectApi(handlers as never, resolveAttachmentPayload as never).send({
       body: {
         requestId: 'direct-request-1',
-        to: 'claude',
+        to: 'pmem_claude',
+        deliveryMode: 'steer',
         text: 'private handoff',
         attachments: [{ path: '/tmp/report.md' }]
       },
@@ -59,7 +66,8 @@ test('direct send replays durable request identity after capability recreation a
     const replay = await createNativeAgentDirectApi(handlers as never, resolveAttachmentPayload as never).send({
       body: {
         requestId: 'direct-request-1',
-        to: 'claude',
+        to: 'pmem_claude',
+        deliveryMode: 'steer',
         text: 'private handoff',
         attachments: [{ path: '/tmp/report.md' }]
       },
@@ -70,7 +78,7 @@ test('direct send replays durable request identity after capability recreation a
     expect({ first: first.message, replay: replay.message, notifications }).toEqual({
       first: first.message,
       replay: first.message,
-      notifications: [first.message.id]
+      notifications: [{ messageId: first.message.id, deliveryMode: 'steer' }]
     });
     expect({
       originalAttachment: store.getMessageAttachment('att_DIRECT000001')?.id,
@@ -83,7 +91,8 @@ test('direct send replays durable request identity after capability recreation a
       createNativeAgentDirectApi(handlers as never, resolveAttachmentPayload as never).send({
         body: {
           requestId: 'direct-request-1',
-          to: 'claude',
+          to: 'pmem_claude',
+          deliveryMode: 'steer',
           text: 'changed handoff',
           attachments: [{ path: '/tmp/report.md' }]
         },

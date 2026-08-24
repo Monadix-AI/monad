@@ -69,6 +69,7 @@ export interface SessionDeps {
     MeshAgentHost,
     | 'preflight'
     | 'input'
+    | 'trySteer'
     | 'list'
     | 'start'
     | 'stop'

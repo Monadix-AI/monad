@@ -5,16 +5,35 @@ import { createStore } from '#/store/db/index.ts';
 import {
   acknowledgeVisibleNativeAgentIngress,
   claimNativeAgentIngressBatch,
+  claimNativeAgentIngressForSteer,
   consumeNativeAgentIngressBatch,
   consumeNativeAgentPendingInbox,
   enqueueNativeAgentIngressItem,
   listClaimedNativeAgentIngress,
   markNativeAgentIngressVisible,
-  reconcileNativeAgentIngressAfterRestart
+  reconcileNativeAgentIngressAfterRestart,
+  settleNativeAgentIngressSteer
 } from '#/store/db/native-agent-ingress.ts';
 
 function sqliteOf(store: ReturnType<typeof createStore>): Database {
   return (store as unknown as { sqlite: Database }).sqlite;
+}
+
+function enqueueSteerTestIngress(store: ReturnType<typeof createStore>, messageId: `msg_${string}`, text: string) {
+  store.insertNativeAgentDirectMessage({
+    id: messageId,
+    sessionId: 'ses_STEERQUEUE01',
+    meshSessionId: 'mesh_sender00001',
+    fromAgent: 'sender',
+    peer: 'builder',
+    text,
+    createdAt: '2026-08-21T00:00:00.000Z'
+  });
+  return store.enqueueNativeAgentIngressItem({
+    projectId: 'prj_STEERQUEUE01',
+    memberInstanceId: 'builder',
+    source: { kind: 'direct', directMessageId: messageId }
+  });
 }
 
 test('allocates one ingress sequence across room and direct sources for a member', () => {
@@ -252,6 +271,55 @@ test('inbox check consumes one mixed room and direct high-water batch exactly on
       { state: 'consumed' },
       { state: 'consumed' }
     ]);
+  } finally {
+    store.close();
+  }
+});
+
+test('a successful steer consumes only its ingress item and leaves surrounding queued messages ordered', () => {
+  const store = createStore();
+  const sqlite = sqliteOf(store);
+  try {
+    const queuedBefore = enqueueSteerTestIngress(store, 'msg_STEERQUEUE01', 'before');
+    const steered = enqueueSteerTestIngress(store, 'msg_STEERNOW0001', 'steer now');
+    const queuedAfter = enqueueSteerTestIngress(store, 'msg_STEERQUEUE02', 'after');
+
+    expect(claimNativeAgentIngressForSteer(sqlite, steered.id)).toBe(true);
+    expect(
+      settleNativeAgentIngressSteer(sqlite, steered.id, true, {
+        meshSessionId: 'mesh_recipient001',
+        providerSessionRef: 'provider-turn-owner'
+      })
+    ).toBe(true);
+
+    expect(
+      consumeNativeAgentPendingInbox(sqlite, 'prj_STEERQUEUE01', 'ses_STEERQUEUE01', 'builder').map((item) => ({
+        ingressSeq: item.ingressSeq,
+        deliveryId: item.deliveryId,
+        text: item.message.text
+      }))
+    ).toEqual([
+      { ingressSeq: 1, deliveryId: queuedBefore.deliveryId, text: 'before' },
+      { ingressSeq: 3, deliveryId: queuedAfter.deliveryId, text: 'after' }
+    ]);
+  } finally {
+    store.close();
+  }
+});
+
+test('a rejected steer returns its single ingress item to the normal queue', () => {
+  const store = createStore();
+  const sqlite = sqliteOf(store);
+  try {
+    const ingress = enqueueSteerTestIngress(store, 'msg_STEERFALLBACK', 'fall back');
+
+    expect(claimNativeAgentIngressForSteer(sqlite, ingress.id)).toBe(true);
+    expect(settleNativeAgentIngressSteer(sqlite, ingress.id, false)).toBe(true);
+    expect(
+      consumeNativeAgentPendingInbox(sqlite, 'prj_STEERQUEUE01', 'ses_STEERQUEUE01', 'builder').map(
+        (item) => item.message.text
+      )
+    ).toEqual(['fall back']);
   } finally {
     store.close();
   }

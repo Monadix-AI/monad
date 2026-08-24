@@ -34,6 +34,7 @@ export type {
 } from './mesh-agent-config.ts';
 export type {
   MeshAgentDirectMessageMessageData,
+  NativeAgentDeliveryMode,
   NativeAgentDirectMessage,
   NativeAgentReadRequest,
   NativeAgentReadResponse,
@@ -244,6 +245,7 @@ export {
 } from './mesh-agent-config.ts';
 export {
   meshAgentDirectMessageMessageDataSchema,
+  nativeAgentDeliveryModeSchema,
   nativeAgentDirectMessageSchema,
   nativeAgentReadRequestSchema,
   nativeAgentReadResponseSchema,

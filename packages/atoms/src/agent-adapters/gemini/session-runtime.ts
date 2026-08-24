@@ -33,7 +33,7 @@ type PendingRequest = {
 
 const CAPABILITIES: MeshAgentRuntimeCapabilities = {
   input: true,
-  steer: true,
+  steer: false,
   interrupt: true,
   approvalResolution: true,
   providerSessionContinuation: true,
@@ -87,7 +87,7 @@ export class GeminiAcpSessionDriver implements ResidentProviderDriver {
     approvalResolution: {
       resolve: (resolution: MeshAgentApprovalResolutionRequest) => this.resolveApproval(resolution)
     },
-    steer: { send: (input: MeshAgentTurnInput) => this.sendTurn(input) },
+    steer: false,
     interrupt: { run: () => this.interrupt() }
   } as const;
 

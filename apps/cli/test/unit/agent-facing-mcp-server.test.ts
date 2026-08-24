@@ -91,6 +91,7 @@ test('agent-facing MCP lists project and direct communication tools', async () =
         type: 'string',
         description: 'Stable idempotency key for this intended side effect. Reuse it when retrying the same action.'
       },
+      deliveryMode: { type: 'string', enum: ['queue', 'steer'], default: 'queue' },
       text: { type: 'string' },
       replyToMessageId: { type: 'string' },
       attachments: {
@@ -118,6 +119,14 @@ test('agent-facing MCP lists project and direct communication tools', async () =
     },
     required: [],
     additionalProperties: false
+  });
+  const agentSendInputSchema = listed.tools.find((tool) => tool.name === 'agent_send')?.inputSchema as
+    | { properties?: Record<string, unknown> }
+    | undefined;
+  expect(agentSendInputSchema?.properties?.deliveryMode).toEqual({
+    type: 'string',
+    enum: ['queue', 'steer'],
+    default: 'queue'
   });
   expect(response).toMatchObject({
     jsonrpc: '2.0',
@@ -214,6 +223,7 @@ test('agent-facing MCP forwards explicit project reply ids and caches mutating r
                   calls++;
                   expect(body).toEqual({
                     requestId: 'same-turn',
+                    deliveryMode: 'queue',
                     text: 'hello',
                     replyToMessageId: 'msg_PARENT000000'
                   });
@@ -1000,7 +1010,7 @@ test('agent-facing MCP aborts a cancelled mutating call without project ask reco
   expect({ cancelled, aborted, sentBody }).toEqual({
     cancelled: null,
     aborted: true,
-    sentBody: { requestId: 'send-cancel', to: 'reviewer', text: 'Stop' }
+    sentBody: { requestId: 'send-cancel', to: 'reviewer', deliveryMode: 'queue', text: 'Stop' }
   });
 });
 

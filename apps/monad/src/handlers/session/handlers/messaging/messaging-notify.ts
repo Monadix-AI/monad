@@ -12,14 +12,7 @@ import type { ManagedMeshAgentProjectMessageSender } from '#/handlers/session/ha
 
 import { extractError } from '#/agent/index.ts';
 import { HandlerError } from '#/handlers/handler-error.ts';
-import { routeChannelMessage } from '#/handlers/session/channel-routing.ts';
-import {
-  AMBIGUOUS_MEMBER_TARGET_CODE,
-  AmbiguousMemberTargetError,
-  managedMeshAgentProjectMembers,
-  resolveDirectMessageTarget,
-  resolveManagedMember
-} from '#/handlers/session/handlers/messaging-members.ts';
+import { resolveDirectMessageTarget } from '#/handlers/session/handlers/messaging-members.ts';
 import { enabledInvitableMeshAgentConfigs } from '#/services/mesh-agent/invitable-agents.ts';
 
 /** Wraps the managed-mesh-agent delivery primitives with the project-config lookups the
@@ -28,10 +21,7 @@ export function createMessagingNotifyHandlers(
   ctx: SessionContext,
   managedMeshAgentDelivery: ReturnType<typeof createManagedMeshAgentDelivery>
 ) {
-  const {
-    deps: { store },
-    requireSession
-  } = ctx;
+  const { requireSession } = ctx;
   const {
     completeManagedMeshAgentThinking,
     retireManagedMeshAgentThinking,
@@ -45,33 +35,21 @@ export function createMessagingNotifyHandlers(
       text,
       sender,
       triggerMessageId,
-      exceptProjectMemberId
+      exceptProjectMemberId,
+      deliveryMode = 'queue'
     }: {
       sessionId: SessionId;
       text: string;
       sender?: ManagedMeshAgentProjectMessageSender;
       triggerMessageId?: MessageId;
       exceptProjectMemberId?: string;
+      deliveryMode?: import('@monad/protocol').NativeAgentDeliveryMode;
     }) {
       const session = requireSession(sessionId);
       const cfg = ctx.deps.configManager?.get().cfg;
       const meshAgents = cfg ? enabledInvitableMeshAgentConfigs(cfg) : [];
-      let onlyProjectMemberId: string | undefined;
-      if (sender?.kind === 'mesh-agent') {
-        const managedMembers = managedMeshAgentProjectMembers(store, sessionId, meshAgents);
-        const route = routeChannelMessage({
-          text,
-          acpAgentNames: [],
-          meshAgentNames: managedMembers.flatMap((member) => [
-            member.projectMemberId,
-            member.runtimeAgentName,
-            member.templateAgentName,
-            member.displayName
-          ])
-        });
-        if (route.kind !== 'forward-mesh-agent') return { accepted: true as const };
-        onlyProjectMemberId = resolveManagedMember(managedMembers, route.agentName)?.projectMemberId;
-      }
+      // Public project messages are room broadcasts. Mentions stay in the message body for each member
+      // to interpret; they never narrow fanout or override the caller-selected queue/steer mode.
       void deliverProjectMessageToManagedMeshAgentMembers({
         session,
         meshAgents,
@@ -79,7 +57,7 @@ export function createMessagingNotifyHandlers(
         sender,
         triggerMessageId,
         exceptProjectMemberId,
-        ...(onlyProjectMemberId ? { onlyProjectMemberId } : {})
+        deliveryMode
       }).catch((error) => {
         ctx.deps.log?.debug(
           {
@@ -92,8 +70,7 @@ export function createMessagingNotifyHandlers(
       return { accepted: true as const };
     },
 
-    // Boundary classifier for direct-message addressing: a `to`/`with` string becomes either a canonical
-    // member (pmid, delivery-eligible) or a verbatim private label (ledger-only). Callers branch on kind.
+    // Direct-message addressing accepts only an exact canonical ProjectMember id in this session.
     resolveManagedMeshAgentDirectTarget({
       sessionId,
       target
@@ -102,24 +79,25 @@ export function createMessagingNotifyHandlers(
       target: string;
     }): DirectMessageTarget {
       const meshAgents = ctx.deps.configManager?.get().cfg.meshAgents ?? [];
-      try {
-        return resolveDirectMessageTarget(ctx.deps.store, sessionId, meshAgents, target);
-      } catch (err) {
-        // The resolver stays presentation-agnostic; the handler maps its typed ambiguity to a stable
-        // conflict so a shared alias surfaces as 409 AMBIGUOUS_MEMBER_TARGET, never an opaque 500.
-        if (err instanceof AmbiguousMemberTargetError) {
-          throw new HandlerError('conflict', err.message, AMBIGUOUS_MEMBER_TARGET_CODE);
-        }
-        throw err;
+      const member = resolveDirectMessageTarget(ctx.deps.store, sessionId, meshAgents, target);
+      if (!member) {
+        throw new HandlerError(
+          'not_found',
+          `Direct-message target "${target}" is not an active project member in this session`,
+          'DIRECT_MESSAGE_TARGET_NOT_FOUND'
+        );
       }
+      return member;
     },
 
     async notifyManagedMeshAgentDirectMessage({
       message,
-      noticeText
+      noticeText,
+      deliveryMode = 'queue'
     }: {
       message: NativeAgentDirectMessage;
       noticeText: string;
+      deliveryMode?: import('@monad/protocol').NativeAgentDeliveryMode;
     }) {
       const session = requireSession(message.sessionId);
       const cfg = ctx.deps.configManager?.get().cfg;
@@ -130,7 +108,8 @@ export function createMessagingNotifyHandlers(
         session,
         meshAgents,
         message,
-        noticeText
+        noticeText,
+        deliveryMode
       });
       return { accepted: true as const };
     },

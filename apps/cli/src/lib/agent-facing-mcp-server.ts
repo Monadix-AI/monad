@@ -118,6 +118,10 @@ function messageIdArg(args: Record<string, unknown>, name: string) {
   return value === undefined ? undefined : messageIdSchema.parse(value);
 }
 
+function deliveryModeArg(args: Record<string, unknown>): 'queue' | 'steer' {
+  return args.deliveryMode === 'steer' ? 'steer' : 'queue';
+}
+
 function numberArg(args: Record<string, unknown>, name: string): number | undefined {
   const value = args[name];
   return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
@@ -296,10 +300,12 @@ const planDeleteInputSchema = planToolInputSchema(nativeAgentProjectPlanDeleteRe
 const tools: ToolDef[] = [
   {
     name: 'project_post',
-    description: 'Post a public message to the current Workplace Project transcript.',
+    description:
+      'Post a public message to the current Workplace Project transcript and broadcast it to all other members regardless of mentions. deliveryMode=steer best-effort injects it into supported active recipient turns; otherwise it queues normally.',
     inputSchema: schema(
       {
         requestId: requestIdProperty,
+        deliveryMode: { type: 'string', enum: ['queue', 'steer'], default: 'queue' },
         text: { type: 'string' },
         replyToMessageId: { type: 'string' },
         attachments: {
@@ -375,11 +381,12 @@ const tools: ToolDef[] = [
   {
     name: 'agent_send',
     description:
-      'Send a private direct message to another Monad agent or human. This does not enter the project transcript.',
+      'Send a private direct message to another Monad agent or human. This does not enter the project transcript. deliveryMode=steer best-effort injects it into a supported active recipient turn; otherwise it queues normally.',
     inputSchema: schema(
       {
         requestId: requestIdProperty,
         to: { type: 'string' },
+        deliveryMode: { type: 'string', enum: ['queue', 'steer'], default: 'queue' },
         text: { type: 'string' },
         attachments: {
           type: 'array',
@@ -471,6 +478,7 @@ async function callTool(
       await nativeAgent.project.post.post(
         {
           requestId: stringArg(args, 'requestId', true),
+          deliveryMode: deliveryModeArg(args),
           ...(replyToMessageId ? { replyToMessageId } : {}),
           ...(text ? { text } : {}),
           ...(attachments ? { attachments } : {})
@@ -539,6 +547,7 @@ async function callTool(
         {
           requestId: stringArg(args, 'requestId', true),
           to: stringArg(args, 'to', true),
+          deliveryMode: deliveryModeArg(args),
           ...(text ? { text } : {}),
           ...(attachments ? { attachments } : {})
         },

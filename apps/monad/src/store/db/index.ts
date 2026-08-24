@@ -188,6 +188,7 @@ import {
   type ClaimedNativeAgentIngressItem,
   type ClaimNativeAgentIngressBatchInput,
   claimNativeAgentIngressBatch,
+  claimNativeAgentIngressForSteer,
   claimNextNativeAgentIngressBatch,
   consumeNativeAgentIngressBatch,
   consumeNativeAgentPendingInbox,
@@ -201,7 +202,8 @@ import {
   type NativeAgentIngressItem,
   type PendingNativeAgentIngressTarget,
   reconcileNativeAgentIngressAfterRestart,
-  releaseNativeAgentIngressBatch
+  releaseNativeAgentIngressBatch,
+  settleNativeAgentIngressSteer
 } from './native-agent-ingress.ts';
 import {
   type ReconcileNativeAgentMemberKeysResult,
@@ -1217,6 +1219,19 @@ export class Store {
     at?: string
   ): boolean {
     return bindNativeAgentIngressDelivery(this.sqlite, deliveryId, meshSessionId, providerSessionRef, at);
+  }
+
+  claimNativeAgentIngressForSteer(ingressId: string, at?: string): boolean {
+    return claimNativeAgentIngressForSteer(this.sqlite, ingressId, at);
+  }
+
+  settleNativeAgentIngressSteer(
+    ingressId: string,
+    accepted: boolean,
+    binding?: { meshSessionId: string; providerSessionRef?: string | null },
+    at?: string
+  ): boolean {
+    return settleNativeAgentIngressSteer(this.sqlite, ingressId, accepted, binding, at);
   }
 
   getNativeAgentIngressForDirectMessage(directMessageId: string): NativeAgentIngressItem | null {

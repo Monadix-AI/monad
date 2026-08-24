@@ -12,7 +12,7 @@ import { newId } from '@monad/protocol';
 import { getNativeAgentDirectMessage } from './native-agent-messages.ts';
 import { type MessageRow, rowToMessage } from './row-mappers.ts';
 
-type NativeAgentIngressState = 'queued' | 'claimed' | 'delivered' | 'visible' | 'consumed' | 'failed';
+type NativeAgentIngressState = 'queued' | 'steering' | 'claimed' | 'delivered' | 'visible' | 'consumed' | 'failed';
 
 type NativeAgentIngressSource =
   | { kind: 'project'; messageSeq: number; messageId: string }
@@ -176,6 +176,53 @@ export function bindNativeAgentIngressDelivery(
          WHERE delivery_id = ?`
       )
       .run(meshSessionId, providerSessionRef ?? null, at, deliveryId).changes > 0
+  );
+}
+
+export function claimNativeAgentIngressForSteer(
+  sqlite: Database,
+  ingressId: string,
+  at = new Date().toISOString()
+): boolean {
+  return (
+    sqlite
+      .query(
+        `UPDATE native_agent_ingress_items
+         SET state = 'steering', updated_at = ?
+         WHERE id = ? AND state = 'queued'`
+      )
+      .run(at, ingressId).changes > 0
+  );
+}
+
+export function settleNativeAgentIngressSteer(
+  sqlite: Database,
+  ingressId: string,
+  accepted: boolean,
+  binding?: { meshSessionId: string; providerSessionRef?: string | null },
+  at = new Date().toISOString()
+): boolean {
+  if (!accepted) {
+    return (
+      sqlite
+        .query(
+          `UPDATE native_agent_ingress_items
+           SET state = 'queued', updated_at = ?
+           WHERE id = ? AND state = 'steering'`
+        )
+        .run(at, ingressId).changes > 0
+    );
+  }
+  return (
+    sqlite
+      .query(
+        `UPDATE native_agent_ingress_items
+         SET state = 'consumed', mesh_session_id = COALESCE(?, mesh_session_id),
+             provider_session_ref = COALESCE(?, provider_session_ref),
+             consumed_at = COALESCE(consumed_at, ?), updated_at = ?
+         WHERE id = ? AND state = 'steering'`
+      )
+      .run(binding?.meshSessionId ?? null, binding?.providerSessionRef ?? null, at, at, ingressId).changes > 0
   );
 }
 
@@ -677,7 +724,7 @@ export function reconcileNativeAgentIngressAfterRestart(
       .query(
         `UPDATE native_agent_ingress_items
          SET state = 'queued', claim_batch_id = NULL, updated_at = ?
-         WHERE state = 'claimed'`
+         WHERE state IN ('claimed', 'steering')`
       )
       .run(at).changes;
     sqlite

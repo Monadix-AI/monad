@@ -344,23 +344,19 @@ test('resolveDirectMessageTarget classifies an exact projectMemberId of a canoni
   }
 });
 
-test('resolveDirectMessageTarget classifies a unique alias of a canonical binding-only member', () => {
+test('resolveDirectMessageTarget rejects a display-name alias of a canonical member', () => {
   const store = createStore();
   const sessionId = 'ses_dmtarget0002' as SessionId;
   try {
     boundSession(store, sessionId);
     boundMember(store, sessionId, 'pmem_codex_default', { profileId: 'codex', displayName: 'Lily' });
-    // Addressed by the member's display-name alias — resolves to its canonical pmid with no legacy row.
-    expect(resolveDirectMessageTarget(store, sessionId, [], 'Lily')).toEqual({
-      kind: 'project_member',
-      projectMemberId: 'pmem_codex_default'
-    });
+    expect(resolveDirectMessageTarget(store, sessionId, [], 'Lily')).toBeUndefined();
   } finally {
     store.close();
   }
 });
 
-test('resolveDirectMessageTarget throws AMBIGUOUS_MEMBER_TARGET when two canonical bindings share an alias', () => {
+test('resolveDirectMessageTarget never resolves a shared provider alias', () => {
   const store = createStore();
   const sessionId = 'ses_dmtarget0003' as SessionId;
   try {
@@ -368,31 +364,19 @@ test('resolveDirectMessageTarget throws AMBIGUOUS_MEMBER_TARGET when two canonic
     // Two canonical members backed by the same profile 'codex' — the template alias is ambiguous.
     boundMember(store, sessionId, 'pmem_codex_a', { profileId: 'codex', displayName: 'Rev A' });
     boundMember(store, sessionId, 'pmem_codex_b', { profileId: 'codex', displayName: 'Rev B' });
-    let thrown: unknown;
-    try {
-      resolveDirectMessageTarget(store, sessionId, [], 'codex');
-    } catch (err) {
-      thrown = err;
-    }
-    expect(thrown).toBeInstanceOf(AmbiguousMemberTargetError);
-    expect((thrown as AmbiguousMemberTargetError).code).toBe(AMBIGUOUS_MEMBER_TARGET_CODE);
-    expect((thrown as AmbiguousMemberTargetError).matchedMemberIds).toEqual(['pmem_codex_a', 'pmem_codex_b']);
+    expect(resolveDirectMessageTarget(store, sessionId, [], 'codex')).toBeUndefined();
   } finally {
     store.close();
   }
 });
 
-test('resolveDirectMessageTarget excludes a left canonical member, classifying its id as a private label', () => {
+test('resolveDirectMessageTarget excludes a left canonical member', () => {
   const store = createStore();
   const sessionId = 'ses_dmtarget0005' as SessionId;
   try {
     boundSession(store, sessionId);
     boundMember(store, sessionId, 'pmem_codex_left', { profileId: 'codex', displayName: 'Gone', lifecycle: 'left' });
-    // A left binding suppresses the member — its own pmid no longer resolves and is kept as a raw label.
-    expect(resolveDirectMessageTarget(store, sessionId, [], 'pmem_codex_left')).toEqual({
-      kind: 'private_label',
-      label: 'pmem_codex_left'
-    });
+    expect(resolveDirectMessageTarget(store, sessionId, [], 'pmem_codex_left')).toBeUndefined();
   } finally {
     store.close();
   }
@@ -415,38 +399,25 @@ test('resolveDirectMessageTarget ignores a legacy session_members row with no ca
       createdAt: now,
       updatedAt: now
     });
-    expect(resolveDirectMessageTarget(store, sessionId, [codex], 'pmem_ghost000001')).toEqual({
-      kind: 'private_label',
-      label: 'pmem_ghost000001'
-    });
-    expect(resolveDirectMessageTarget(store, sessionId, [codex], 'ghost')).toEqual({
-      kind: 'private_label',
-      label: 'ghost'
-    });
+    expect(resolveDirectMessageTarget(store, sessionId, [codex], 'pmem_ghost000001')).toBeUndefined();
+    expect(resolveDirectMessageTarget(store, sessionId, [codex], 'ghost')).toBeUndefined();
   } finally {
     store.close();
   }
 });
 
-test('resolveDirectMessageTarget resolves a canonical member by its provider spec name', () => {
+test('resolveDirectMessageTarget accepts the canonical member id but rejects provider and display aliases', () => {
   const store = createStore();
   const sessionId = 'ses_dmtarget0008' as SessionId;
   try {
     boundSession(store, sessionId);
     boundMember(store, sessionId, 'pmem_claude_rev1', { profileId: 'claude-code', displayName: 'Reviewer' });
-    expect(resolveDirectMessageTarget(store, sessionId, [claudeReviewer], 'claude-code')).toEqual({
-      kind: 'project_member',
-      projectMemberId: 'pmem_claude_rev1'
-    });
-    // Exact pmid and the display-name alias resolve to the same member.
+    expect(resolveDirectMessageTarget(store, sessionId, [claudeReviewer], 'claude-code')).toBeUndefined();
     expect(resolveDirectMessageTarget(store, sessionId, [claudeReviewer], 'pmem_claude_rev1')).toEqual({
       kind: 'project_member',
       projectMemberId: 'pmem_claude_rev1'
     });
-    expect(resolveDirectMessageTarget(store, sessionId, [claudeReviewer], 'Reviewer')).toEqual({
-      kind: 'project_member',
-      projectMemberId: 'pmem_claude_rev1'
-    });
+    expect(resolveDirectMessageTarget(store, sessionId, [claudeReviewer], 'Reviewer')).toBeUndefined();
   } finally {
     store.close();
   }
@@ -458,9 +429,20 @@ test('canonicalDirectMembers classifies a spec-backed member as a startable avai
   try {
     boundSession(store, sessionId);
     boundMember(store, sessionId, 'pmem_claude_rev1', {
-      profileId: 'claude-code',
+      profileId: 'pmem_claude_profile',
       displayName: 'Reviewer',
       workingDirectoryOverride: '/tmp/reviewer'
+    });
+    const now = new Date().toISOString();
+    store.insertSessionMember({
+      sessionId,
+      memberId: 'pmem_claude_rev1',
+      templateId: 'pmem_claude_profile',
+      type: 'mesh-agent',
+      meshSessionId: null,
+      data: { name: 'claude-code', displayName: 'Reviewer', settings: { managedProjectAgent: true } },
+      createdAt: now,
+      updatedAt: now
     });
     boundMember(store, sessionId, 'pmem_noconfig001', { profileId: 'unconfigured', displayName: 'Nobody' });
 
@@ -491,17 +473,13 @@ test('canonicalDirectMembers classifies a spec-backed member as a startable avai
   }
 });
 
-test('resolveDirectMessageTarget keeps a non-member addressing string as a verbatim private label', () => {
+test('resolveDirectMessageTarget rejects a non-member addressing string', () => {
   const store = createStore();
   const sessionId = 'ses_dmtarget0004' as SessionId;
   try {
     boundSession(store, sessionId);
     boundMember(store, sessionId, 'pmem_codex_default', { profileId: 'codex', displayName: 'Lily' });
-    // 'human:zeke' matches no member — it is the agent's private ledger label, returned untouched.
-    expect(resolveDirectMessageTarget(store, sessionId, [], 'human:zeke')).toEqual({
-      kind: 'private_label',
-      label: 'human:zeke'
-    });
+    expect(resolveDirectMessageTarget(store, sessionId, [], 'human:zeke')).toBeUndefined();
   } finally {
     store.close();
   }

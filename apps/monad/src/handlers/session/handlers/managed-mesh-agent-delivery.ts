@@ -3,6 +3,7 @@ import type {
   Event,
   ManagedMeshAgentLifecycleLogEvent,
   MessageId,
+  NativeAgentDeliveryMode,
   NativeAgentDirectMessage,
   Session,
   SessionId
@@ -81,6 +82,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
       triggerMessageId?: MessageId;
       agentName: string;
       projectMemberId: string;
+      deliveryMode: NativeAgentDeliveryMode;
     }
   >();
   const pendingDirectDeliveries = new Map<
@@ -91,6 +93,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
       message: NativeAgentDirectMessage;
       noticeText: string;
       agentName: string;
+      deliveryMode: NativeAgentDeliveryMode;
     }
   >();
 
@@ -121,7 +124,8 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     sender,
     triggerMessageId,
     exceptProjectMemberId,
-    onlyProjectMemberId
+    onlyProjectMemberId,
+    deliveryMode = 'queue'
   }: {
     session: Session;
     meshAgents: readonly MeshAgentConfig[];
@@ -130,6 +134,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     triggerMessageId?: MessageId;
     exceptProjectMemberId?: string;
     onlyProjectMemberId?: string;
+    deliveryMode?: NativeAgentDeliveryMode;
   }): Promise<void> {
     const managedMembers = managedMeshAgentProjectMembers(store, session.id, meshAgents);
     const unavailableMembers = unavailableManagedMeshAgentProjectMembers(store, session.id, meshAgents);
@@ -178,7 +183,8 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
         ...(sender ? { sender } : {}),
         ...(resolvedTriggerMessageId ? { triggerMessageId: resolvedTriggerMessageId } : {}),
         agentName: member.runtimeAgentName,
-        projectMemberId: member.projectMemberId
+        projectMemberId: member.projectMemberId,
+        deliveryMode
       });
     };
     const emitConnectionRequired = (member: ManagedMeshAgentProjectMember, reason: string) => {
@@ -233,14 +239,38 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
           const isGated = () =>
             Boolean(session.projectId && store.getNativeAgentMemberGate(session.id, member.projectMemberId));
           if (existing) {
+            let steerIngress: ReturnType<typeof store.enqueueNativeAgentIngressItem> | undefined;
             if (deliveredSeq > 0) {
-              store.enqueueMeshAgentInboxItem(existing.id, deliveredSeq, {
-                deliveryId,
-                ...(session.projectId ? { projectId: session.projectId } : {}),
-                memberInstanceId: member.projectMemberId,
-                triggerMessageId: resolvedTriggerMessageId,
-                providerSessionRef: existing.providerSessionRef ?? null
+              if (deliveryMode === 'steer' && resolvedTriggerMessageId) {
+                steerIngress = store.enqueueNativeAgentIngressItem({
+                  projectId,
+                  memberInstanceId: member.projectMemberId,
+                  meshSessionId: existing.id,
+                  source: {
+                    kind: 'project',
+                    messageSeq: deliveredSeq,
+                    messageId: resolvedTriggerMessageId
+                  },
+                  deliveryId,
+                  providerSessionRef: existing.providerSessionRef ?? null
+                });
+              } else {
+                store.enqueueMeshAgentInboxItem(existing.id, deliveredSeq, {
+                  deliveryId,
+                  ...(session.projectId ? { projectId: session.projectId } : {}),
+                  memberInstanceId: member.projectMemberId,
+                  triggerMessageId: resolvedTriggerMessageId,
+                  providerSessionRef: existing.providerSessionRef ?? null
+                });
+              }
+            }
+            if (steerIngress && store.claimNativeAgentIngressForSteer(steerIngress.id)) {
+              const accepted = await meshAgentHost.trySteer(existing.id, { input: meshAgentInputText(notice) });
+              store.settleNativeAgentIngressSteer(steerIngress.id, accepted, {
+                meshSessionId: existing.id,
+                providerSessionRef: existing.providerSessionRef
               });
+              if (accepted) return;
             }
             const supportsBatchClaims = typeof store.claimNativeAgentIngressBatch === 'function';
             batch = supportsBatchClaims
@@ -314,6 +344,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                     text,
                     ...(sender ? { sender } : {}),
                     ...(resolvedTriggerMessageId ? { triggerMessageId: resolvedTriggerMessageId } : {}),
+                    deliveryMode,
                     onlyProjectMemberId: member.projectMemberId
                   })
                 );
@@ -441,6 +472,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
                   text,
                   ...(sender ? { sender } : {}),
                   ...(resolvedTriggerMessageId ? { triggerMessageId: resolvedTriggerMessageId } : {}),
+                  deliveryMode,
                   onlyProjectMemberId: member.projectMemberId
                 })
               );
@@ -460,12 +492,14 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
     session,
     meshAgents,
     message,
-    noticeText
+    noticeText,
+    deliveryMode = 'queue'
   }: {
     session: Session;
     meshAgents: readonly MeshAgentConfig[];
     message: NativeAgentDirectMessage;
     noticeText: string;
+    deliveryMode?: NativeAgentDeliveryMode;
   }): Promise<void> {
     const fromAgentName = message.fromAgent;
     if (!fromAgentName) return;
@@ -523,7 +557,8 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
         meshAgents,
         message,
         noticeText,
-        agentName: runtimeAgentName
+        agentName: runtimeAgentName,
+        deliveryMode
       });
     };
     const emitConnectionRequired = (reason: string) => {
@@ -556,6 +591,14 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
         source: { kind: 'direct', directMessageId: message.id },
         createdAt: message.createdAt
       });
+      if (deliveryMode === 'steer' && existing && store.claimNativeAgentIngressForSteer(ingress.id)) {
+        const accepted = await meshAgentHost.trySteer(existing.id, { input: meshAgentInputText(notice) });
+        store.settleNativeAgentIngressSteer(ingress.id, accepted, {
+          meshSessionId: existing.id,
+          providerSessionRef: existing.providerSessionRef
+        });
+        if (accepted) return;
+      }
       const supportsBatchClaims = typeof store.claimNativeAgentIngressBatch === 'function';
       batch = supportsBatchClaims
         ? claimNativeAgentDeliveryBatch(store, projectId, session.id, member.projectMemberId)
@@ -614,7 +657,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
           });
           if (admission.reason === 'active') {
             await memberDeliveryCoordinator.runWhenIdle(session.id, member.projectMemberId, () =>
-              deliverDirectMessageToManagedMeshAgentMember({ session, meshAgents, message, noticeText })
+              deliverDirectMessageToManagedMeshAgentMember({ session, meshAgents, message, noticeText, deliveryMode })
             );
           }
           return;
@@ -683,7 +726,7 @@ export function createManagedMeshAgentDelivery(ctx: SessionContext) {
         });
         if (admission.reason === 'active') {
           await memberDeliveryCoordinator.runWhenIdle(session.id, member.projectMemberId, () =>
-            deliverDirectMessageToManagedMeshAgentMember({ session, meshAgents, message, noticeText })
+            deliverDirectMessageToManagedMeshAgentMember({ session, meshAgents, message, noticeText, deliveryMode })
           );
         }
         return;
