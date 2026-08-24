@@ -10,6 +10,7 @@ import { initMonadHome, loadAuth, loadConfig } from '@monad/environment';
 
 import { ModelService } from '#/handlers/settings/model/index.ts';
 import { registerAgentAdapterImpl } from '#/services/mesh-agent/index.ts';
+import { killMeshAgentProcess } from '#/services/mesh-agent/process.ts';
 import { createHttpTransport } from '#/transports/http.ts';
 import { writeControllableMeshAgentCli } from '../fixtures/controllable-mesh-agent-cli.ts';
 import {
@@ -215,7 +216,7 @@ for (const kind of TRANSPORTS) {
         const running = handlers.store.getMeshSession(meshSession.id);
         if (running?.pid == null) throw new Error('expected the hung turn to still have a live pid');
 
-        process.kill(running.pid, 'SIGKILL');
+        killMeshAgentProcess(running.pid, 'SIGKILL');
         await Promise.all([inputPromise, settledSnapshot.result]);
         settledSnapshot.restore();
 
