@@ -1,6 +1,6 @@
 import type { AtomPackManifestWire } from '@monad/protocol';
 
-import { lstat, mkdir, readdir, writeFile } from 'node:fs/promises';
+import { lstat, mkdir, readdir } from 'node:fs/promises';
 import { dirname, isAbsolute, join, posix, relative, resolve, sep } from 'node:path';
 import { parseAtomPackManifest } from '@monad/protocol';
 
@@ -93,7 +93,7 @@ export async function packageAtomPack(options: PackageAtomPackOptions): Promise<
   }
   const archiveHash = sha256(archive);
   await mkdir(dirname(artifact), { recursive: true });
-  await writeFile(artifact, archive);
+  await Bun.write(artifact, archive);
 
   return {
     name: manifest.name,

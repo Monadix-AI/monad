@@ -1,5 +1,5 @@
 import { expect, test } from 'bun:test';
-import { mkdir, rm } from 'node:fs/promises';
+import { mkdir, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 
@@ -31,13 +31,20 @@ test('atom pack runs without resolving a daemon connection', async () => {
       [process.execPath, resolve(import.meta.dir, '../../src/main.ts'), 'atom', 'pack', root, '--out', output],
       { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, MONAD_SERVER_URL: 'http://127.0.0.1:1' } }
     );
-    const [exitCode, stderr] = await Promise.all([proc.exited, new Response(proc.stderr).text()]);
+    const [exitCode, stdout, stderr] = await Promise.all([
+      proc.exited,
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text()
+    ]);
+    const artifact = await readFile(output);
+    const sha256 = new Bun.CryptoHasher('sha256').update(artifact).digest('hex');
 
-    expect({ exitCode, stderr, artifact: await Bun.file(output).exists() }).toEqual({
+    expect({ exitCode, stderr, zipHeader: [...artifact.subarray(0, 4)] }).toEqual({
       exitCode: 0,
       stderr: '',
-      artifact: true
+      zipHeader: [80, 75, 3, 4]
     });
+    expect(stdout.replaceAll('\r\n', '\n')).toBe(`packed Atom Pack ${output}\nSHA-256 ${sha256}\n`);
   } finally {
     await rm(root, { recursive: true, force: true });
   }
