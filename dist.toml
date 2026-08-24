@@ -1,6 +1,6 @@
 [package]
 name = "monad"
-version = "0.1.7"
+version = "0.1.8"
 description = "Daemon-first agent team runtime with headless architecture."
 homepage = "https://monadix.ai"
 license = "Apache-2.0"
