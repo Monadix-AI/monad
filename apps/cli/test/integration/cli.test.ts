@@ -28,7 +28,7 @@ test('atom pack runs without resolving a daemon connection', async () => {
 
   try {
     const proc = Bun.spawn(
-      [process.execPath, resolve(import.meta.dir, '../../src/main.ts'), 'atom', 'pack', root, '--out', output],
+      [process.execPath, resolve(import.meta.dir, '../../src/bin.ts'), 'atom', 'pack', root, '--out', output],
       { stdout: 'pipe', stderr: 'pipe', env: { ...process.env, MONAD_SERVER_URL: 'http://127.0.0.1:1' } }
     );
     const [exitCode, stdout, stderr] = await Promise.all([
