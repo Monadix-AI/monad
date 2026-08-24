@@ -134,7 +134,7 @@ export function RuntimeOverview() {
     <PanelShell>
       <StudioBreadcrumbHeader title={t('web.studio.runtimeOverview')} />
       <PanelShellBody>
-        <div className="mx-auto grid max-w-6xl gap-5 p-4 pb-24 lg:grid-cols-[minmax(0,1fr)_19rem] lg:p-6 lg:pb-24">
+        <div className="mx-auto grid w-full max-w-6xl gap-5 p-4 pb-24 lg:grid-cols-[minmax(0,1fr)_19rem] lg:p-6 lg:pb-24">
           <main className="flex min-w-0 flex-col gap-5">
             <section className="grid gap-5 rounded-xl border bg-card px-5 py-5 shadow-xs md:grid-cols-[minmax(0,1fr)_17rem] md:items-center">
               <div className="min-w-0">

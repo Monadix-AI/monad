@@ -15,7 +15,7 @@ export function ThirdPartyAgentsSettings({ onClose }: StudioSectionProps) {
         <p className="max-w-[72ch] text-muted-foreground text-sm">{t('web.studio.acpDelegatesDesc')}</p>
       </div>
       <PanelShellBody>
-        <div className="mx-auto max-w-5xl p-4 lg:p-5">
+        <div className="mx-auto w-full max-w-5xl p-4 lg:p-5">
           <section className="overflow-hidden rounded-xl border bg-card">
             <AcpAgentsSettings
               embedded

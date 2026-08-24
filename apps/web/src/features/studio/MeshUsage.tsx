@@ -3,11 +3,12 @@ import type { ChannelIcon } from '@monad/protocol';
 import { LoaderPinwheelIcon } from '@hugeicons/core-free-icons';
 import { HugeiconsIcon } from '@hugeicons/react';
 import { useGetMeshUsageOverviewQuery, useListMeshAgentPresetsQuery } from '@monad/client-rtk';
-import { Card, cn, ProductIcon, Skeleton } from '@monad/ui';
+import { Card, cn, ProductIcon } from '@monad/ui';
 import { useMemo, useState } from 'react';
 
 import { BrandIcon } from '#/components/BrandIcon';
 import { useT } from '#/components/I18nProvider';
+import { MeshUsageSkeleton } from './MeshUsageSkeleton';
 import {
   buildMeshUsageView,
   type MeshUsageProviderGroup,
@@ -17,7 +18,6 @@ import {
 } from './mesh-usage-data';
 
 type DetailDimension = 'provider' | 'session';
-const SUMMARY_SKELETON_KEYS = ['providers', 'agents', 'projects', 'sessions', 'tokens'] as const;
 
 function fmtTokens(value: number): string {
   if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(1)}M`;
@@ -128,28 +128,6 @@ function SessionCard({ group }: { group: MeshUsageSessionGroup }) {
         title={t('web.studio.meshUsageTopAgentMembers')}
       />
     </Card>
-  );
-}
-
-function MeshUsageSkeleton() {
-  return (
-    <div
-      aria-busy="true"
-      className="flex flex-col gap-5"
-    >
-      <section className="rounded-xl border bg-card p-4">
-        <Skeleton className="h-5 w-28" />
-        <div className="mt-4 grid grid-cols-2 gap-2 lg:grid-cols-5">
-          {SUMMARY_SKELETON_KEYS.map((key) => (
-            <Skeleton
-              className="h-16 rounded-lg"
-              key={key}
-            />
-          ))}
-        </div>
-      </section>
-      <Skeleton className="h-64 rounded-xl" />
-    </div>
   );
 }
 

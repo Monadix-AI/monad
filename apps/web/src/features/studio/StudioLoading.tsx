@@ -1,11 +1,8 @@
-import type { ComponentType, ReactNode } from 'react';
+import type { ReactNode } from 'react';
 
 import { Card, Skeleton } from '@monad/ui';
 
-import { studioSectionFromPathname } from '#/features/shell/routing/paths';
 import { MeshAgentPresetSkeleton } from '#/features/studio/third-party-agents/MeshAgentPresetSkeleton';
-import { useShellPathname } from '#/hooks/use-shell-location';
-import { DEFAULT_STUDIO_SECTION, type StudioSectionId } from './sections';
 
 const keys = (prefix: string, count: number) => Array.from({ length: count }, (_, index) => `${prefix}-${index}`);
 
@@ -62,7 +59,7 @@ function RuntimeRowSkeleton({ index }: { index: number }) {
   );
 }
 
-function RuntimeStudioLoading() {
+export function RuntimeStudioLoading() {
   return (
     <PanelFrame>
       <StudioHeaderSkeleton
@@ -70,7 +67,7 @@ function RuntimeStudioLoading() {
         badge
       />
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="mx-auto grid h-full max-w-6xl gap-5 overflow-hidden p-4 lg:grid-cols-[minmax(0,1fr)_19rem] lg:p-6">
+        <div className="mx-auto grid h-full w-full max-w-6xl gap-5 overflow-hidden p-4 lg:grid-cols-[minmax(0,1fr)_19rem] lg:p-6">
           <main className="flex min-w-0 flex-col gap-5 overflow-hidden">
             <Card className="grid gap-5 px-5 py-5 md:grid-cols-[minmax(0,1fr)_17rem] md:items-center">
               <div className="min-w-0 space-y-3">
@@ -129,7 +126,7 @@ export function ModelsStudioLoading() {
     <PanelFrame>
       <StudioHeaderSkeleton actions={0} />
       <div className="min-h-0 flex-1 overflow-hidden">
-        <div className="mx-auto flex max-w-5xl flex-col gap-5 p-5">
+        <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 p-5">
           <ModelSectionLoading
             cardClassName="h-[4.5rem]"
             count={3}
@@ -567,7 +564,7 @@ export function AcpAgentsStudioLoading() {
         <Skeleton className="h-4 w-3/5 rounded" />
       </div>
       <div className="min-h-0 flex-1 overflow-hidden p-5">
-        <section className="mx-auto max-w-5xl overflow-hidden rounded-xl border bg-card">
+        <section className="mx-auto w-full max-w-5xl overflow-hidden rounded-xl border bg-card">
           <div className="border-b bg-muted/30 px-5 py-2">
             <Skeleton className="h-3 w-4/5 rounded" />
           </div>
@@ -622,36 +619,4 @@ function PresetPanelSkeleton() {
       </div>
     </div>
   );
-}
-
-export function StudioRouteLoading() {
-  const section = studioSectionFromPathname(useShellPathname()) ?? DEFAULT_STUDIO_SECTION;
-  const Loading = STUDIO_LOADING_COMPONENTS[section] ?? RuntimeStudioLoading;
-  return <Loading />;
-}
-
-const STUDIO_LOADING_COMPONENTS: Partial<Record<StudioSectionId, ComponentType>> = {
-  acpAgents: AcpAgentsStudioLoading,
-  acpDelegates: AcpAgentsStudioLoading,
-  approvals: ApprovalsStudioLoading,
-  atoms: AtomsStudioLoading,
-  capabilities: CapabilitiesStudioLoading,
-  channels: ChannelsStudioLoading,
-  meshAgents: MeshAgentsStudioLoading,
-  graph: MemoryGraphStudioLoading,
-  hooks: HooksStudioLoading,
-  import: ImportStudioLoading,
-  mcpAtoms: CapabilitiesStudioLoading,
-  mcpServers: CapabilitiesStudioLoading,
-  mem0: MemoryMem0StudioLoading,
-  memory: MemorySettingsStudioLoading,
-  models: ModelsStudioLoading,
-  skills: SkillsStudioLoading,
-  thirdPartyAgents: AcpAgentsStudioLoading,
-  tools: CapabilitiesStudioLoading,
-  runtime: RuntimeStudioLoading
-};
-
-function _StudioLoading() {
-  return <RuntimeStudioLoading />;
 }
