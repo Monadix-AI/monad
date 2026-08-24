@@ -92,14 +92,16 @@ test('the resolved runtime skips the bun-node shim that turbo runs tasks through
 });
 
 test('the resolved runtime prefers setup-bun installation over the task shim and PATH', () => {
+  const bunInstall = join('runner', '.bun');
+  const expected = join(bunInstall, 'bin', process.platform === 'win32' ? 'bun.exe' : 'bun');
   expect(
     resolvePlaywrightRuntime(
       undefined,
-      (path) => path === '/home/runner/.bun/bin/bun',
-      { BUN_INSTALL: '/home/runner/.bun', PATH: '/tmp/bun-node-task:/usr/bin' },
-      'linux'
+      (path) => path === expected,
+      { BUN_INSTALL: bunInstall, PATH: join('tmp', 'bun-node-task') },
+      process.platform
     )
-  ).toBe('/home/runner/.bun/bin/bun');
+  ).toBe(expected);
 });
 
 test('the resolved runtime falls back to PATH lookup when no candidate exists on disk', () => {
