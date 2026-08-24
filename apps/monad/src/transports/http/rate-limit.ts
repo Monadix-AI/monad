@@ -11,7 +11,10 @@ export interface IpRateLimiter {
   allow(ip: string): null | number;
 }
 
-export function createIpRateLimiter({ capacity, refillPerSec }: RateLimitConfig): IpRateLimiter {
+export function createIpRateLimiter(
+  { capacity, refillPerSec }: RateLimitConfig,
+  now: () => number = Date.now
+): IpRateLimiter {
   // Keyed by peer IP. Bounded in practice by the number of distinct remote peers (TCP
   // source addresses can't be spoofed on an established connection).
   const buckets = new Map<string, Bucket>();
@@ -19,14 +22,14 @@ export function createIpRateLimiter({ capacity, refillPerSec }: RateLimitConfig)
 
   return {
     allow(ip: string): null | number {
-      const now = Date.now();
+      const currentTime = now();
       let bucket = buckets.get(ip);
       if (!bucket) {
-        bucket = { tokens: capacity, lastRefillMs: now };
+        bucket = { tokens: capacity, lastRefillMs: currentTime };
         buckets.set(ip, bucket);
       }
-      bucket.tokens = Math.min(capacity, bucket.tokens + (now - bucket.lastRefillMs) * refillPerMs);
-      bucket.lastRefillMs = now;
+      bucket.tokens = Math.min(capacity, bucket.tokens + (currentTime - bucket.lastRefillMs) * refillPerMs);
+      bucket.lastRefillMs = currentTime;
       if (bucket.tokens < 1) {
         const waitMs = (1 - bucket.tokens) / refillPerMs;
         return Math.ceil(waitMs / 1000);
