@@ -3,8 +3,6 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { readDaemonUrl } from '../../server/index.ts';
-
 test('readDaemonUrl uses configured HTTPS from mesh config', () => {
   const home = join(tmpdir(), `monad-route-proxy-${Date.now()}`);
   mkdirSync(join(home, 'configs'), { recursive: true });
@@ -19,16 +17,27 @@ test('readDaemonUrl uses configured HTTPS from mesh config', () => {
     })
   );
 
-  const prevHome = process.env.MONAD_HOME;
-  const prevPort = process.env.MONAD_PORT;
-  process.env.MONAD_HOME = home;
-  process.env.MONAD_PORT = '52522';
+  const env: Record<string, string | undefined> = { ...process.env, MONAD_HOME: home, MONAD_PORT: '52522' };
+  delete env.MONAD_URL;
+  const moduleUrl = new URL('../../server/index.ts', import.meta.url).href;
 
   try {
-    expect(readDaemonUrl()).toBe('https://127.0.0.1:52522');
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        '-e',
+        `const { readDaemonUrl } = await import(${JSON.stringify(moduleUrl)}); console.log(readDaemonUrl());`
+      ],
+      env,
+      stderr: 'pipe',
+      stdout: 'pipe'
+    });
+    expect({
+      exitCode: result.exitCode,
+      stderr: result.stderr.toString(),
+      stdout: result.stdout.toString().trim()
+    }).toEqual({ exitCode: 0, stderr: '', stdout: 'https://127.0.0.1:52522' });
   } finally {
-    process.env.MONAD_HOME = prevHome;
-    process.env.MONAD_PORT = prevPort;
     rmSync(home, { recursive: true, force: true });
   }
 });

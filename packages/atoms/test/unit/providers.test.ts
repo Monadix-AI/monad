@@ -18,7 +18,8 @@ function fakeFetch(handler: FetchHandler): typeof fetch {
 }
 function sseResponse(deltas: string[]): Response {
   const frames = deltas.map((c) => `data: ${JSON.stringify({ choices: [{ delta: { content: c } }] })}\n\n`).join('');
-  return new Response(`${frames}data: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
+  const finish = `data: ${JSON.stringify({ choices: [{ delta: {}, finish_reason: 'stop' }] })}\n\n`;
+  return new Response(`${frames}${finish}data: [DONE]\n\n`, { headers: { 'Content-Type': 'text/event-stream' } });
 }
 function jsonResponse(text: string): Response {
   const body = {

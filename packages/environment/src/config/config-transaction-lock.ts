@@ -18,7 +18,7 @@ interface UnixNativeLockLibrary {
   semget(key: number, count: number, flags: number): number;
   semop(id: number, operations: Pointer | null, count: number | bigint): number;
   semctl(id: number, index: number, command: number): number;
-  errno(): Pointer | null;
+  errno(): Pointer | bigint | null;
   close(): void;
 }
 
@@ -341,7 +341,7 @@ async function withLocalLock<T>(key: string, timeoutMs: number, run: (remainingM
   }
 }
 
-function readUnixErrno(library: UnixNativeLockLibrary, read: (pointer: Pointer) => number): number {
+function readUnixErrno(library: UnixNativeLockLibrary, read: (pointer: Pointer | bigint) => number): number {
   const pointer = library.errno();
   if (pointer === null) return 0;
   return read(pointer);
