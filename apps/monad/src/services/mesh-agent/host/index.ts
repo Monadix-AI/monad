@@ -384,7 +384,10 @@ export class MeshAgentHost {
     try {
       const completion = live.sessionEventRuntime.input(
         { text: req.input, attachments: [] },
-        { waitForSettlement: live.runtimeRole === 'managed-project-agent' }
+        {
+          waitForPriorSettlement: live.runtimeRole === 'managed-project-agent',
+          waitForSettlement: live.runtimeRole === 'managed-project-agent'
+        }
       );
       options?.onAccepted?.();
       await completion;

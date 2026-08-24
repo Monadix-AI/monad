@@ -913,6 +913,90 @@ describe('generic session-event runtime executor', () => {
     await executor.close();
   });
 
+  test('keeps a managed input behind an unsettled initial resident turn', async () => {
+    let releaseInitialFinal = () => {};
+    let releaseManagedFinal = () => {};
+    let markManagedSent = () => {};
+    const initialFinal = new Promise<void>((resolve) => {
+      releaseInitialFinal = resolve;
+    });
+    const managedFinal = new Promise<void>((resolve) => {
+      releaseManagedFinal = resolve;
+    });
+    const managedSent = new Promise<void>((resolve) => {
+      markManagedSent = resolve;
+    });
+    const sends: string[] = [];
+    const residentDriver = driver('resident');
+    residentDriver.sendTurn = async (input) => {
+      sends.push(input.text);
+      if (input.text === 'managed delivery') markManagedSent();
+    };
+    residentDriver.accept = async (_packet, sink) => {
+      await sink.emit({ type: 'agent_message', payload: { text: 'done', final: true } });
+    };
+    const executor = new SessionEventRuntimeExecutor({
+      definition: {
+        plan: {
+          processModel: 'resident',
+          launch: { args: ['serve'], cwd: '/workspace' },
+          channel: { kind: 'child-stdio' },
+          startup: { timeoutMs: 1_000 }
+        },
+        driver: residentDriver
+      },
+      executable: '/bin/provider',
+      allowedWorkingRoot: '/workspace',
+      workingPath: '/workspace',
+      resourceFactory: {
+        async start() {
+          const runtime = activation({ pending: true });
+          runtime.packets = async function* () {
+            await initialFinal;
+            yield {
+              bytes: new TextEncoder().encode('initial completed'),
+              source: 'provider-channel',
+              receivedAt: '2026-08-24T00:00:00.000Z'
+            };
+            await managedFinal;
+            yield {
+              bytes: new TextEncoder().encode('managed completed'),
+              source: 'provider-channel',
+              receivedAt: '2026-08-24T00:00:01.000Z'
+            };
+          };
+          return runtime;
+        }
+      },
+      createObservationEpoch: () => 'epoch-1',
+      captureRaw: async () => {},
+      consumeEvent: async () => {}
+    });
+
+    await executor.open({ text: 'initial turn', attachments: [] });
+    let settled = false;
+    const managedInput = executor
+      .input({ text: 'managed delivery', attachments: [] }, { waitForPriorSettlement: true, waitForSettlement: true })
+      .then(() => {
+        settled = true;
+      });
+    await Bun.sleep(0);
+    expect({ sends, settled }).toEqual({ sends: ['initial turn'], settled: false });
+
+    releaseInitialFinal();
+    await managedSent;
+    expect({ sends, settled }).toEqual({ sends: ['initial turn', 'managed delivery'], settled: false });
+
+    releaseManagedFinal();
+    await managedInput;
+    expect({ sends, settled, activity: executor.snapshot().activity.state }).toEqual({
+      sends: ['initial turn', 'managed delivery'],
+      settled: true,
+      activity: 'idle'
+    });
+    await executor.close();
+  });
+
   test('treats an unexpected resident process exit as a terminal failure even with exit code zero', async () => {
     const executor = new SessionEventRuntimeExecutor({
       definition: {
