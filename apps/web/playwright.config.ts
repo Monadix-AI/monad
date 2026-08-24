@@ -36,15 +36,19 @@ export function resolvePlaywrightWebPort(
 // answered the port, so the server has to be started by a real Bun. Same exclusion the mesh e2e
 // fixture applies when it picks a Bun to compile with.
 export function resolvePlaywrightRuntime(
-  candidates: Array<string | undefined | null> = [
-    process.execPath,
-    ...(process.env.PATH ?? '').split(delimiter).flatMap((dir) => (dir ? [join(dir, 'bun')] : []))
-  ],
-  exists: (path: string) => boolean = existsSync
+  candidates?: Array<string | undefined | null>,
+  exists: (path: string) => boolean = existsSync,
+  env: NodeJS.ProcessEnv = process.env,
+  platform = process.platform
 ): string {
-  const runtime = candidates.find(
-    (candidate): candidate is string => !!candidate && !candidate.includes('bun-node-') && exists(candidate)
-  );
+  const executable = platform === 'win32' ? 'bun.exe' : 'bun';
+  const runtime = (
+    candidates ?? [
+      env.BUN_INSTALL ? join(env.BUN_INSTALL, 'bin', executable) : undefined,
+      process.execPath,
+      ...(env.PATH ?? '').split(delimiter).flatMap((dir) => (dir ? [join(dir, executable)] : []))
+    ]
+  ).find((candidate): candidate is string => !!candidate && !candidate.includes('bun-node-') && exists(candidate));
   return runtime ?? 'bun';
 }
 
