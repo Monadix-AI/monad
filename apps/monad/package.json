@@ -4,7 +4,7 @@
   "dependencies": {
     "@a2a-js/sdk": "^1.0.1",
     "@agentclientprotocol/sdk": "^1.4.0",
-    "@arizeai/openinference-semantic-conventions": "^2.7.0",
+    "@arizeai/openinference-semantic-conventions": "^2.8.0",
     "@arizeai/openinference-vercel": "^3.1.5",
     "@dicebear/core": "^10.6.1",
     "@dicebear/styles": "^10.5.0",
