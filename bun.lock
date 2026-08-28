@@ -59,7 +59,7 @@
         "@a2a-js/sdk": "^1.0.1",
         "@agentclientprotocol/sdk": "^1.4.0",
         "@arizeai/openinference-semantic-conventions": "^2.7.0",
-        "@arizeai/openinference-vercel": "^3.1.5",
+        "@arizeai/openinference-vercel": "^3.1.6",
         "@dicebear/core": "^10.6.1",
         "@dicebear/styles": "^10.5.0",
         "@elysiajs/server-timing": "^1.4.1",
@@ -322,7 +322,7 @@
     },
     "packages/protocol": {
       "name": "@monad/protocol",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "zod": "^4.4.3",
       },
@@ -363,7 +363,7 @@
     },
     "packages/sdk-atom": {
       "name": "@monad/sdk-atom",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "@monad/protocol": "workspace:*",
         "zod": "^4.4.3",
@@ -376,7 +376,7 @@
     },
     "packages/sdk-experience": {
       "name": "@monad/sdk-experience",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "@monad/client-rtk": "workspace:*",
         "@monad/protocol": "workspace:*",
@@ -527,13 +527,13 @@
 
     "@anthropic-ai/sdk": ["@anthropic-ai/sdk@0.120.0", "", { "dependencies": { "json-schema-to-ts": "^3.1.1", "standardwebhooks": "^1.0.0" }, "peerDependencies": { "zod": "^3.25.0 || ^4.0.0" }, "optionalPeers": ["zod"], "bin": { "anthropic-ai-sdk": "bin/cli" } }, "sha512-ZlvmNFT/iIF6JD13rxbbMWD8nvGR0RaUp6yMQnoc+4Af0YjVVe/bIdW1XSQQsoxXAtg1NaT6Vak0LKFlJ4d37Q=="],
 
-    "@arizeai/openinference-core": ["@arizeai/openinference-core@2.5.2", "", { "dependencies": { "@arizeai/openinference-semantic-conventions": "2.7.0", "@opentelemetry/api": "^1.9.0", "@opentelemetry/core": "^2.8.0" } }, "sha512-FG1O2gwl10Ls3lHXJZS/6wTGwSNTQVEaEmmrG9z+bvo7FvAd0liDe4Q5UOx760luFXhVw9s9kisGlv/igyIATw=="],
+    "@arizeai/openinference-core": ["@arizeai/openinference-core@2.5.3", "", { "dependencies": { "@arizeai/openinference-semantic-conventions": "2.8.0", "@opentelemetry/api": "^1.9.0", "@opentelemetry/core": "^2.8.0" } }, "sha512-erWBuOBHrvqLhuqpzAXWVPOcoPIjHrw63/pNV6IMORs+0BRZvUH/dSb382krURzubRhfvAvZVP624XnOOwb99Q=="],
 
-    "@arizeai/openinference-genai": ["@arizeai/openinference-genai@0.3.4", "", { "dependencies": { "@arizeai/openinference-semantic-conventions": "2.7.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.9.0", "@opentelemetry/semantic-conventions": ">=1.41.1" } }, "sha512-LqMmzucu+CfpWjM6AFPH3P2gmiwgSZmHTgvUyY8Fs1lv+i1PzQjgdZFeqCY12o6dmgzSRqFK4b+YvrX8eOgg9g=="],
+    "@arizeai/openinference-genai": ["@arizeai/openinference-genai@0.3.5", "", { "dependencies": { "@arizeai/openinference-semantic-conventions": "2.8.0" }, "peerDependencies": { "@opentelemetry/api": ">=1.9.0", "@opentelemetry/semantic-conventions": ">=1.41.1" } }, "sha512-6La3QULjCV5+bu3XpCkoezqssjWVYh5/DIkEgCYy6GhWCyK1pZrZaEL9mACooeGXVOv3f3kb54ZTQDs+KfhoJQ=="],
 
-    "@arizeai/openinference-semantic-conventions": ["@arizeai/openinference-semantic-conventions@2.7.0", "", {}, "sha512-POJ0LN6akXRsZnx5KPOyYY19zzOeBUlKx4Sg8zQCgmL12uCPxygagjfa+xGWf76NvIqwZ0bYzDxjICk5JbxHMw=="],
+    "@arizeai/openinference-semantic-conventions": ["@arizeai/openinference-semantic-conventions@2.8.0", "", {}, "sha512-2Ep10THclKGfAY+Iu9ojhjTuKZpnPZ185O2bI+l2fyOT4ODBWJzjE9iRweeLqNaRPHdxCAZWGTjdXTf3Z67Kgg=="],
 
-    "@arizeai/openinference-vercel": ["@arizeai/openinference-vercel@3.1.5", "", { "dependencies": { "@arizeai/openinference-core": "2.5.2", "@arizeai/openinference-genai": "0.3.4", "@arizeai/openinference-semantic-conventions": "2.7.0", "@opentelemetry/core": "^1.30.1", "@opentelemetry/semantic-conventions": ">=1.41.1 <2.0.0" }, "peerDependencies": { "@ai-sdk/otel": "^1.0.0", "@opentelemetry/api": ">=1.7.0 <2.0.0", "ai": "^7.0.0" } }, "sha512-GRtdNpb8mkbaT18e64TU17SbOq/T+FcSw4V91G6mvBmFXQzGKVNXtLY/4fpxMB/G1lecYpcRHOjwE9eiSMKsmA=="],
+    "@arizeai/openinference-vercel": ["@arizeai/openinference-vercel@3.1.6", "", { "dependencies": { "@arizeai/openinference-core": "2.5.3", "@arizeai/openinference-genai": "0.3.5", "@arizeai/openinference-semantic-conventions": "2.8.0", "@opentelemetry/core": "^1.30.1", "@opentelemetry/semantic-conventions": ">=1.41.1 <2.0.0" }, "peerDependencies": { "@ai-sdk/otel": "^1.0.0", "@opentelemetry/api": ">=1.7.0 <2.0.0", "ai": "^7.0.0" } }, "sha512-3ki0Igf+HsOCnJe9wI5dpzateZdvFoSUsuUUW4KiolVg0kjA38xp5qQXzfDgC+x/LdefWDnsz9qmbNhbq6Vd+w=="],
 
     "@ark/schema": ["@ark/schema@0.56.2", "", { "dependencies": { "@ark/util": "0.56.2" } }, "sha512-Qx4D2JFbBWpntiHZaTv7bGG4H/M2rigiknezKg/WVyDSaLdE4YCcWAOoFB7pjjDqHbbV2OqRfntm1nnXvwMexg=="],
 
