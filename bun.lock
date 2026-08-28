@@ -322,7 +322,7 @@
     },
     "packages/protocol": {
       "name": "@monad/protocol",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "zod": "^4.4.3",
       },
@@ -363,7 +363,7 @@
     },
     "packages/sdk-atom": {
       "name": "@monad/sdk-atom",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "@monad/protocol": "workspace:*",
         "zod": "^4.4.3",
@@ -376,7 +376,7 @@
     },
     "packages/sdk-experience": {
       "name": "@monad/sdk-experience",
-      "version": "0.1.6",
+      "version": "0.1.7",
       "dependencies": {
         "@monad/client-rtk": "workspace:*",
         "@monad/protocol": "workspace:*",
@@ -415,7 +415,7 @@
         "@streamdown/mermaid": "^1.0.2",
         "@tanstack/react-virtual": "^3.14.10",
         "@tiptap/core": "^3.30.2",
-        "@tiptap/extension-document": "^3.30.2",
+        "@tiptap/extension-document": "^3.30.3",
         "@tiptap/extension-list": "^3.30.2",
         "@tiptap/extension-mention": "^3.30.2",
         "@tiptap/extension-paragraph": "^3.30.2",
@@ -1525,7 +1525,7 @@
 
     "@tiptap/extension-bubble-menu": ["@tiptap/extension-bubble-menu@3.30.2", "", { "dependencies": { "@floating-ui/dom": "^1.0.0" }, "peerDependencies": { "@tiptap/core": "3.30.2", "@tiptap/pm": "3.30.2" } }, "sha512-oS0WiWNXHKpiPYMkcnHm1j7iEvufTGGtLFtcJJd3olb5OS6V2acoXVDL0nNJDmRQ32K3QXut3fbRcMseMxT+lw=="],
 
-    "@tiptap/extension-document": ["@tiptap/extension-document@3.30.2", "", { "peerDependencies": { "@tiptap/core": "3.30.2" } }, "sha512-+xIv67V+/2L1uvz98FAT5W7kWEfHwfNV3MD7b4UsKPU0lhcCWuVOXy0JB8yYmdNExqpI7xT9g3MWzREoBvBQSg=="],
+    "@tiptap/extension-document": ["@tiptap/extension-document@3.30.3", "", { "peerDependencies": { "@tiptap/core": "3.30.3" } }, "sha512-B9gqrgM1uHjCKr/PSnnSl+bS+YQb5EN/PUW9KWp9nSgmIaqxXws2ufqowS65uTLJLqd7pwF4l5lUrsfhq0EKzw=="],
 
     "@tiptap/extension-floating-menu": ["@tiptap/extension-floating-menu@3.30.2", "", { "peerDependencies": { "@floating-ui/dom": "^1.0.0", "@tiptap/core": "3.30.2", "@tiptap/pm": "3.30.2" } }, "sha512-A8PLvvh8W6PUMrqh+EpBerxm+Ucr0irGxJvwAnzYQmNGNIJ9U4OVgw4OcEU+9JH0gMmEzDcHzMPP2s/s1lIcyw=="],
 

@@ -19,7 +19,7 @@
     "@streamdown/mermaid": "^1.0.2",
     "@tanstack/react-virtual": "^3.14.10",
     "@tiptap/core": "^3.30.2",
-    "@tiptap/extension-document": "^3.30.2",
+    "@tiptap/extension-document": "^3.30.3",
     "@tiptap/extension-list": "^3.30.2",
     "@tiptap/extension-mention": "^3.30.2",
     "@tiptap/extension-paragraph": "^3.30.2",
