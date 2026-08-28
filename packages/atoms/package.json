@@ -10,7 +10,7 @@
     "@ai-sdk/mistral": "^4.0.32",
     "@ai-sdk/openai": "^4.0.46",
     "@ai-sdk/openai-compatible": "^3.0.35",
-    "@ai-sdk/otel": "^1.0.77",
+    "@ai-sdk/otel": "^1.0.79",
     "@anthropic-ai/claude-agent-sdk": "0.3.241",
     "@hugeicons/core-free-icons": "^4.3.0",
     "@hugeicons/react": "^1.1.10",
