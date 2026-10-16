@@ -13,7 +13,7 @@
 
 # Pin to the repo's bun version (package.json packageManager) so install/hoisting
 # behaviour matches CI and the host, not whatever floating 1.x the tag resolves to.
-FROM oven/bun:1.4.0-alpine@sha256:07235578f79ef8c6f97d94aee7938e76f5cdba5f21ae5dbfdd3d3d38058437eb AS musl-tester
+FROM oven/bun:1.4.3-alpine@sha256:629e17411f1f129dbec3af78d5af9c9f2a937435c80349437206c6b0b7422373 AS musl-tester
 
 WORKDIR /workspace
 
